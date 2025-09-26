@@ -5,6 +5,7 @@ use tokio::net::TcpListener;
 mod config;
 mod handlers;
 mod models;
+mod repositories;
 mod routes;
 
 #[tokio::main]
