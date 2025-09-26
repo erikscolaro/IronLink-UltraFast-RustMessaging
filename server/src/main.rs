@@ -2,10 +2,10 @@ use axum::Router;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
 
-mod routes;
-mod handlers;
 mod config;
+mod handlers;
 mod models;
+mod routes;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -23,8 +23,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let listener = TcpListener::bind(addr).await?;
 
     // Avvia il server
-    axum::serve(listener, app)
-        .await?;
+    axum::serve(listener, app).await?;
 
     Ok(())
 }
@@ -36,7 +35,7 @@ mod tests {
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
     use tower::ServiceExt;
-    // for `oneshot` 
+    // for `oneshot`
 
     #[tokio::test]
     async fn test_root() {

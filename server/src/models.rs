@@ -1,41 +1,97 @@
-use sqlx::{SqlitePool, Row};
-use tokio;
-use dotenv::dotenv;
-use std::env;
+/*
+pacchetto di idee:
+- singleton per distribuire le connessioni a db tramite pool in modo da evitre
+ di passare ad ogni entitò una connessione
+- pacchetto tratto crud
+- singleton per la struttura hashmap utente - websocket
+ */
+use axum::extract::State;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone)]
+// ********************* ENUMERAZIONI UTILI **********************//
+#[derive(Serialize, Deserialize, Debug)]
+pub enum MessageType {
+    UserMessage,
+    SystemMessage,
+}
+#[derive(Serialize, Deserialize, Debug)]
+pub enum UserRole {
+    Owner,
+    Admin,
+    Standard,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum InvitationStatus {
+    Pending,
+    Accepted,
+    Rejected,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum ChatType {
+    Group,
+    Private 
+}
+
+// ********************* MODELLI VERI E PROPRI *******************//
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct User {
-	pub id: i64,
-	pub name: String,
+    /* se vogliamo rinominare campi usiamo la macro
+     * #[serde(rename = "userId")]
+     */
+    id: u32,
+    username: String,
+    // Questo per evitare la serializzazione quando inviamo le informazioni utente al client
+    #[serde(skip_deserializing)]
+    password_hash: Option<String>,
 }
 
-pub struct UserRepo {
-	pool: SqlitePool,
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Message {
+    id: u32,
+    chat_id: u32,
+    sender_id: u32,
+    content: String,
+    // il server si aspetta una stringa litterale iso8601 che viene parsata in oggetto DateTime di tipo UTC
+    // la conversione viene fatta in automatico da serde, la feature è stata abilitata
+    created_at: DateTime<Utc>,
+    // campo rinominato rispetto a uml perchè type è una parola protetta
+    message_type: MessageType,
+}
+#[derive(Serialize, Deserialize, Debug)]
+pub struct UserChatMetadata {
+    user_id: u32,
+    chat_id: u32,
+    user_role: UserRole,
+    // sostituisce deliver_from con un nome più esplicativo
+    // sostituito al posto dell'id del messaggio il datetime, è da intendersi come 
+    // "visualizza i messaggi da questo istante in poi, questo istante ESCLUSO"
+    messages_visible_from: DateTime<Utc>,
+    // sostituisce last delivered con un nume più esplicativo
+    // sostituito al posto dell'id del messaggio il date time, è da intendersi come 
+    // "ho ricevuto i messaggi fino a questo istante, istante INCLUSO"
+    messages_received_until: DateTime<Utc>,
+    
+    //per ora non esludo i due campi dalla deserializzazione 
 }
 
-impl UserRepo {
-	// crea e connette direttamente al DB dal DATABASE_URL
-	pub async fn new() -> Result<Self, sqlx::Error> {
-		dotenv().ok();
-		let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-		let pool = SqlitePool::connect(&database_url).await?;
-		Ok(Self { pool })
-	}
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Invitation {
+    id: u32,
+    // rinominato da group_id a chat_id per consistenza
+    chat_id: u32, // chat ( di gruppo ) in cui si viene invitati
+    invited_id: u32, // utente invitato
+    invitee_id: u32, // utente che invita
+    state: InvitationStatus
+}
 
-	pub async fn get_by_id(&self, id: i64) -> Result<Option<User>, sqlx::Error> {
-		let row = sqlx::query("SELECT id, name FROM users WHERE id = ?")
-			.bind(id)
-			.fetch_optional(&self.pool)
-			.await?;
-		Ok(row.map(|r| User { id: r.get(0), name: r.get(1) }))
-	}
-
-	pub async fn create(&self, user: User) -> Result<(), sqlx::Error> {
-		sqlx::query("INSERT INTO users (id, name) VALUES (?, ?)")
-			.bind(user.id)
-			.bind(user.name)
-			.execute(&self.pool)
-			.await?;
-		Ok(())
-	}
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Chat {
+    id: u32,
+    title: Option<String>,
+    description: Option<String>,
+    chat_type: ChatType
 }
