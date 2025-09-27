@@ -73,13 +73,73 @@ async fn main() {
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     println!("Server listening on http://{}", addr);
 
-    // Crea il listener TCP
-    let listener = TcpListener::bind(addr).await?;
+    // Creazione del listener TCP per ascoltare l'indirizzo
+    let listener = TcpListener::bind(addr)
+        .await
+        .expect("Unable to start TCP listener.");
+
+    let root_route = Router::new().route("/", get(root));
+
+    // autenticazione
+    let auth_routes = Router::new()
+        .route("/login", post(login_user))
+        .route(
+            "/logout",
+            post(logout_user).layer(middleware::from_fn_with_state(
+                state.clone(),
+                authentication_middleware,
+            )),
+        )
+        .route(
+            "/register",
+            post(register_user).layer(middleware::from_fn_with_state(
+                state.clone(),
+                authentication_middleware,
+            )),
+        );
+
+    // utenti
+    let user_routes = Router::new()
+        .route("/", get(search_users))
+        .route("/:id", get(get_user))
+        .route("/me", delete(delete_my_account))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            authentication_middleware,
+        ));
+
+    // chat
+    let chat_routes = Router::new()
+        .route("/", get(list_chats).post(create_chat))
+        .route("/:id/messages", get(get_chat_messages))
+        .route("/:id/members", get(list_chat_members))
+        .route("/:id/invite", post(invite_to_chat))
+        .route("/:id/members/:id/role", patch(update_member_role))
+        .route(
+            "/:id/members/:id/transfer-ownership",
+            patch(transfer_ownership),
+        )
+        .route("/:id/members/:id", delete(remove_member))
+        .route("/:id/leave", post(leave_chat))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            authentication_middleware,
+        ));
+
+    // router principale con nesting
+    let app = Router::new()
+        .merge(root_route) // root senza stato
+        .nest("/auth", auth_routes)
+        .nest("/users", user_routes)
+        .nest("/chats", chat_routes)
+        .with_state(state);
+
+    // NOTA: rimosse le route degli inviti visto che vengono inviati in chat privata come messaggio di sistema
 
     // Avvia il server
-    axum::serve(listener, app).await?;
-
-    Ok(())
+    axum::serve(listener, app)
+        .await
+        .expect("Error serving the application");
 }
 
 // --- TEST MINIMALE ---
