@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 use tokio::net::TcpListener;
 
 mod config;
-mod handlers;
+mod error_handler;
 mod models;
 mod repositories;
 mod services;
@@ -40,12 +40,24 @@ struct AppState {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Inizializza la configurazione
-    config::init();
+async fn main() {
+    // avvio dotenv
+    dotenv().ok();
+    // cerco la variaible per connettermi al database
+    let database_url =
+        env::var("DATABASE_URL").expect("Error retrieving database url from environment.");
 
-    // Crea il router
-    let app = Router::new().merge(routes::router());
+    //builder per configurare le connessioni al database
+    let pool_options = MySqlPoolOptions::new()
+        .max_connections(1000)
+        .max_lifetime(Duration::from_secs(1))
+        .test_before_acquire(true);
+
+    // avvio il pool di connessioni al database
+    let connection_pool = pool_options
+        .connect(database_url.as_str())
+        .await
+        .expect("Error connecting to the database");
 
     // creiamo una struct repos per poterla condiividere come stato alle varie routes
     let state = Arc::new(AppState {
