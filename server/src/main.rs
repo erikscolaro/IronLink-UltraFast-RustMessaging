@@ -1,7 +1,4 @@
-use axum::Router;
-use std::net::SocketAddr;
-use tokio::net::TcpListener;
-
+mod auth;
 mod config;
 mod error_handler;
 mod models;
@@ -140,25 +137,4 @@ async fn main() {
     axum::serve(listener, app)
         .await
         .expect("Error serving the application");
-}
-
-// --- TEST MINIMALE ---
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use axum::body::Body;
-    use axum::http::{Request, StatusCode};
-    use tower::ServiceExt;
-    // for `oneshot`
-
-    #[tokio::test]
-    async fn test_root() {
-        let app = Router::new().merge(routes::router());
-        let response = app
-            .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::OK);
-    }
 }

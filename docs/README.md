@@ -30,30 +30,31 @@ L’obiettivo è fornire un sistema efficiente, sicuro e multi–piattaforma che
 ## 4. API REST
 
 ### Autenticazione
-- `POST /api/login`
-- `POST /api/register`
-- `DELETE /api/users/{id}`
+- `POST /auth/login`
+- `POST /auth/logout`
+- `POST /auth/register`
 
 ### Utenti
-- `GET /api/users?search=...`
-- `GET /api/users/{id}/online`
+- `GET /users?search=...` cercare un utente per username anche parziale
+- `GET /users/{id}`ottenere le informazioni di un utente specifico
+- `DELETE /users/me `cancellare il mio account
 
 ### Chat
-- `GET /api/chats`
-- `POST /api/chats/private`
-- `POST /api/chats/group`
-- `GET /api/chats/{id}/messages?starting={id}&before=20&after=20`
+- `GET /chats`
+- `POST /chats/private`
+- `POST /chats/group`
+- `GET /chats/{id}/messages?starting={id}&before=20&after=20`
 
 ### Gruppi
-- `POST /api/chats/{id}/invite`
-- `DELETE /api/chats/{id}/members/{user}`
-- `POST /api/chats/{id}/leave`
-- `PATCH /api/chats/{id}/members/{user}/role`
-- `PATCH /api/chats/{id}/transfer-ownership`
+- `POST /chats/{id}/invite`
+- `DELETE /chats/{id}/members/{user}`
+- `POST /chats/{id}/leave`
+- `PATCH /chats/{id}/members/{user}/role`
+- `PATCH /chats/{id}/transfer-ownership`
 
 ### Inviti
-- `GET /api/invitations`
-- `POST /api/invitations/{id}`
+- `GET /invitations`
+- `POST /invitations/{id}`
 
 ## 5. WebSocket
 - **Endpoint**: `WS /ws/chat`
