@@ -1,11 +1,4 @@
-/*
-pacchetto di idee:
-- singleton per distribuire le connessioni a db tramite pool in modo da evitre
- di passare ad ogni entitò una connessione
-- pacchetto tratto crud
-- singleton per la struttura hashmap utente - websocket
- */
-
+use bcrypt::{DEFAULT_COST, hash, verify};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -40,16 +33,26 @@ pub type IdType = u32;
 
 // ********************* MODELLI VERI E PROPRI *******************//
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct User {
     /* se vogliamo rinominare campi usiamo la macro
      * #[serde(rename = "userId")]
      */
-    id: IdType,
-    username: String,
-    // Questo per evitare la serializzazione quando inviamo le informazioni utente al client
-    #[serde(skip_deserializing)]
-    password_hash: Option<String>,
+    pub id: Option<IdType>,
+    pub username: String,
+    pub password: String,
+}
+
+impl User {
+    // Verify if target_password matches the stored hashed password
+    pub fn verify_password(&self, target_password: &String) -> bool {
+        verify(target_password, &self.password).unwrap_or_else(|_| false)
+    }
+
+    pub fn hash_password(password: &str) -> Result<String, bcrypt::BcryptError> {
+        let hash = hash(password, DEFAULT_COST)?;
+        Ok(hash)
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
