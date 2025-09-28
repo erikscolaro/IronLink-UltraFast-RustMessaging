@@ -92,7 +92,7 @@ async fn main() {
     // utenti
     let user_routes = Router::new()
         .route("/", get(search_user_with_username))
-        .route("/:user_id", get(get_user_by_id))
+        .route("/{user_id}", get(get_user_by_id))
         .route("/me", delete(delete_my_account))
         .layer(middleware::from_fn_with_state(
             state.clone(),
@@ -102,16 +102,16 @@ async fn main() {
     // chat
     let chat_routes = Router::new()
         .route("/", get(list_chats).post(create_chat))
-        .route("/:chat_id/messages", get(get_chat_messages))
-        .route("/:chat_id/members", get(list_chat_members))
-        .route("/:chat_id/invite/:user_id", post(invite_to_chat))
-        .route("/:chat_id/members/:user_id/role", patch(update_member_role))
+        .route("/{chat_id}/messages", get(get_chat_messages))
+        .route("/{chat_id}/members", get(list_chat_members))
+        .route("/{chat_id}/invite/{user_id}", post(invite_to_chat))
+        .route("/{chat_id}/members/{user_id}/role", patch(update_member_role))
         .route(
-            "/:chat_id/transfer_ownership",
+            "/{chat_id}/transfer_ownership",
             patch(transfer_ownership),
         )
-        .route("/:chat_id/members/:user_id", delete(remove_member))
-        .route("/:chat_id/leave", post(leave_chat))
+        .route("/{chat_id}/members/{user_id}", delete(remove_member))
+        .route("/{chat_id}/leave", post(leave_chat))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             authentication_middleware,
