@@ -1,13 +1,14 @@
 use crate::AppState;
 use crate::auth::encode_jwt;
 use crate::error_handler::AppError;
-use crate::models::User;
+use crate::models::{IdType, User, UserDTO};
 use axum::Json;
-use axum::extract::State;
+use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use serde_json::json;
 use std::sync::Arc;
+use crate::repositories::Crud;
 /* si usano queste ntoazioni per prendere cioò che ci serve dai frame http, mi raccomando
   funziona solo in questo esatto ordine !
    State(state): State<Arc<AppState>>,
@@ -63,22 +64,26 @@ pub async fn root() -> Response {
 
 pub async fn login_user(
     State(state): State<Arc<AppState>>,
-    // Path(user_id): Path<i32>,        // parametro dalla URL /users/:user_id
+    Path(id): Path<IdType>,        // parametro dalla URL /users/:id
     // Query(params): Query<MyQuery>,   // query params ?filter=xyz
-    Json(body): Json<User>, // JSON body
+    Json(body): Json<UserDTO>, // JSON body
 ) -> Result<impl IntoResponse, AppError> {
     // cerco l'utente, se  non lo trovo allora
-    let user = match state.user.find_by_username(&body.username).await? {
+    let user = match state.user.read(&id).await? {
         Some(user) => user,
-        None => return Err(AppError::from_status(StatusCode::UNAUTHORIZED)),
+        None => return Err(AppError::with_status(StatusCode::UNAUTHORIZED)),
     };
 
     // Verify the password provided against the stored hash
-    if !user.verify_password(&body.password) {
-        return Err(AppError::from_status(StatusCode::UNAUTHORIZED)); // Password verification failed, return unauthorized status
+    if let Some(password) = &body.password {
+        if !user.verify_password(password) {
+            return Err(AppError::with_message(StatusCode::UNAUTHORIZED, "Username or password are not correct."));
+        }
+    } else {
+        return Err(AppError::with_message(StatusCode::UNAUTHORIZED, "Password was not provided."));
     }
 
-    let token = encode_jwt(user.username, user.id.expect("ahhahaha"), &state.jwt_secret)?;
+        let token = encode_jwt(user.username, user.id, &state.jwt_secret)?;
 
     // Return the token as a JSON-wrapped string
     Ok(Json(token))
