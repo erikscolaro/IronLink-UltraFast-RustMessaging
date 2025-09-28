@@ -38,7 +38,7 @@ pub struct User {
     /* se vogliamo rinominare campi usiamo la macro
      * #[serde(rename = "userId")]
      */
-    pub id: IdType,
+    pub user_id: IdType,
     pub username: String,
     pub password: String,
 }
@@ -57,7 +57,7 @@ impl User {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Message {
-    pub id: IdType,
+    pub message_id: IdType,
     pub chat_id: IdType,
     pub sender_id: IdType,
     pub content: String,
@@ -72,6 +72,7 @@ pub struct UserChatMetadata {
     pub user_id: IdType,
     pub chat_id: IdType,
     pub user_role: UserRole,
+    pub member_since: DateTime<Utc>,
     // sostituisce deliver_from con un nome più esplicativo
     // sostituito al posto dell'id del messaggio il datetime, è da intendersi come
     // "visualizza i messaggi da questo istante in poi, questo istante ESCLUSO"
@@ -85,7 +86,7 @@ pub struct UserChatMetadata {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Invitation {
-    pub id: IdType,
+    pub invite_id: IdType, //todo: valutare se togliere la chaive primaria qui, gli inviti sono univoci per invitee e chat_id
     // rinominato da group_id a chat_id per consistenza
     pub chat_id: IdType,    // chat ( di gruppo ) in cui si viene invitati
     pub invited_id: IdType, // utente invitato
@@ -95,7 +96,7 @@ pub struct Invitation {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Chat {
-    pub id: IdType,
+    pub chat_id: IdType,
     pub title: Option<String>,
     pub description: Option<String>,
     pub chat_type: ChatType,
