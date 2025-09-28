@@ -81,13 +81,6 @@ async fn main() {
     let auth_routes = Router::new()
         .route("/login", post(login_user))
         .route(
-            "/logout",
-            post(logout_user).layer(middleware::from_fn_with_state(
-                state.clone(),
-                authentication_middleware,
-            )),
-        )
-        .route(
             "/register",
             post(register_user).layer(middleware::from_fn_with_state(
                 state.clone(),

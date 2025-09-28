@@ -89,10 +89,6 @@ pub async fn login_user(
     Ok(Json(token))
 }
 
-pub async fn logout_user() -> Result<(), AppError> {
-    todo!()
-}
-
 pub async fn register_user() -> Result<impl IntoResponse, AppError> {
     todo!()
 }
