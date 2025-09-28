@@ -1,9 +1,10 @@
 mod auth;
 mod config;
 mod error_handler;
-mod models;
+mod entities;
 mod repositories;
 mod services;
+mod dtos;
 
 use crate::auth::authentication_middleware;
 use crate::services::login_user;
@@ -13,9 +14,9 @@ use crate::{
         UserRepository,
     },
     services::{
-        create_chat, delete_my_account, get_chat_messages, get_user, invite_to_chat, leave_chat,
-        list_chat_members, list_chats, logout_user, register_user, remove_member, root,
-        search_users, transfer_ownership, update_member_role,
+        create_chat, delete_my_account, get_chat_messages, get_user_by_id, invite_to_chat, leave_chat,
+        list_chat_members, list_chats, register_user, remove_member, root,
+        search_user_with_username, transfer_ownership, update_member_role,
     },
 };
 use axum::{
@@ -90,8 +91,8 @@ async fn main() {
 
     // utenti
     let user_routes = Router::new()
-        .route("/", get(search_users))
-        .route("/:id", get(get_user))
+        .route("/", get(search_user_with_username))
+        .route("/:user_id", get(get_user_by_id))
         .route("/me", delete(delete_my_account))
         .layer(middleware::from_fn_with_state(
             state.clone(),
@@ -101,16 +102,16 @@ async fn main() {
     // chat
     let chat_routes = Router::new()
         .route("/", get(list_chats).post(create_chat))
-        .route("/:id/messages", get(get_chat_messages))
-        .route("/:id/members", get(list_chat_members))
-        .route("/:id/invite", post(invite_to_chat))
-        .route("/:id/members/:id/role", patch(update_member_role))
+        .route("/:chat_id/messages", get(get_chat_messages))
+        .route("/:chat_id/members", get(list_chat_members))
+        .route("/:chat_id/invite/:user_id", post(invite_to_chat))
+        .route("/:chat_id/members/:user_id/role", patch(update_member_role))
         .route(
-            "/:id/members/:id/transfer-ownership",
+            "/:chat_id/transfer_ownership",
             patch(transfer_ownership),
         )
-        .route("/:id/members/:id", delete(remove_member))
-        .route("/:id/leave", post(leave_chat))
+        .route("/:chat_id/members/:user_id", delete(remove_member))
+        .route("/:chat_id/leave", post(leave_chat))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             authentication_middleware,
@@ -118,7 +119,7 @@ async fn main() {
 
     // router principale con nesting
     let app = Router::new()
-        .merge(root_route) // root senza stato
+        .merge(root_route) 
         .nest("/auth", auth_routes)
         .nest("/users", user_routes)
         .nest("/chats", chat_routes)
