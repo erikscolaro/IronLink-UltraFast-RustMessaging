@@ -14,16 +14,16 @@ pub type PoolType = MySqlPool;
 /// Trait per operazioni CRUD generiche
 pub trait Crud<T, Id> {
     /// Crea un nuovo record e lo restituisce
-    async fn create(&self, item: T) -> Result<T, sqlx::Error>;
+    async fn create(&self, item: &T) -> Result<T, sqlx::Error>;
 
     /// Legge un record tramite ID
-    async fn read(&self, id: Id) -> Result<Option<T>, sqlx::Error>;
+    async fn read(&self, id: &Id) -> Result<Option<T>, sqlx::Error>;
 
     /// Aggiorna un record esistente
-    async fn update(&self, item: T) -> Result<T, sqlx::Error>;
+    async fn update(&self, item: &T) -> Result<T, sqlx::Error>;
 
     /// Cancella un record tramite ID
-    async fn delete(&self, id: Id) -> Result<(), sqlx::Error>;
+    async fn delete(&self, id: &Id) -> Result<(), sqlx::Error>;
 }
 
 // ************************* REPOSITORY ************************* //
@@ -97,19 +97,19 @@ impl UserRepository {
 }
 
 impl Crud<User, IdType> for UserRepository {
-    async fn create(&self, item: User) -> Result<User, Error> {
+    async fn create(&self, item: &User) -> Result<User, Error> {
         todo!()
     }
 
-    async fn read(&self, id: IdType) -> Result<Option<User>, Error> {
+    async fn read(&self, id: &IdType) -> Result<Option<User>, Error> {
         todo!()
     }
 
-    async fn update(&self, item: User) -> Result<User, Error> {
+    async fn update(&self, item: &User) -> Result<User, Error> {
         todo!()
     }
 
-    async fn delete(&self, id: IdType) -> Result<(), Error> {
+    async fn delete(&self, id: &IdType) -> Result<(), Error> {
         todo!()
     }
 }
@@ -126,19 +126,19 @@ impl MessageRepository {
 }
 
 impl Crud<Message, IdType> for MessageRepository {
-    async fn create(&self, item: Message) -> Result<Message, Error> {
+    async fn create(&self, item: &Message) -> Result<Message, Error> {
         todo!()
     }
 
-    async fn read(&self, id: IdType) -> Result<Option<Message>, Error> {
+    async fn read(&self, id: &IdType) -> Result<Option<Message>, Error> {
         todo!()
     }
 
-    async fn update(&self, item: Message) -> Result<Message, Error> {
+    async fn update(&self, item: &Message) -> Result<Message, Error> {
         todo!()
     }
 
-    async fn delete(&self, id: IdType) -> Result<(), Error> {
+    async fn delete(&self, id: &IdType) -> Result<(), Error> {
         todo!()
     }
 }
@@ -155,19 +155,19 @@ impl UserChatMetadataRepository {
 }
 
 impl Crud<UserChatMetadata, IdType> for UserChatMetadataRepository {
-    async fn create(&self, item: UserChatMetadata) -> Result<UserChatMetadata, Error> {
+    async fn create(&self, item: &UserChatMetadata) -> Result<UserChatMetadata, Error> {
         todo!()
     }
 
-    async fn read(&self, id: IdType) -> Result<Option<UserChatMetadata>, Error> {
+    async fn read(&self, id: &IdType) -> Result<Option<UserChatMetadata>, Error> {
         todo!()
     }
 
-    async fn update(&self, item: UserChatMetadata) -> Result<UserChatMetadata, Error> {
+    async fn update(&self, item: &UserChatMetadata) -> Result<UserChatMetadata, Error> {
         todo!()
     }
 
-    async fn delete(&self, id: IdType) -> Result<(), Error> {
+    async fn delete(&self, id: &IdType) -> Result<(), Error> {
         todo!()
     }
 }
@@ -184,19 +184,19 @@ impl InvitationRepository {
 }
 
 impl Crud<Invitation, IdType> for InvitationRepository {
-    async fn create(&self, item: Invitation) -> Result<Invitation, Error> {
+    async fn create(&self, item: &Invitation) -> Result<Invitation, Error> {
         todo!()
     }
 
-    async fn read(&self, id: IdType) -> Result<Option<Invitation>, Error> {
+    async fn read(&self, id: &IdType) -> Result<Option<Invitation>, Error> {
         todo!()
     }
 
-    async fn update(&self, item: Invitation) -> Result<Invitation, Error> {
+    async fn update(&self, item: &Invitation) -> Result<Invitation, Error> {
         todo!()
     }
 
-    async fn delete(&self, id: IdType) -> Result<(), Error> {
+    async fn delete(&self, id: &IdType) -> Result<(), Error> {
         todo!()
     }
 }
@@ -213,19 +213,19 @@ impl ChatRepository {
 }
 
 impl Crud<Chat, IdType> for ChatRepository {
-    async fn create(&self, item: Chat) -> Result<Chat, Error> {
+    async fn create(&self, item: &Chat) -> Result<Chat, Error> {
         todo!()
     }
 
-    async fn read(&self, id: IdType) -> Result<Option<Chat>, Error> {
+    async fn read(&self, id: &IdType) -> Result<Option<Chat>, Error> {
         todo!()
     }
 
-    async fn update(&self, item: Chat) -> Result<Chat, Error> {
+    async fn update(&self, item: &Chat) -> Result<Chat, Error> {
         todo!()
     }
 
-    async fn delete(&self, id: IdType) -> Result<(), Error> {
+    async fn delete(&self, id: &IdType) -> Result<(), Error> {
         todo!()
     }
 }
