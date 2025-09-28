@@ -1,4 +1,4 @@
-use crate::models::{Chat, IdType, Invitation, Message, User, UserChatMetadata};
+use crate::entities::{Chat, IdType, Invitation, Message, User, UserChatMetadata};
 use sqlx::{Error, MySqlPool};
 
 // alias di tipo per il pool, per semplificare lo switch in caso in cui vogliamo usare un altro db

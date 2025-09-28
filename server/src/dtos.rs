@@ -14,7 +14,7 @@ pub struct UserDTO {
 impl From<User> for UserDTO {
 	fn from(value: User) -> Self {
 		Self {
-			id: Some(value.id),
+			id: Some(value.user_id),
 			username: Some(value.username),
 			password: None, // mai esposta al client!!!
 		}
@@ -32,7 +32,7 @@ pub struct ChatDTO {
 impl From<Chat> for ChatDTO {
 	fn from(value: Chat) -> Self {
 		Self {
-			id: Some(value.id),
+			id: Some(value.chat_id),
 			title: value.title,
 			description: value.description,
 			chat_type: value.chat_type,
