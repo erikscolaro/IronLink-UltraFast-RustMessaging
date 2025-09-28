@@ -15,7 +15,23 @@ pub struct AppError {
 }
 
 impl AppError {
-    pub fn new<E: std::fmt::Debug>(
+    pub fn with_status(code: StatusCode) -> Self {
+        Self {
+            code,
+            message: None,
+            details: None,
+        }
+    }
+
+    pub fn with_message<S: Into<String>>(code: StatusCode, message: S) -> Self {
+        Self {
+            code,
+            message: Some(message.into()),
+            details: None,
+        }
+    }
+
+    pub fn with_details<E: std::fmt::Debug>(
         code: StatusCode,
         message: Option<String>,
         err: Option<E>,
@@ -24,14 +40,6 @@ impl AppError {
             code,
             message,
             details: err.map(|e| format!("{:#?}", e)),
-        }
-    }
-
-    pub fn from_status(code: StatusCode) -> Self {
-        Self {
-            code,
-            message: None,
-            details: None,
         }
     }
 }
