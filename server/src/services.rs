@@ -83,10 +83,25 @@ pub async fn login_user(
         return Err(AppError::with_message(StatusCode::UNAUTHORIZED, "Password was not provided."));
     }
 
-        let token = encode_jwt(user.username, user.id, &state.jwt_secret)?;
+    let token = encode_jwt(user.username, user.id, &state.jwt_secret)?;
 
-    // Return the token as a JSON-wrapped string
-    Ok(Json(token))
+    // Costruisci cookie con direttive di sicurezza
+    let cookie_value = format!(
+        "token={}; HttpOnly; Secure; SameSite=Lax; Max-Age={}",
+        token,
+        24 * 60 * 60 // durata in secondi
+    );
+
+    let mut headers = HeaderMap::new();
+    headers.insert("Set-Cookie", HeaderValue::from_str(&cookie_value).unwrap());
+    headers.insert("Authorization", HeaderValue::from_str(&format!("Bearer {}", token)).unwrap());
+
+    #[derive(serde::Serialize)]
+    struct TokenResponse {
+        token: String,
+    }
+
+    Ok((StatusCode::OK, headers, Json(TokenResponse { token })))
 }
 
 pub async fn register_user() -> Result<impl IntoResponse, AppError> {

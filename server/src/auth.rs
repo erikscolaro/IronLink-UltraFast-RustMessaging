@@ -1,5 +1,5 @@
 use crate::error_handler::AppError;
-use crate::models::IdType;
+use crate::entities::IdType;
 use crate::AppState;
 use axum::extract::State;
 use axum::{
