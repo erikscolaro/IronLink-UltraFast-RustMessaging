@@ -1,18 +1,17 @@
-use crate::error_handler::AppError;
-use crate::entities::IdType;
 use crate::AppState;
+use crate::entities::IdType;
+use crate::error_handler::AppError;
 use axum::extract::State;
 use axum::{
-	body::Body,
-	extract::Request,
-	http,
-	http::{Response, StatusCode},
-	middleware::Next,
-	Error
-	,
+    Error,
+    body::Body,
+    extract::Request,
+    http,
+    http::{Response, StatusCode},
+    middleware::Next,
 };
 use chrono::{Duration, Utc};
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, TokenData, Validation};
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, TokenData, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
