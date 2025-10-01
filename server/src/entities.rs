@@ -3,26 +3,26 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 // ********************* ENUMERAZIONI UTILI **********************//
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum MessageType {
     UserMessage,
     SystemMessage,
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum UserRole {
     Owner,
     Admin,
     Standard,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum InvitationStatus {
     Pending,
     Accepted,
     Rejected,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ChatType {
     Group,
     Private,
@@ -55,7 +55,7 @@ impl User {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Message {
     pub message_id: IdType,
     pub chat_id: IdType,
@@ -67,7 +67,7 @@ pub struct Message {
     // campo rinominato rispetto a uml perchè type è una parola protetta
     pub message_type: MessageType,
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct UserChatMetadata {
     pub user_id: IdType,
     pub chat_id: IdType,
@@ -84,7 +84,7 @@ pub struct UserChatMetadata {
     //per ora non esludo i due campi dalla deserializzazione
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Invitation {
     pub invite_id: IdType, //todo: valutare se togliere la chaive primaria qui, gli inviti sono univoci per invitee e chat_id
     // rinominato da group_id a chat_id per consistenza
@@ -94,7 +94,7 @@ pub struct Invitation {
     pub state: InvitationStatus,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Chat {
     pub chat_id: IdType,
     pub title: Option<String>,

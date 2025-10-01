@@ -1,9 +1,9 @@
-use crate::entities::{Chat, IdType, Invitation, Message, User, UserChatMetadata};
+use crate::entities::{Chat, IdType, Invitation, Message, User, UserChatMetadata, UserRole, MessageType, ChatType, InvitationStatus};
 use sqlx::{Error, MySqlPool};
+use chrono::{DateTime, Utc};
 
 // alias di tipo per il pool, per semplificare lo switch in caso in cui vogliamo usare un altro db
 pub type PoolType = MySqlPool;
-
 //***************************** TRATTI ****************************//
 
 /*
@@ -78,8 +78,11 @@ pub trait Crud<T, Id> {
 
 
 */
-//TODO: "bisogna aggiungere alle definizioni dei models i tipi che vengono usati nel database, chiarire questo aspetto"
+//TODO: "bisogna aggiungere alle definizioni dei models i tipi che vengono usati nel database, chiarire questo aspetto"<
 
+//MOD -> possibile modifica
+// Controllare se in alcuni casi non vogliamo l'oggetto come risultato ma solo un valore, e viceversa
+//Per le crud, non sempre ritorno l'oggetto, quindi servirà poi fare una lettura successiva in services oppure scriverlo nel messaggio ok()
 // USER REPO
 pub struct UserRepository {
     connection_pool: PoolType,
@@ -90,27 +93,103 @@ impl UserRepository {
         Self { connection_pool }
     }
 
-    // ricerca per username esatto, per ricerca globale username parziale usare altro metodo
+///considero l'username univoco
+
+
+
+
+
+
+/*/
+    /// Find user by exact username match
+    /// For partial username search, use search_by_username_partial
     pub async fn find_by_username(&self, username: &String) -> Result<Option<User>, Error> {
-        todo!()
+        let user = sqlx::query_as!(
+            User,
+            "SELECT id as user_id, username, passwordHash as password FROM Users WHERE username = ?",
+            username
+        )
+        .fetch_optional(&self.connection_pool)
+        .await?;
+        
+        Ok(user)
     }
+
+    /// Search users by partial username match (for search functionality)
+    pub async fn search_by_username_partial(&self, username_pattern: &String) -> Result<Vec<User>, Error> {
+        let pattern = format!("%{}%", username_pattern);
+        let users = sqlx::query_as!(
+            User,
+            "SELECT id as user_id, username, passwordHash as password FROM Users WHERE username LIKE ? LIMIT 50",
+            pattern
+        )
+        .fetch_all(&self.connection_pool)
+        .await?;
+        
+        Ok(users)
+    }
+
 }
 
 impl Crud<User, IdType> for UserRepository {
     async fn create(&self, item: &User) -> Result<User, Error> {
-        todo!()
+        // Insert user and get the ID using MySQL syntax
+        let result = sqlx::query!(
+            "INSERT INTO Users (username, passwordHash) VALUES (?, ?)",
+            item.username,
+            item.password
+        )
+        .execute(&self.connection_pool)
+        .await?;
+
+        // Get the last inserted ID
+        let new_id = result.last_insert_id() as IdType;
+
+        // Return the created user with the new ID
+        Ok(User {
+            user_id: new_id,
+            username: item.username.clone(),
+            password: item.password.clone(),
+        })
     }
 
     async fn read(&self, id: &IdType) -> Result<Option<User>, Error> {
-        todo!()
+        let user = sqlx::query_as!(
+            User,
+            "SELECT id as user_id, username, passwordHash as password FROM Users WHERE id = ?",
+            id
+        )
+        .fetch_optional(&self.connection_pool)
+        .await?;
+        
+        Ok(user)
     }
 
     async fn update(&self, item: &User) -> Result<User, Error> {
-        todo!()
+        sqlx::query!(
+            "UPDATE Users SET username = ?, passwordHash = ? WHERE id = ?",
+            item.username,
+            item.password,
+            item.user_id
+        )
+        .execute(&self.connection_pool)
+        .await?;
+        
+        // Return the updated user
+        Ok(item.clone())
     }
 
-    async fn delete(&self, id: &IdType) -> Result<(), Error> {
-        todo!()
+    /// Soft delete user by setting username to "Deleted User" and clearing password ""
+    /// This preserves message history while anonymizing the user
+    async fn delete(&self, user_id: &IdType) -> Result<(), Error> {
+        sqlx::query!(
+            "UPDATE Users SET username = 'Deleted User', passwordHash = '' WHERE id = ?",
+            user_id
+        )
+        .execute(&self.connection_pool)
+        .await?;
+        
+        Ok(())
     }
 }
 
@@ -123,23 +202,178 @@ impl MessageRepository {
     pub fn new(connection_pool: PoolType) -> Self {
         Self { connection_pool }
     }
+
+    /// Get all messages for a specific chat, ordered by creation time
+    pub async fn get_messages_by_chat_id(&self, chat_id: &IdType) -> Result<Vec<Message>, Error> {
+        let messages = sqlx::query_as!(
+            Message,
+            r#"
+            SELECT 
+                id as message_id, 
+                chatId as chat_id, 
+                senderId as sender_id, 
+                content, 
+                createdAt as created_at,
+                type as "message_type: MessageType"
+            FROM Messages 
+            WHERE chatId = ? 
+            ORDER BY createdAt ASC
+            "#,
+            chat_id
+        )
+        .fetch_all(&self.connection_pool)
+        .await?;
+        
+        Ok(messages)
+    }
+
+//MOD: imposta timestamp  after_timestamp = current_time-20minuti?????
+    /// Get messages for a chat after a specific timestamp (for pagination)
+    pub async fn get_messages_after_timestamp(
+        &self, 
+        chat_id: &IdType, 
+        after_timestamp: &DateTime<Utc>
+    ) -> Result<Vec<Message>, Error> {
+        let messages = sqlx::query_as!(
+            Message,
+            r#"
+            SELECT 
+                id as message_id, 
+                chatId as chat_id, 
+                senderId as sender_id, 
+                content, 
+                createdAt as created_at,
+                type as "message_type: MessageType"
+            FROM Messages 
+            WHERE chatId = ? AND createdAt > ?
+            ORDER BY createdAt ASC
+            "#,
+            chat_id,
+            after_timestamp
+        )
+        .fetch_all(&self.connection_pool)
+        .await?;
+        
+        Ok(messages)
+    }
+
+//MOD: se vogliomano caricare solo fino a 50 (limit) messaggi
+    /// Get messages for a chat with limit (for pagination)
+    pub async fn get_messages_with_limit(
+        &self, 
+        chat_id: &IdType, 
+        limit: i64,
+        offset: i64
+    ) -> Result<Vec<Message>, Error> {
+        let messages = sqlx::query_as!(
+            Message,
+            r#"
+            SELECT 
+                id as message_id, 
+                chatId as chat_id, 
+                senderId as sender_id, 
+                content, 
+                createdAt as created_at,
+                type as "message_type: MessageType"
+            FROM Messages 
+            WHERE chatId = ? 
+            ORDER BY createdAt DESC
+            LIMIT ? OFFSET ?
+            "#,
+            chat_id,
+            limit,
+            offset
+        )
+        .fetch_all(&self.connection_pool)
+        .await?;
+        
+        Ok(messages)
+    }
 }
 
 impl Crud<Message, IdType> for MessageRepository {
     async fn create(&self, item: &Message) -> Result<Message, Error> {
-        todo!()
+        // Insert message using MySQL syntax
+        let result = sqlx::query!(
+            r#"
+            INSERT INTO Messages (chatId, senderId, content, type, createdAt) 
+            VALUES (?, ?, ?, ?, ?)
+            "#,
+            item.chat_id,
+            item.sender_id,
+            item.content,
+            item.message_type as MessageType,
+            item.created_at
+        )
+        .execute(&self.connection_pool)
+        .await?;
+
+        // Get the last inserted ID
+        let new_id = result.last_insert_id() as IdType;
+
+        // Return the created message with the new ID
+        Ok(Message {
+            message_id: new_id,
+            chat_id: item.chat_id,
+            sender_id: item.sender_id,
+            content: item.content.clone(),
+            created_at: item.created_at,
+            message_type: item.message_type.clone(),
+        })
     }
 
     async fn read(&self, id: &IdType) -> Result<Option<Message>, Error> {
-        todo!()
+        let message = sqlx::query_as!(
+            Message,
+            r#"
+            SELECT 
+                id as message_id, 
+                chatId as chat_id, 
+                senderId as sender_id, 
+                content, 
+                createdAt as created_at,
+                type as "message_type: MessageType"
+            FROM Messages 
+            WHERE id = ?
+            "#,
+            id
+        )
+        .fetch_optional(&self.connection_pool)
+        .await?;
+        
+        Ok(message)
     }
 
     async fn update(&self, item: &Message) -> Result<Message, Error> {
-        todo!()
+        sqlx::query!(
+            r#"
+            UPDATE Messages 
+            SET chatId = ?, senderId = ?, content = ?, type = ?, createdAt = ?
+            WHERE id = ?
+            "#,
+            item.chat_id,
+            item.sender_id,
+            item.content,
+            item.message_type as MessageType,
+            item.created_at,
+            item.message_id
+        )
+        .execute(&self.connection_pool)
+        .await?;
+        
+        // Return the updated message
+        Ok(item.clone())
     }
 
     async fn delete(&self, id: &IdType) -> Result<(), Error> {
-        todo!()
+        sqlx::query!(
+            "DELETE FROM Messages WHERE id = ?",
+            id
+        )
+        .execute(&self.connection_pool)
+        .await?;
+        
+        Ok(())
     }
 }
 
@@ -152,23 +386,223 @@ impl UserChatMetadataRepository {
     pub fn new(connection_pool: PoolType) -> Self {
         Self { connection_pool }
     }
+
+    /// Get all members of a specific chat
+    pub async fn get_members_by_chat(&self, chat_id: &IdType) -> Result<Vec<UserChatMetadata>, Error> {
+        let metadata_list = sqlx::query_as!(
+            UserChatMetadata,
+            r#"
+            SELECT 
+                userId as user_id,
+                chatId as chat_id,
+                role as "user_role: UserRole",
+                NOW() as "member_since: DateTime<Utc>",
+                '1970-01-01 00:00:00' as "messages_visible_from: DateTime<Utc>",
+                NOW() as "messages_received_until: DateTime<Utc>"
+            FROM UserChatMetadata 
+            WHERE chatId = ?
+            "#,
+            chat_id
+        )
+        .fetch_all(&self.connection_pool)
+        .await?;
+        
+        Ok(metadata_list)
+    }
+
+    /// Update user role in a chat
+    pub async fn update_user_role(&self, user_id: &IdType, chat_id: &IdType, new_role: &UserRole) -> Result<(), Error> {
+        sqlx::query!(
+            "UPDATE UserChatMetadata SET role = ? WHERE userId = ? AND chatId = ?",
+            new_role as &UserRole,
+            user_id,
+            chat_id
+        )
+        .execute(&self.connection_pool)
+        .await?;
+        
+        Ok(())
+    }
+
+    /// Update messages received until timestamp
+    pub async fn update_messages_received_until(
+        &self, 
+        user_id: &IdType, 
+        chat_id: &IdType, 
+        timestamp: &DateTime<Utc>
+    ) -> Result<(), Error> {
+        sqlx::query!(
+            "UPDATE UserChatMetadata SET lastDelivered = ? WHERE userId = ? AND chatId = ?",
+            timestamp,
+            user_id,
+            chat_id
+        )
+        .execute(&self.connection_pool)
+        .await?;
+        
+        Ok(())
+    }
+
+    /// Check if user is member of chat
+    pub async fn is_user_member(&self, user_id: &IdType, chat_id: &IdType) -> Result<bool, Error> {
+        let count = sqlx::query!(
+            "SELECT COUNT(*) as count FROM UserChatMetadata WHERE userId = ? AND chatId = ?",
+            user_id,
+            chat_id
+        )
+        .fetch_one(&self.connection_pool)
+        .await?;
+        
+        Ok(count.count > 0)
+    }
+
+    /// Check if user has admin or owner role in chat
+    pub async fn is_user_admin_or_owner(&self, user_id: &IdType, chat_id: &IdType) -> Result<bool, Error> {
+        let result = sqlx::query!(
+            "SELECT role FROM UserChatMetadata WHERE userId = ? AND chatId = ?",
+            user_id,
+            chat_id
+        )
+        .fetch_optional(&self.connection_pool)
+        .await?;
+        
+        match result {
+            Some(row) => {
+                let role = row.role.unwrap_or_default();
+                Ok(role == "admin" || role == "owner")
+            },
+            None => Ok(false)
+        }
+    }
+
+    //MOD inutile??
+    /// Get chat owner
+    pub async fn get_chat_owner(&self, chat_id: &IdType) -> Result<Option<IdType>, Error> {
+        let result = sqlx::query!(
+            "SELECT userId FROM UserChatMetadata WHERE chatId = ? AND role = 'owner'",
+            chat_id
+        )
+        .fetch_optional(&self.connection_pool)
+        .await?;
+        
+        Ok(result.map(|row| row.userId as IdType))
+    }
+
+    /// Remove user from chat (delete metadata entry)
+    pub async fn remove_user_from_chat(&self, user_id: &IdType, chat_id: &IdType) -> Result<(), Error> {
+        sqlx::query!(
+            "DELETE FROM UserChatMetadata WHERE userId = ? AND chatId = ?",
+            user_id,
+            chat_id
+        )
+        .execute(&self.connection_pool)
+        .await?;
+        
+        Ok(())
+    }
+
+    //MOD: inutile? si puo far tutto con 'update user role'
+    /// Transfer ownership from one user to another in a chat
+    pub async fn transfer_ownership(&self, from_user_id: &IdType, to_user_id: &IdType, chat_id: &IdType) -> Result<(), Error> {
+        // Start a transaction for atomicity
+        let mut tx = self.connection_pool.begin().await?;
+        
+        // Update the old owner to admin
+        sqlx::query!(
+            "UPDATE UserChatMetadata SET role = 'admin' WHERE userId = ? AND chatId = ?",
+            from_user_id,
+            chat_id
+        )
+        .execute(&mut *tx)
+        .await?;
+        
+        // Update the new owner
+        sqlx::query!(
+            "UPDATE UserChatMetadata SET role = 'owner' WHERE userId = ? AND chatId = ?",
+            to_user_id,
+            chat_id
+        )
+        .execute(&mut *tx)
+        .await?;
+        
+        // Commit the transaction
+        tx.commit().await?;
+        
+        Ok(())
+    }
 }
 
 impl Crud<UserChatMetadata, IdType> for UserChatMetadataRepository {
     async fn create(&self, item: &UserChatMetadata) -> Result<UserChatMetadata, Error> {
-        todo!()
+        sqlx::query!(
+            r#"
+            INSERT INTO UserChatMetadata (userId, chatId, role, lastDelivered, deliverFrom) 
+            VALUES (?, ?, ?, NULL, NULL)
+            "#,
+            item.user_id,
+            item.chat_id,
+            item.user_role as UserRole
+        )
+        .execute(&self.connection_pool)
+        .await?;
+
+        // Return the created metadata
+        Ok(item.clone())
     }
 
     async fn read(&self, id: &IdType) -> Result<Option<UserChatMetadata>, Error> {
-        todo!()
+        // For UserChatMetadata, we'll interpret the ID as user_id for simplicity
+        // In real scenarios, you might want a composite key approach
+        let metadata = sqlx::query_as!(
+            UserChatMetadata,
+            r#"
+            SELECT 
+                userId as user_id,
+                chatId as chat_id,
+                role as "user_role: UserRole",
+                DATETIME('now') as "member_since: DateTime<Utc>",
+                DATETIME('1970-01-01') as "messages_visible_from: DateTime<Utc>",
+                DATETIME('now') as "messages_received_until: DateTime<Utc>"
+            FROM UserChatMetadata 
+            WHERE userId = ?
+            LIMIT 1
+            "#,
+            id
+        )
+        .fetch_optional(&self.connection_pool)
+        .await?;
+        
+        Ok(metadata)
     }
 
     async fn update(&self, item: &UserChatMetadata) -> Result<UserChatMetadata, Error> {
-        todo!()
+        sqlx::query!(
+            r#"
+            UPDATE UserChatMetadata 
+            SET role = ?
+            WHERE userId = ? AND chatId = ?
+            "#,
+            item.user_role as UserRole,
+            item.user_id,
+            item.chat_id
+        )
+        .execute(&self.connection_pool)
+        .await?;
+        
+        // Return the updated metadata
+        Ok(item.clone())
     }
 
     async fn delete(&self, id: &IdType) -> Result<(), Error> {
-        todo!()
+        // Delete all metadata for a user (interpretation of the ID parameter)
+        sqlx::query!(
+            "DELETE FROM UserChatMetadata WHERE userId = ?",
+            id
+        )
+        .execute(&self.connection_pool)
+        .await?;
+        
+        Ok(())
     }
 }
 
@@ -181,23 +615,136 @@ impl InvitationRepository {
     pub fn new(connection_pool: PoolType) -> Self {
         Self { connection_pool }
     }
+
+    /// Get all pending invitations for a specific user
+    pub async fn get_pending_invitations_for_user(&self, user_id: &IdType) -> Result<Vec<Invitation>, Error> {
+        let invitations = sqlx::query_as!(
+            Invitation,
+            r#"
+            SELECT 
+                id as invite_id,
+                groupId as chat_id,
+                invitedUserId as invited_id,
+                invitedById as invitee_id,
+                status as "state: InvitationStatus"
+            FROM Invitations 
+            WHERE invitedUserId = ? AND status = 'pending'
+            "#,
+            user_id
+        )
+        .fetch_all(&self.connection_pool)
+        .await?;
+        
+        Ok(invitations)
+    }
+
+    //MOD: controllo prima di inviare invito
+    /// Check if there's already a pending invitation for user to chat
+    pub async fn has_pending_invitation(&self, user_id: &IdType, chat_id: &IdType) -> Result<bool, Error> {
+        let count = sqlx::query!(
+            "SELECT COUNT(*) as count FROM Invitations WHERE invitedUserId = ? AND groupId = ? AND status = 'pending'",
+            user_id,
+            chat_id
+        )
+        .fetch_one(&self.connection_pool)
+        .await?;
+        
+        Ok(count.count > 0)
+    }
+
+    /// Update invitation status (accept/reject)
+    pub async fn update_invitation_status(&self, invitation_id: &IdType, new_status: &InvitationStatus) -> Result<(), Error> {
+        sqlx::query!(
+            "UPDATE Invitations SET status = ? WHERE id = ?",
+            new_status as &InvitationStatus,
+            invitation_id
+        )
+        .execute(&self.connection_pool)
+        .await?;
+        
+        Ok(())
+    }
 }
 
 impl Crud<Invitation, IdType> for InvitationRepository {
     async fn create(&self, item: &Invitation) -> Result<Invitation, Error> {
-        todo!()
+        // Insert invitation using MySQL syntax
+        let result = sqlx::query!(
+            r#"
+            INSERT INTO Invitations (groupId, invitedUserId, invitedById, status) 
+            VALUES (?, ?, ?, ?)
+            "#,
+            item.chat_id,
+            item.invited_id,
+            item.invitee_id,
+            item.state as InvitationStatus
+        )
+        .execute(&self.connection_pool)
+        .await?;
+
+        // Get the last inserted ID
+        let new_id = result.last_insert_id() as IdType;
+
+        // Return the created invitation with the new ID
+        Ok(Invitation {
+            invite_id: new_id,
+            chat_id: item.chat_id,
+            invited_id: item.invited_id,
+            invitee_id: item.invitee_id,
+            state: item.state.clone(),
+        })
     }
 
     async fn read(&self, id: &IdType) -> Result<Option<Invitation>, Error> {
-        todo!()
+        let invitation = sqlx::query_as!(
+            Invitation,
+            r#"
+            SELECT 
+                id as invite_id,
+                groupId as chat_id,
+                invitedUserId as invited_id,
+                invitedById as invitee_id,
+                status as "state: InvitationStatus"
+            FROM Invitations 
+            WHERE id = ?
+            "#,
+            id
+        )
+        .fetch_optional(&self.connection_pool)
+        .await?;
+        
+        Ok(invitation)
     }
 
     async fn update(&self, item: &Invitation) -> Result<Invitation, Error> {
-        todo!()
+        sqlx::query!(
+            r#"
+            UPDATE Invitations 
+            SET groupId = ?, invitedUserId = ?, invitedById = ?, status = ?
+            WHERE id = ?
+            "#,
+            item.chat_id,
+            item.invited_id,
+            item.invitee_id,
+            item.state as InvitationStatus,
+            item.invite_id
+        )
+        .execute(&self.connection_pool)
+        .await?;
+        
+        // Return the updated invitation
+        Ok(item.clone())
     }
 
     async fn delete(&self, id: &IdType) -> Result<(), Error> {
-        todo!()
+        sqlx::query!(
+            "DELETE FROM Invitations WHERE id = ?",
+            id
+        )
+        .execute(&self.connection_pool)
+        .await?;
+        
+        Ok(())
     }
 }
 
@@ -210,26 +757,193 @@ impl ChatRepository {
     pub fn new(connection_pool: PoolType) -> Self {
         Self { connection_pool }
     }
+
+    /// Get all chats where user is a member
+    pub async fn get_chats_by_user(&self, user_id: &IdType) -> Result<Vec<Chat>, Error> {
+        let chats = sqlx::query_as!(
+            Chat,
+            r#"
+            SELECT 
+                c.id as chat_id,
+                c.title,
+                c.description,
+                c.type as "chat_type: ChatType"
+            FROM Chats c
+            INNER JOIN UserChatMetadata ucm ON c.id = ucm.chatId
+            WHERE ucm.userId = ?
+            "#,
+            user_id
+        )
+        .fetch_all(&self.connection_pool)
+        .await?;
+        
+        Ok(chats)
+    }
+//MOD opzione in piu per cercare chat private tra due utenti (possiamo evitare un ud come input)
+    /// Get private chat between two users (if exists)
+    pub async fn get_private_chat_between_users(&self, user1_id: &IdType, user2_id: &IdType) -> Result<Option<Chat>, Error> {
+        let chat = sqlx::query_as!(
+            Chat,
+            r#"
+            SELECT DISTINCT
+                c.id as chat_id,
+                c.title,
+                c.description,
+                c.type as "chat_type: ChatType"
+            FROM Chats c
+            INNER JOIN UserChatMetadata ucm1 ON c.id = ucm1.chatId
+            INNER JOIN UserChatMetadata ucm2 ON c.id = ucm2.chatId
+            WHERE c.type = 'Private' 
+            AND ucm1.userId = ? 
+            AND ucm2.userId = ?
+            AND ucm1.userId != ucm2.userId
+            "#,
+            user1_id,
+            user2_id
+        )
+        .fetch_optional(&self.connection_pool)
+        .await?;
+        
+        Ok(chat)
+    }
+
+    //MOD: assumo title univoco
+    /// Get group chat by title 
+    pub async fn get_groups_by_title(&self, title_group: &Option<String>) -> Result<Option<Chat>, Error> {
+        let chats = sqlx::query_as!(
+            Chat,
+            r#"
+            SELECT 
+                id as chat_id,
+                title,
+                description,
+                type as "chat_type: ChatType"
+            FROM Chats 
+            WHERE type = 'Group' and title = ?
+            "#, 
+            title_group
+        )
+        .fetch_optional(&self.connection_pool)
+        .await?;
+        
+        Ok(chats)
+    }
+
+    //MOD: forse utile per controlli
+    /// Check if chat exists and is of specified type
+    pub async fn is_chat_type(&self, chat_id: &IdType, expected_type: &ChatType) -> Result<bool, Error> {
+        let result = sqlx::query!(
+            "SELECT type FROM Chats WHERE id = ?",
+            chat_id
+        )
+        .fetch_optional(&self.connection_pool)
+        .await?;
+        
+        match result {
+            Some(row) => {
+                let chat_type_str = row.r#type.unwrap_or_default();
+                let matches = match expected_type {
+                    ChatType::Group => chat_type_str == "Group",
+                    ChatType::Private => chat_type_str == "Private",
+                };
+                Ok(matches)
+            },
+            None => Ok(false)
+        }
+    }
+
+    /// Update chat title and description (for groups)
+    pub async fn update_chat_description(&self, chat_id: &IdType, description: &Option<String>) -> Result<(), Error> {
+        sqlx::query!(
+            "UPDATE Chats SET description = ? WHERE id = ?",
+            description,
+            chat_id
+        )
+        .execute(&self.connection_pool)
+        .await?;
+        
+        Ok(())
+    }
 }
 
 impl Crud<Chat, IdType> for ChatRepository {
     async fn create(&self, item: &Chat) -> Result<Chat, Error> {
-        todo!()
+        // Insert chat using MySQL syntax
+        let result = sqlx::query!(
+            r#"
+            INSERT INTO Chats (title, description, type) 
+            VALUES (?, ?, ?)
+            "#,
+            item.title,
+            item.description,
+            item.chat_type as ChatType
+        )
+        .execute(&self.connection_pool)
+        .await?;
+
+        // Get the last inserted ID
+        let new_id = result.last_insert_id() as IdType;
+
+        // Return the created chat with the new ID
+        Ok(Chat {
+            chat_id: new_id,
+            title: item.title.clone(),
+            description: item.description.clone(),
+            chat_type: item.chat_type.clone(),
+        })
     }
 
     async fn read(&self, id: &IdType) -> Result<Option<Chat>, Error> {
-        todo!()
+        let chat = sqlx::query_as!(
+            Chat,
+            r#"
+            SELECT 
+                id as chat_id,
+                title,
+                description,
+                type as "chat_type: ChatType"
+            FROM Chats 
+            WHERE id = ?
+            "#,
+            id
+        )
+        .fetch_optional(&self.connection_pool)
+        .await?;
+        
+        Ok(chat)
     }
 
     async fn update(&self, item: &Chat) -> Result<Chat, Error> {
-        todo!()
+        sqlx::query!(
+            r#"
+            UPDATE Chats 
+            SET title = ?, description = ?, type = ?
+            WHERE id = ?
+            "#,
+            item.title,
+            item.description,
+            item.chat_type as ChatType,
+            item.chat_id
+        )
+        .execute(&self.connection_pool)
+        .await?;
+        
+        // Return the updated chat
+        Ok(item.clone())
     }
 
     async fn delete(&self, id: &IdType) -> Result<(), Error> {
-        todo!()
+        sqlx::query!(
+            "DELETE FROM Chats WHERE id = ?",
+            id
+        )
+        .execute(&self.connection_pool)
+        .await?;
+        
+        Ok(())
     }
 }
-
+*/
 //************************** UNIT TEST **************************//
 //howto guide : https://docs.rs/sqlx/latest/sqlx/attr.test.html
 /*

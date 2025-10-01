@@ -210,7 +210,7 @@ pub async fn update_member_role(
     // inviare messaggio di aggiornamento ruolo sul gruppo
     todo!()
 }
-pub async fn transfer_ownership(
+pub async fn transfer_ownership(    
     State(state): State<Arc<AppState>>,
     Path(chat_id): Path<IdType>,       
     Extension(current_user): Extension<User> // ottenuto dall'autenticazione tramite token jwt
