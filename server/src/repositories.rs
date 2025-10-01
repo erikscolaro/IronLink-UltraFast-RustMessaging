@@ -94,13 +94,6 @@ impl UserRepository {
     }
 
 ///considero l'username univoco
-
-
-
-
-
-
-/*/
     /// Find user by exact username match
     /// For partial username search, use search_by_username_partial
     pub async fn find_by_username(&self, username: &String) -> Result<Option<User>, Error> {
@@ -943,7 +936,8 @@ impl Crud<Chat, IdType> for ChatRepository {
         Ok(())
     }
 }
-*/
+
+
 //************************** UNIT TEST **************************//
 //howto guide : https://docs.rs/sqlx/latest/sqlx/attr.test.html
 /*
