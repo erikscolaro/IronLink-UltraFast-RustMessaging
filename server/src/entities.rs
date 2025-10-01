@@ -59,7 +59,7 @@ impl User {
 pub struct Message {
     pub message_id: IdType,
     pub chat_id: IdType,
-    pub sender_id: IdType,
+    pub sender_id: IdType,  // rendere opzionale per i messaggi di sistema visto che il sistema non ha tipo ? 
     pub content: String,
     // il server si aspetta una stringa litterale iso8601 che viene parsata in oggetto DateTime di tipo UTC
     // la conversione viene fatta in automatico da serde, la feature è stata abilitata
@@ -88,7 +88,7 @@ pub struct UserChatMetadata {
 pub struct Invitation {
     pub invite_id: IdType, //todo: valutare se togliere la chaive primaria qui, gli inviti sono univoci per invitee e chat_id
     // rinominato da group_id a chat_id per consistenza
-    pub chat_id: IdType,    // chat ( di gruppo ) in cui si viene invitati
+    pub target_chat_id: IdType,    // chat ( di gruppo ) in cui si viene invitati
     pub invited_id: IdType, // utente invitato
     pub invitee_id: IdType, // utente che invita
     pub state: InvitationStatus,
