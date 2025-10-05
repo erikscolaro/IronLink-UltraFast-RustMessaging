@@ -1,7 +1,7 @@
 use crate::AppState;
 use crate::auth::encode_jwt;
 use crate::dtos::{ChatDTO, MessageDTO, SearchQueryDTO, UserDTO, UserInChatDTO};
-use crate::entities::{IdType, User, UserRole};
+use crate::entities::{Chat, IdType, User, UserRole};
 use crate::error_handler::AppError;
 use crate::repositories::Crud;
 use axum::{
@@ -70,11 +70,12 @@ pub async fn root() -> Response {
 
 pub async fn login_user(
     State(state): State<Arc<AppState>>,
-    Path(user_id): Path<IdType>, // parametro dalla URL /auth/login/:username
     Json(body): Json<UserDTO>,   // JSON body
 ) -> Result<impl IntoResponse, AppError> {
-    // cerco l'utente, se  non lo trovo allora
-    let user = match state.user.read(&user_id).await? {
+    // cerco l'utente, se  non lo trovo allora errore
+    let username = body.username.ok_or(AppError::with_message(StatusCode::BAD_REQUEST, "Invalid username or password"))?;
+    
+    let user = match state.user.find_by_username(&username).await? {
         Some(user) => user,
         None => return Err(AppError::with_status(StatusCode::UNAUTHORIZED)),
     };
@@ -110,12 +111,7 @@ pub async fn login_user(
         HeaderValue::from_str(&format!("Bearer {}", token)).unwrap(),
     );
 
-    #[derive(serde::Serialize)]
-    struct TokenResponse {
-        token: String,
-    }
-
-    Ok((StatusCode::OK, headers, Json(TokenResponse { token })))
+    Ok((StatusCode::OK, headers))
 }
 
 pub async fn register_user(
@@ -129,7 +125,12 @@ pub async fn search_user_with_username(
     State(state): State<Arc<AppState>>,
     Query(params): Query<SearchQueryDTO>, // query params /users/find?search=username
 ) -> Result<Json<Vec<UserDTO>>, AppError> {
-    todo!()
+    let query = params.search
+        .filter(|v| v.len() >= 3)
+        .ok_or_else(|| AppError::with_message(StatusCode::BAD_REQUEST, "Query search param too short."))?;
+    let users = state.user.search_by_username_partial(&query).await?;
+    let users_dto = users.into_iter().map(UserDTO::from).collect::<Vec<_>>();
+    Ok(Json::from(users_dto))
 }
 pub async fn get_user_by_id(
     State(state): State<Arc<AppState>>,
@@ -137,6 +138,7 @@ pub async fn get_user_by_id(
 ) -> Result<Json<Option<UserDTO>>, AppError> {
     todo!()
 }
+
 pub async fn delete_my_account(
     State(state): State<Arc<AppState>>,
     Extension(current_user): Extension<User>, // ottenuto dall'autenticazione tramite token jwt
@@ -165,6 +167,7 @@ pub async fn list_chats(
 ) -> Result<Json<Vec<ChatDTO>>, AppError> {
     todo!()
 }
+
 #[debug_handler]
 pub async fn create_chat(
     State(state): State<Arc<AppState>>,
