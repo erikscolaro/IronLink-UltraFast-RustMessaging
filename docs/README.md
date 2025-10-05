@@ -58,7 +58,7 @@ L’obiettivo è fornire un sistema efficiente, sicuro e multi–piattaforma che
 
 #### Chat Unificate (Group + Private)
 - `GET /chats` [~] **Struttura pronta** - Lista delle chat dell'utente
-- `POST /chats` [~] **Struttura pronta** - Creazione nuova chat
+- `POST /chats` [~] **Struttura pronta** - Creazione nuova chat (se privata evita la creazione di duplicati)
 - `GET /chats/{id}/messages` [~] **Struttura pronta** - Messaggi di una chat
 - `GET /chats/{id}/members` [~] **Struttura pronta** - Lista membri di una chat
 

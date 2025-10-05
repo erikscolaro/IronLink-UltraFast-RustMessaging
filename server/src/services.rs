@@ -1,7 +1,7 @@
 use crate::AppState;
 use crate::auth::encode_jwt;
 use crate::dtos::{ChatDTO, MessageDTO, SearchQueryDTO, UserDTO, UserInChatDTO};
-use crate::entities::{Chat, IdType, User, UserRole};
+use crate::entities::{Chat, ChatType, IdType, User, UserRole};
 use crate::error_handler::AppError;
 use crate::repositories::Crud;
 use axum::{
@@ -202,7 +202,85 @@ pub async fn create_chat(
     Json(body): Json<ChatDTO>,
 ) -> Result<Json<ChatDTO>, AppError> {
     // ricordarsi che la crazione di una chat privata non ha titolo o descrizione, usare il flag chat type
-    todo!()
+
+    // !! WIP 
+
+    let chat;
+    match body.chat_type {
+    //se la chat è privata, controllare che non esista già una chat privata tra i due utenti
+        ChatType::Private =>{
+            
+            //cerca id del secondo utente
+            let other_users = body.user_list.find(|&&id| id != current_user.user_id);
+            // se non esiste, errore
+            if other_users.is_none() || body.user_list.as_ref().unwrap().len() != 2 {
+                return Err(AppError::with_message(
+                    StatusCode::BAD_REQUEST,
+                    "Private chat should specify two different users.",
+                ));
+            }
+            // se esiste, cerca chat privata tra i due
+            let second_user_id = other_users[0].unwrap();
+            let existing_chat = state.chat.get_private_chat_between_users(&current_user.user_id, second_user_id).await?;
+            // se esiste, errore
+            if existing_chat.is_some() {
+                return Err(AppError::with_message(
+                    StatusCode::CONFLICT,
+                    "A private chat between these users already exists.",
+                ));
+            }
+            // se non esiste, crea la chat privata con i due utenti
+            chat = state.chat.create(body).await?;
+            // crea i metadata per entrambi gli utenti, entrambi member
+
+            let metadata_current_user = UserChatMetadata {
+                user_id: current_user.user_id,
+                chat_id: chat.chat_id,
+                user_role: UserRole::Member,
+                member_since: Utc::now(),
+                messages_visible_from: Utc::now(),
+                messages_received_until: Utc::now(),
+            };
+
+            let metadata_second_user = UserChatMetadata {
+                user_id: second_user_id,
+                chat_id: chat.chat_id,
+                user_role: UserRole::Member,
+                member_since: Utc::now(),
+                messages_visible_from: Utc::now(),
+                messages_received_until: Utc::now(),
+            };
+            //inserisci i metadata specificati nel database con create
+            state.meta.create(metadata_current_user).await?;
+            state.meta.create(metadata_second_user).await?;
+        }
+
+    //se la chat è di gruppo, allora current user diventa owner automaticamente
+        ChatType::Group => {
+           // crea la chat di gruppo
+              chat = state.chat.create(body).await?;
+
+              // crea i metadata per l'owner
+                let metadata_owner = UserChatMetadata {
+                    user_id: current_user.user_id,
+                    chat_id: chat.chat_id,
+                    user_role: UserRole::Owner,
+                    member_since: Utc::now(),
+                    messages_visible_from: Utc::now(),
+                    messages_received_until: Utc::now(),
+                };
+
+            //inserisci i metadata specificati nel database con create
+
+            state.meta.create(metadata_owner).await?;
+        }
+
+    }
+
+    // crea chat, che sia privata o di gruppo
+    let chat_dto = ChatDTO::from(state.chat.create(body));
+    Ok(Json(chat_dto))
+    
 }
 pub async fn get_chat_messages(
     State(state): State<Arc<AppState>>,
