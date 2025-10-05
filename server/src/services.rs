@@ -120,7 +120,52 @@ pub async fn register_user(
     State(state): State<Arc<AppState>>,
     Json(body): Json<UserDTO>, // JSON body
 ) -> Result<Json<UserDTO>, AppError> {
-    todo!()
+    
+    // Verifica che username sia fornito 
+    let username = if let Some(username) = &body.username {
+        username.clone()
+    } else {
+        return Err(AppError::with_message(
+            StatusCode::BAD_REQUEST,
+            "Username is required"
+        ));
+    };
+    // Verifica che password sia fornita 
+    let password = if let Some(password) = &body.password {
+        password.clone()
+    } else {
+        return Err(AppError::with_message(
+            StatusCode::BAD_REQUEST, 
+            "Password is required"
+        ));
+    };
+    // Verifica che l'utente non esista già
+    if state.user.find_by_username(&username).await.is_ok() {
+        return Err(AppError::with_message(
+            StatusCode::CONFLICT, 
+            "Username already exists"
+        ));
+    }
+    // Hash della password 
+    let password_hash = if let Ok(hash) = User::hash_password(&password) {
+        hash        //se l'operazione va a buon fine, restituisco l'hash
+    } else {
+        return Err(AppError::with_message(
+            StatusCode::INTERNAL_SERVER_ERROR, 
+            "Failed to hash password"
+        ));
+    };
+    // Crea il nuovo utente
+    let new_user = User {
+        user_id: 0, 
+        username,
+        password: password_hash,
+    };
+
+    // Salva nel database e ritorna il DTO
+    let created_user = state.user.create(new_user).await?;
+    
+    Ok(Json(UserDTO::from(created_user)))
 }
 
 pub async fn search_user_with_username(
@@ -138,7 +183,8 @@ pub async fn get_user_by_id(
     State(state): State<Arc<AppState>>,
     Path(user_id): Path<IdType>, // parametro dalla URL /users/:user_id
 ) -> Result<Json<Option<UserDTO>>, AppError> {
-    todo!()
+    let user_option = state.user.read(&user_id).await?;
+    Ok(Json(user_option.map(UserDTO::from)))
 }
 
 pub async fn delete_my_account(
