@@ -1,16 +1,18 @@
+use crate::AppState;
 use crate::auth::encode_jwt;
 use crate::dtos::{ChatDTO, MessageDTO, SearchQueryDTO, UserDTO, UserInChatDTO};
 use crate::entities::{IdType, User, UserRole};
 use crate::error_handler::AppError;
 use crate::repositories::Crud;
-use crate::AppState;
-use axum::extract::{Path, Query, State, Json};
-use axum::http::{HeaderMap, HeaderValue, StatusCode};
-use axum::response::{IntoResponse, Response};
-use axum::{Extension};
+use axum::{
+    Extension,
+    extract::{Json, Path, Query, State},
+    http::{HeaderMap, HeaderValue, StatusCode},
+    response::{IntoResponse, Response}
+};
+use axum_macros::debug_handler;
 use serde_json::json;
 use std::sync::Arc;
-use axum_macros::debug_handler;
 /* si usano queste ntoazioni per prendere cioò che ci serve dai frame http, mi raccomando
   funziona solo in questo esatto ordine ! Json consuma tutto il messaggio quindi deve stare ultimo
         State(state): State<Arc<AppState>>,
@@ -68,8 +70,8 @@ pub async fn root() -> Response {
 
 pub async fn login_user(
     State(state): State<Arc<AppState>>,
-    Path(user_id): Path<IdType>,        // parametro dalla URL /users/:id
-    Json(body): Json<UserDTO>, // JSON body
+    Path(user_id): Path<IdType>, // parametro dalla URL /auth/login/:username
+    Json(body): Json<UserDTO>,   // JSON body
 ) -> Result<impl IntoResponse, AppError> {
     // cerco l'utente, se  non lo trovo allora
     let user = match state.user.read(&user_id).await? {
@@ -80,10 +82,16 @@ pub async fn login_user(
     // Verify the password provided against the stored hash
     if let Some(password) = &body.password {
         if !user.verify_password(password) {
-            return Err(AppError::with_message(StatusCode::UNAUTHORIZED, "Username or password are not correct."));
+            return Err(AppError::with_message(
+                StatusCode::UNAUTHORIZED,
+                "Username or password are not correct.",
+            ));
         }
     } else {
-        return Err(AppError::with_message(StatusCode::UNAUTHORIZED, "Password was not provided."));
+        return Err(AppError::with_message(
+            StatusCode::UNAUTHORIZED,
+            "Password was not provided.",
+        ));
     }
 
     let token = encode_jwt(user.username, user.user_id, &state.jwt_secret)?;
@@ -97,7 +105,10 @@ pub async fn login_user(
 
     let mut headers = HeaderMap::new();
     headers.insert("Set-Cookie", HeaderValue::from_str(&cookie_value).unwrap());
-    headers.insert("Authorization", HeaderValue::from_str(&format!("Bearer {}", token)).unwrap());
+    headers.insert(
+        "Authorization",
+        HeaderValue::from_str(&format!("Bearer {}", token)).unwrap(),
+    );
 
     #[derive(serde::Serialize)]
     struct TokenResponse {
@@ -116,34 +127,32 @@ pub async fn register_user(
 
 pub async fn search_user_with_username(
     State(state): State<Arc<AppState>>,
-    Query(params): Query<SearchQueryDTO>,   // query params ?search=username
+    Query(params): Query<SearchQueryDTO>, // query params /users/find?search=username
 ) -> Result<Json<Vec<UserDTO>>, AppError> {
     todo!()
 }
 pub async fn get_user_by_id(
     State(state): State<Arc<AppState>>,
-    Path(user_id): Path<IdType>,        // parametro dalla URL /users/:user_id
+    Path(user_id): Path<IdType>, // parametro dalla URL /users/:user_id
 ) -> Result<Json<Option<UserDTO>>, AppError> {
     todo!()
 }
 pub async fn delete_my_account(
     State(state): State<Arc<AppState>>,
-    Extension(current_user): Extension<User> // ottenuto dall'autenticazione tramite token jwt
+    Extension(current_user): Extension<User>, // ottenuto dall'autenticazione tramite token jwt
 ) -> Result<impl IntoResponse, AppError> {
-    
-    // logica di cancellazione account 
+    // logica di cancellazione account
     // occhio, la cancellazione rinomina username con Deleted User e sostituisce la password con ""
     // altrimenti ci tocca modificare nella tabella messaggi tutti i messaggi dell'utente!
     // anche i descrittori metdata vanno cancellati, ma questo è inevitabile
     // lato client, bisogna gestire i messaggi inviati da utenti cancellati in questo modo:
-        // se l'id è nella lista dei membri della chat, allora mostra il nome
-        // altrimenti, mostra deleted user 
-    
+    // se l'id è nella lista dei membri della chat, allora mostra il nome
+    // altrimenti, mostra deleted user
+
     // anche il caso in cui un utente owner di un gruppo si cancella va gestito
-    // cosa succede? si cancellano tutti i gruppi di sua appartenenza ? oppure si identifica randomicamente 
+    // cosa succede? si cancellano tutti i gruppi di sua appartenenza ? oppure si identifica randomicamente
     // una persona tra gli admin che prende il possesso del gruppo ?
-    
-    
+
     // sovrascrive il cookie lato client con uno che scade subito, per forzare il logout
     let cookie = "token=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0";
     let mut headers = HeaderMap::new();
@@ -151,45 +160,43 @@ pub async fn delete_my_account(
     Ok((StatusCode::OK, headers, "Logged out"))
 }
 pub async fn list_chats(
-        State(state): State<Arc<AppState>>,
-        Extension(current_user): Extension<User> // ottenuto dall'autenticazione tramite token jwt
-    ) -> Result<Json<Vec<ChatDTO>>, AppError> {
+    State(state): State<Arc<AppState>>,
+    Extension(current_user): Extension<User>, // ottenuto dall'autenticazione tramite token jwt
+) -> Result<Json<Vec<ChatDTO>>, AppError> {
     todo!()
 }
 #[debug_handler]
 pub async fn create_chat(
     State(state): State<Arc<AppState>>,
     Extension(current_user): Extension<User>, // ottenuto dall'autenticazione tramite token jwt
-    Json(body): Json<ChatDTO>
+    Json(body): Json<ChatDTO>,
 ) -> Result<Json<ChatDTO>, AppError> {
-    
-    // ricordarsi che la crazione di una chat privata non ha titolo o descrizione, usare il flag chat type 
+    // ricordarsi che la crazione di una chat privata non ha titolo o descrizione, usare il flag chat type
     todo!()
 }
 pub async fn get_chat_messages(
     State(state): State<Arc<AppState>>,
-    Path(chat_id): Path<IdType>,        
-    // Query(params): Query<QueryStructCursom>,   // da vedere, se conviene o meno 
-    Extension(current_user): Extension<User> // ottenuto dall'autenticazione tramite token jwt
+    Path(chat_id): Path<IdType>,
+    // Query(params): Query<QueryStructCursom>,   // da vedere, se conviene o meno
+    Extension(current_user): Extension<User>, // ottenuto dall'autenticazione tramite token jwt
 ) -> Result<Json<Vec<MessageDTO>>, AppError> {
     todo!()
 }
 pub async fn list_chat_members(
     State(state): State<Arc<AppState>>,
-    Path(chat_id): Path<IdType>,        
+    Path(chat_id): Path<IdType>,
 ) -> Result<Json<Vec<UserInChatDTO>>, AppError> {
     todo!()
 }
 
 pub async fn invite_to_chat(
     State(state): State<Arc<AppState>>,
-    Path(chat_id): Path<IdType>,      
+    Path(chat_id): Path<IdType>,
     Path(user_id): Path<IdType>,
-    Extension(current_user): Extension<User> // ottenuto dall'autenticazione tramite token jwt
+    Extension(current_user): Extension<User>, // ottenuto dall'autenticazione tramite token jwt
 ) -> Result<(), AppError> {
-    
     // possiamo dare più significato alla questione dei ruoli se solo admin o owner possono invitare persone
-    
+
     // crea una chat privata con l'utente target se non esiste già e lo informa della craezione della chat
     // in questa chat privata, attraverso il canale websocket, ricavabile dallo stato (todo) e salva in dabaase persistnete
     // invia alla persona un emssaggio di sistema con l'invito
@@ -200,46 +207,46 @@ pub async fn invite_to_chat(
 #[debug_handler]
 pub async fn update_member_role(
     State(state): State<Arc<AppState>>,
-    Path(user_id): Path<IdType>,     
+    Path(user_id): Path<IdType>,
     Extension(current_user): Extension<User>, // ottenuto dall'autenticazione tramite token jwt
-    Json(body): Json<UserRole>
+    Json(body): Json<UserRole>,
 ) -> Result<(), AppError> {
-    
-    //ricordare di controllare i permessi per fare questo , forse conviene creare un middleware? 
-    
+    //ricordare di controllare i permessi per fare questo , forse conviene creare un middleware?
+
     // inviare messaggio di aggiornamento ruolo sul gruppo
     todo!()
 }
 pub async fn transfer_ownership(    
     State(state): State<Arc<AppState>>,
-    Path(chat_id): Path<IdType>,       
-    Extension(current_user): Extension<User> // ottenuto dall'autenticazione tramite token jwt
+    Path(chat_id): Path<IdType>,
+    Extension(current_user): Extension<User>, // ottenuto dall'autenticazione tramite token jwt
 ) -> Result<(), AppError> {
     //anche qui, devo controlalre se current user è owner per trasferire l'ownership
     // devo aggionrare i metadata di entrambi
     // devo inviare un messaggio di sistema per informare nel gruppo
-    
+
     todo!()
 }
 pub async fn remove_member(
     State(state): State<Arc<AppState>>,
     Path(chat_id): Path<IdType>,
     Path(user_id): Path<IdType>,
-    Extension(current_user): Extension<User> // ottenuto dall'autenticazione tramite token jwt
+    Extension(current_user): Extension<User>, // ottenuto dall'autenticazione tramite token jwt
 ) -> Result<(), AppError> {
     // controllare se sono admin o owner
-    // cancellare i metadata 
+    // cancellare i metadata
     // come gestiamo i messaggi delle persone uscite? li lasciamo dove stanno? direi di si
     // ricordarsi di inviare messaggio di sistema
     todo!()
 }
 pub async fn leave_chat(
     State(state): State<Arc<AppState>>,
-    Path(chat_id): Path<IdType>,        
-    Extension(current_user): Extension<User> // ottenuto dall'autenticazione tramite token jwt
+    Path(chat_id): Path<IdType>,
+    Extension(current_user): Extension<User>, // ottenuto dall'autenticazione tramite token jwt
 ) -> Result<(), AppError> {
     // solo cancellare il metadata
-    // inviare messaggio di sistema 
-    
+    // inviare messaggio di sistema
+
     todo!()
 }
+
