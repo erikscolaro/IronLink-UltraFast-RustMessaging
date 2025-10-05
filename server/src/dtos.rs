@@ -27,18 +27,11 @@ impl From<User> for UserDTO {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ChatDTO {
-<<<<<<< HEAD
-    id: Option<i32>,
-    title: Option<String>,
-    description: Option<String>,
-    chat_type: ChatType,
-=======
-    pub id: Option<IdType>,
+    pub id: Option<i32>,
     pub title: Option<String>,
     pub description: Option<String>,
-    pub user_list: Option<Vec<IdType>>, // (opzionale) lista ID utenti appartenenti alla chat
     pub chat_type: ChatType,
->>>>>>> 18bf51259401f13794d7c06b90eaf584356b5016
+    pub user_list: Option<Vec<i32>>, // (opzionale) lista ID utenti appartenenti alla chat
 }
 
 impl From<Chat> for ChatDTO {
