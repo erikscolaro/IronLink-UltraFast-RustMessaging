@@ -302,12 +302,20 @@ L'obiettivo è fornire un sistema efficiente, sicuro e multi-piattaforma che con
   - Output: JWT token in header `Authorization` e cookie `HttpOnly`
 - `POST /auth/register` ⚠️ **Struttura pronta** - `todo!()`
 
+<<<<<<< HEAD
 #### **Utenti** 
 - `GET /users?search=<username>` ✅ **Funzionante**
   - Ricerca parziale username (min 3 caratteri)
   - Limit 10 risultati
 - `GET /users/{user_id}` ⚠️ **Struttura pronta** - `todo!()`
 - `DELETE /users/me` ⚠️ **Struttura pronta** - `todo!()`
+=======
+#### Chat Unificate (Group + Private)
+- `GET /chats` [~] **Struttura pronta** - Lista delle chat dell'utente
+- `POST /chats` [~] **Struttura pronta** - Creazione nuova chat (se privata evita la creazione di duplicati)
+- `GET /chats/{id}/messages` [~] **Struttura pronta** - Messaggi di una chat
+- `GET /chats/{id}/members` [~] **Struttura pronta** - Lista membri di una chat
+>>>>>>> 18bf51259401f13794d7c06b90eaf584356b5016
 
 #### **Chat Unificate (Group + Private)**
 - `GET /chats` ✅ **Funzionante**
