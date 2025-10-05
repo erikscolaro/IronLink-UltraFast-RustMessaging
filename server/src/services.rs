@@ -13,6 +13,8 @@ use axum::{
 use axum_macros::debug_handler;
 use serde_json::json;
 use std::sync::Arc;
+use futures_util::future::try_join_all;
+use tokio::task::Id;
 /* si usano queste ntoazioni per prendere cioò che ci serve dai frame http, mi raccomando
   funziona solo in questo esatto ordine ! Json consuma tutto il messaggio quindi deve stare ultimo
         State(state): State<Arc<AppState>>,
@@ -161,12 +163,37 @@ pub async fn delete_my_account(
     headers.insert("Set-Cookie", HeaderValue::from_str(cookie).unwrap());
     Ok((StatusCode::OK, headers, "Logged out"))
 }
+
 pub async fn list_chats(
     State(state): State<Arc<AppState>>,
-    Extension(current_user): Extension<User>, // ottenuto dall'autenticazione tramite token jwt
+    Extension(current_user): Extension<User>,
 ) -> Result<Json<Vec<ChatDTO>>, AppError> {
-    todo!()
+    // prendi tutti i chat_id dell'utente
+    let chat_ids: Vec<IdType> = state
+        .meta
+        .find_all_by_user_id(&current_user.user_id)
+        .await?
+        .into_iter()
+        .map(|s| s.chat_id)
+        .collect();
+
+    let chats: Vec<Chat> = try_join_all(
+        chat_ids.into_iter().map(|cid| {
+            let state = state.clone(); // se AppState è Arc, clonalo
+            async move { state.chat.read(&cid).await }
+        })
+    )
+        .await?
+        .into_iter()
+        .filter_map(|c| c) // prende solo i Some
+        .collect();
+
+    // converti in DTO
+    let chats_dto: Vec<ChatDTO> = chats.into_iter().map(ChatDTO::from).collect();
+
+    Ok(Json(chats_dto))
 }
+
 
 #[debug_handler]
 pub async fn create_chat(

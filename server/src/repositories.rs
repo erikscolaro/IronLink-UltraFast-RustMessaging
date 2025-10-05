@@ -523,7 +523,31 @@ impl UserChatMetadataRepository {
         
         Ok(())
     }
+
+    pub async fn find_all_by_user_id(&self, user_id: &IdType) -> Result<Vec<UserChatMetadata>, Error> {
+        let result = sqlx::query_as!(
+        UserChatMetadata,
+        r#"
+        SELECT
+            userId as user_id,
+            chatId as chat_id,
+            role as "user_role: UserRole",
+            member_since,
+            messages_visible_from,
+            messages_received_until
+        FROM UserChatMetadata
+        WHERE userId = ?
+        "#,
+        user_id
+    )
+            .fetch_all(&self.connection_pool)
+            .await?;
+
+        Ok(result)
+    }
+
 }
+
 
 impl Crud<UserChatMetadata, IdType> for UserChatMetadataRepository {
     async fn create(&self, item: &UserChatMetadata) -> Result<UserChatMetadata, Error> {
