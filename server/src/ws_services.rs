@@ -153,12 +153,20 @@ pub async fn send_error_to_user(state: &AppState, user_id: IdType, error_code: u
 }
 
 async fn process_chat_message(state: Arc<AppState>, user_id: IdType, event: MessageDTO){
+
+    /*
+    - controllare se la chat con l'utente esiste
+    - salvare a db il messaggio
+     */
+
+    /*
+    state.user_online.get(event.destinatario) => tx (se online) altrimenti none
+    se online => tx.send(event)
+     */
+
     todo!()
 }
 
 async fn process_invitation(state: Arc<AppState>, user_id: IdType, event: InvitationDTO){
     todo!()
 }
-
-
-

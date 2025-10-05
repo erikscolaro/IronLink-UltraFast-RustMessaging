@@ -101,3 +101,4 @@ pub struct Chat {
     pub description: Option<String>,
     pub chat_type: ChatType,
 }
+

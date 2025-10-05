@@ -70,7 +70,7 @@ pub async fn root() -> Response {
 
 pub async fn login_user(
     State(state): State<Arc<AppState>>,
-    Path(user_id): Path<IdType>, // parametro dalla URL /users/:id
+    Path(user_id): Path<IdType>, // parametro dalla URL /auth/login/:username
     Json(body): Json<UserDTO>,   // JSON body
 ) -> Result<impl IntoResponse, AppError> {
     // cerco l'utente, se  non lo trovo allora
@@ -127,7 +127,7 @@ pub async fn register_user(
 
 pub async fn search_user_with_username(
     State(state): State<Arc<AppState>>,
-    Query(params): Query<SearchQueryDTO>, // query params ?search=username
+    Query(params): Query<SearchQueryDTO>, // query params /users/find?search=username
 ) -> Result<Json<Vec<UserDTO>>, AppError> {
     todo!()
 }
@@ -249,3 +249,4 @@ pub async fn leave_chat(
 
     todo!()
 }
+
