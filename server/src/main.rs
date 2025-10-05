@@ -101,7 +101,7 @@ async fn main() {
 
     // utenti
     let user_routes = Router::new()
-        .route("/", get(search_user_with_username))
+        .route("", get(search_user_with_username)) // http: GET users?search=
         .route("/{user_id}", get(get_user_by_id))
         .route("/me", delete(delete_my_account))
         .layer(middleware::from_fn_with_state(
