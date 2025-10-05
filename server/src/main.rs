@@ -8,7 +8,7 @@ mod services;
 mod ws_services;
 
 use crate::auth::authentication_middleware;
-use crate::entities::IdType;
+use crate::dtos::WsEventDTO;
 use crate::services::login_user;
 use crate::ws_services::ws_handler;
 use crate::{
@@ -22,21 +22,16 @@ use crate::{
         search_user_with_username, transfer_ownership, update_member_role,
     },
 };
-use axum::extract::ws::Message;
 use axum::routing::any;
 use axum::{
     Router, middleware,
     routing::{delete, get, patch, post},
 };
 use dashmap::DashMap;
-use dotenv::dotenv;
 use sqlx::mysql::MySqlPoolOptions;
-use std::{env, net::SocketAddr, sync::Arc, time::Duration};
-use std::collections::HashMap;
-use std::sync::RwLock;
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc::Sender;
-use crate::dtos::WsEventDTO;
 
 struct AppState {
     user: UserRepository,
@@ -45,42 +40,49 @@ struct AppState {
     invitation: InvitationRepository,
     meta: UserChatMetadataRepository,
     jwt_secret: String,
-    users_online: DashMap<IdType, Sender<WsEventDTO>>,
+    users_online: DashMap<i32, Sender<WsEventDTO>>,
 }
 
 #[tokio::main]
 async fn main() {
-    // avvio dotenv
-    dotenv().ok();
-    // cerco la variaible per connettermi al database
-    let database_url =
-        env::var("DATABASE_URL").expect("Error retrieving database url from environment.");
+    // Carica la configurazione dalle variabili d'ambiente
+    let config = config::Config::from_env()
+        .expect("Failed to load configuration. Check your .env file.");
 
-    //builder per configurare le connessioni al database
+    // Stampa info sulla configurazione
+    config.print_info();
+
+    // Builder per configurare le connessioni al database
     let pool_options = MySqlPoolOptions::new()
-        .max_connections(1000)
-        .max_lifetime(Duration::from_secs(1))
+        .max_connections(config.max_connections)
+        .max_lifetime(Duration::from_secs(config.connection_lifetime_secs))
         .test_before_acquire(true);
 
-    // avvio il pool di connessioni al database
+    // Avvio il pool di connessioni al database
     let connection_pool = pool_options
-        .connect(database_url.as_str())
+        .connect(&config.database_url)
         .await
         .expect("Error connecting to the database");
 
-    // creiamo una struct repos per poterla condiividere come stato alle varie routes
+    println!("✓ Database connection established");
+
+    // Creiamo una struct repos per poterla condividere come stato alle varie routes
     let state = Arc::new(AppState {
         user: UserRepository::new(connection_pool.clone()),
         chat: ChatRepository::new(connection_pool.clone()),
         msg: MessageRepository::new(connection_pool.clone()),
         invitation: InvitationRepository::new(connection_pool.clone()),
         meta: UserChatMetadataRepository::new(connection_pool.clone()),
-        jwt_secret: env::var("JWT_SECRET").unwrap_or("un segreto meno bello".to_string()),
+        jwt_secret: config.jwt_secret.clone(),
         users_online: Default::default(),
     });
 
     // Definizione indirizzo del server
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let addr = SocketAddr::from((
+        config.server_host.parse::<std::net::IpAddr>()
+            .expect("Invalid SERVER_HOST format"),
+        config.server_port
+    ));
     println!("Server listening on http://{}", addr);
 
     // Creazione del listener TCP per ascoltare l'indirizzo
@@ -101,7 +103,7 @@ async fn main() {
 
     // utenti
     let user_routes = Router::new()
-        .route("", get(search_user_with_username)) // http: GET users?search=
+        .route("/", get(search_user_with_username)) // http: GET users?search=
         .route("/{user_id}", get(get_user_by_id))
         .route("/me", delete(delete_my_account))
         .layer(middleware::from_fn_with_state(

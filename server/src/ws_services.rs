@@ -1,27 +1,27 @@
+use crate::dtos::{InvitationDTO, MessageDTO};
 use crate::{
+    AppState,
     dtos::WsEventDTO,
-    entities::{IdType, User},
-    AppState
+    entities::User,
 };
 use axum::extract::ws::Utf8Bytes;
 use axum::{
+    Extension,
     extract::{
+        State,
         ws::{Message, WebSocket, WebSocketUpgrade},
-        State
     },
     response::Response,
-    Extension
 };
 use futures_util::{
+    SinkExt,
     stream::{SplitSink, SplitStream, StreamExt},
-    SinkExt
 };
 use std::sync::Arc;
 use tokio::{
-    sync::mpsc::{channel, Receiver},
-    time::{sleep, Duration}
+    sync::mpsc::{Receiver, channel},
+    time::{Duration, sleep},
 };
-use crate::dtos::{InvitationDTO, MessageDTO};
 
 pub async fn ws_handler(
     ws: WebSocketUpgrade,
@@ -39,7 +39,7 @@ pub async fn ws_handler(
         .on_upgrade(move |socket| handle_socket(socket, state, user_id))
 }
 
-async fn handle_socket(ws: WebSocket, state: Arc<AppState>, user_id: IdType) {
+async fn handle_socket(ws: WebSocket, state: Arc<AppState>, user_id: i32) {
     // Dividiamo il WebSocket in due metà: sender e receiver
     let (sender, receiver) = ws.split();
 
@@ -56,7 +56,11 @@ async fn handle_socket(ws: WebSocket, state: Arc<AppState>, user_id: IdType) {
     tokio::spawn(read_from_ws(receiver, user_id, state.clone()));
 }
 
-pub async fn read_from_ws(mut receiver: SplitStream<WebSocket>, user_id: IdType, state: Arc<AppState>) {
+pub async fn read_from_ws(
+    mut receiver: SplitStream<WebSocket>,
+    user_id: i32,
+    state: Arc<AppState>,
+) {
     // ciclo su ws per ottenere i messaggi
     while let Some(msg_result) = receiver.next().await {
         // match per vedere se ci sono errori sul ws
@@ -70,14 +74,18 @@ pub async fn read_from_ws(mut receiver: SplitStream<WebSocket>, user_id: IdType,
             }
         };
 
-        // Match per tipo di frame ws, se text, close, ping pong ... 
+        // Match per tipo di frame ws, se text, close, ping pong ...
         match msg {
             Message::Text(text) => {
                 // match per gestire la deserializzazione e inoltrare ai giusti handler
                 match serde_json::from_str::<WsEventDTO>(&text) {
                     Ok(event) => match event {
-                        WsEventDTO::Message(msg) => { process_chat_message(state.clone(), user_id, msg).await}
-                        WsEventDTO::Invitation(inv) => { process_invitation(state.clone(), user_id, inv).await }
+                        WsEventDTO::Message(msg) => {
+                            process_chat_message(state.clone(), user_id, msg).await
+                        }
+                        WsEventDTO::Invitation(inv) => {
+                            process_invitation(state.clone(), user_id, inv).await
+                        }
                         _ => {} // non ricevo mai errori o messaggi di sistema dal client
                     },
                     Err(err) => {
@@ -118,7 +126,11 @@ pub async fn write_on_ws(
         match serde_json::to_string(&event) {
             Ok(text) => {
                 // serializza di nuovo in utf8bytes, richiesto dal framework
-                if sender.send(Message::Text(Utf8Bytes::from(text))).await.is_err() {
+                if sender
+                    .send(Message::Text(Utf8Bytes::from(text)))
+                    .await
+                    .is_err()
+                {
                     if cfg!(debug_assertions) {
                         println!("Client disconnesso durante la scrittura");
                     }
@@ -141,19 +153,33 @@ pub async fn write_on_ws(
     }
 }
 
-pub async fn send_error_to_user(state: &AppState, user_id: IdType, error_code: u16, message: String) {
+pub async fn send_error_to_user(
+    state: &AppState,
+    user_id: i32,
+    error_code: u16,
+    message: String,
+) {
     if let Some(tx) = state.users_online.get(&user_id) {
         // invio direttamente il WsEventDTO sul canale
-        if tx.send(WsEventDTO::Error {code: error_code, message }).await.is_err() {
+        if tx
+            .send(WsEventDTO::Error {
+                code: error_code,
+                message,
+            })
+            .await
+            .is_err()
+        {
             if cfg!(debug_assertions) {
-                eprintln!("Client disconnesso, errore non inviato all'utente {}", user_id);
+                eprintln!(
+                    "Client disconnesso, errore non inviato all'utente {}",
+                    user_id
+                );
             }
         }
     }
 }
 
-async fn process_chat_message(state: Arc<AppState>, user_id: IdType, event: MessageDTO){
-
+async fn process_chat_message(state: Arc<AppState>, user_id: i32, event: MessageDTO) {
     /*
     - controllare se la chat con l'utente esiste
     - salvare a db il messaggio
@@ -167,6 +193,6 @@ async fn process_chat_message(state: Arc<AppState>, user_id: IdType, event: Mess
     todo!()
 }
 
-async fn process_invitation(state: Arc<AppState>, user_id: IdType, event: InvitationDTO){
+async fn process_invitation(state: Arc<AppState>, user_id: i32, event: InvitationDTO) {
     todo!()
 }

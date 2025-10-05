@@ -1,12 +1,15 @@
-use crate::entities::{Chat, ChatType, IdType, Invitation, InvitationStatus, Message, MessageType, User, UserChatMetadata, UserRole};
+use crate::entities::{
+    Chat, ChatType, Invitation, InvitationStatus, Message, MessageType, User,
+    UserChatMetadata, UserRole,
+};
+use crate::error_handler::AppError;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use crate::error_handler::AppError;
 
 // struct per gestire io col client
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UserDTO {
-    pub id: Option<IdType>,
+    pub id: Option<i32>,
     pub username: Option<String>,
     #[serde(skip_serializing)]
     pub password: Option<String>,
@@ -24,7 +27,7 @@ impl From<User> for UserDTO {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ChatDTO {
-    id: Option<IdType>,
+    id: Option<i32>,
     title: Option<String>,
     description: Option<String>,
     chat_type: ChatType,
@@ -44,7 +47,7 @@ impl From<Chat> for ChatDTO {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UserInChatDTO {
     pub user: UserDTO,
-    pub role: UserRole,
+    pub role: Option<UserRole>,
     pub member_since: DateTime<Utc>,
 }
 
@@ -61,9 +64,9 @@ impl From<(User, UserChatMetadata)> for UserInChatDTO {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct MessageDTO {
-    pub message_id: Option<IdType>, // reso opzionale
-    pub chat_id: IdType,
-    pub sender_id: IdType,
+    pub message_id: Option<i32>, // reso opzionale
+    pub chat_id: i32,
+    pub sender_id: i32,
     pub content: String,
     pub created_at: DateTime<Utc>,
     pub message_type: MessageType,
@@ -84,10 +87,10 @@ impl From<Message> for MessageDTO {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct InvitationDTO {
-    pub invite_id: Option<IdType>, // opzionale
-    pub target_chat_id: IdType,
-    pub invited_id: IdType,
-    pub invitee_id: IdType,
+    pub invite_id: Option<i32>, // opzionale
+    pub target_chat_id: i32,
+    pub invited_id: i32,
+    pub invitee_id: i32,
     pub state: InvitationStatus,
 }
 
@@ -102,7 +105,6 @@ impl From<Invitation> for InvitationDTO {
         }
     }
 }
-
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SearchQueryDTO {
@@ -141,7 +143,7 @@ pub struct SearchQueryDTO {
 
  */
 
-// enumerazione per gestire i vari casi di eventi ws 
+// enumerazione per gestire i vari casi di eventi ws
 // e la deserializzazione
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "type", content = "data")]

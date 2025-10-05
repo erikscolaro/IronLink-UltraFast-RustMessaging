@@ -1,25 +1,25 @@
 use crate::AppState;
 use crate::auth::encode_jwt;
 use crate::dtos::{ChatDTO, MessageDTO, SearchQueryDTO, UserDTO, UserInChatDTO};
-use crate::entities::{Chat, IdType, User, UserRole};
+use crate::entities::{Chat, User, UserRole};
 use crate::error_handler::AppError;
 use crate::repositories::Crud;
 use axum::{
     Extension,
     extract::{Json, Path, Query, State},
     http::{HeaderMap, HeaderValue, StatusCode},
-    response::{IntoResponse, Response}
+    response::{IntoResponse, Response},
 };
 use axum_macros::debug_handler;
+use futures_util::future::try_join_all;
 use serde_json::json;
 use std::sync::Arc;
-use futures_util::future::try_join_all;
 use tokio::task::Id;
 /* si usano queste ntoazioni per prendere cioò che ci serve dai frame http, mi raccomando
   funziona solo in questo esatto ordine ! Json consuma tutto il messaggio quindi deve stare ultimo
         State(state): State<Arc<AppState>>,
-        Path(user_id): Path<IdType>,        // parametro dalla URL /users/:user_id
-        Path(chat_id): Path<IdType>,        // parametro dalla URL /users/:user_id
+        Path(user_id): Path<i32>,        // parametro dalla URL /users/:user_id
+        Path(chat_id): Path<i32>,        // parametro dalla URL /users/:user_id
         Query(params): Query<QueryStructCursom>,   // query params ?filter=xyz
         Extension(current_user): Extension<User> // ottenuto dall'autenticazione tramite token jwt
         Json(body): Json<MyBody>,        // JSON body
@@ -72,11 +72,14 @@ pub async fn root() -> Response {
 
 pub async fn login_user(
     State(state): State<Arc<AppState>>,
-    Json(body): Json<UserDTO>,   // JSON body
+    Json(body): Json<UserDTO>, // JSON body
 ) -> Result<impl IntoResponse, AppError> {
     // cerco l'utente, se  non lo trovo allora errore
-    let username = body.username.ok_or(AppError::with_message(StatusCode::BAD_REQUEST, "Invalid username or password"))?;
-    
+    let username = body.username.ok_or(AppError::with_message(
+        StatusCode::BAD_REQUEST,
+        "Invalid username or password",
+    ))?;
+
     let user = match state.user.find_by_username(&username).await? {
         Some(user) => user,
         None => return Err(AppError::with_status(StatusCode::UNAUTHORIZED)),
@@ -127,16 +130,16 @@ pub async fn search_user_with_username(
     State(state): State<Arc<AppState>>,
     Query(params): Query<SearchQueryDTO>, // query params /users/find?search=username
 ) -> Result<Json<Vec<UserDTO>>, AppError> {
-    let query = params.search
-        .filter(|v| v.len() >= 3)
-        .ok_or_else(|| AppError::with_message(StatusCode::BAD_REQUEST, "Query search param too short."))?;
+    let query = params.search.filter(|v| v.len() >= 3).ok_or_else(|| {
+        AppError::with_message(StatusCode::BAD_REQUEST, "Query search param too short.")
+    })?;
     let users = state.user.search_by_username_partial(&query).await?;
     let users_dto = users.into_iter().map(UserDTO::from).collect::<Vec<_>>();
     Ok(Json::from(users_dto))
 }
 pub async fn get_user_by_id(
     State(state): State<Arc<AppState>>,
-    Path(user_id): Path<IdType>, // parametro dalla URL /users/:user_id
+    Path(user_id): Path<i32>, // parametro dalla URL /users/:user_id
 ) -> Result<Json<Option<UserDTO>>, AppError> {
     todo!()
 }
@@ -169,7 +172,7 @@ pub async fn list_chats(
     Extension(current_user): Extension<User>,
 ) -> Result<Json<Vec<ChatDTO>>, AppError> {
     // prendi tutti i chat_id dell'utente
-    let chat_ids: Vec<IdType> = state
+    let chat_ids: Vec<i32> = state
         .meta
         .find_all_by_user_id(&current_user.user_id)
         .await?
@@ -177,23 +180,20 @@ pub async fn list_chats(
         .map(|s| s.chat_id)
         .collect();
 
-    let chats: Vec<Chat> = try_join_all(
-        chat_ids.into_iter().map(|cid| {
-            let state = state.clone(); // se AppState è Arc, clonalo
-            async move { state.chat.read(&cid).await }
-        })
-    )
-        .await?
-        .into_iter()
-        .filter_map(|c| c) // prende solo i Some
-        .collect();
+    let chats: Vec<Chat> = try_join_all(chat_ids.into_iter().map(|cid| {
+        let state = state.clone(); // se AppState è Arc, clonalo
+        async move { state.chat.read(&cid).await }
+    }))
+    .await?
+    .into_iter()
+    .filter_map(|c| c) // prende solo i Some
+    .collect();
 
     // converti in DTO
     let chats_dto: Vec<ChatDTO> = chats.into_iter().map(ChatDTO::from).collect();
 
     Ok(Json(chats_dto))
 }
-
 
 #[debug_handler]
 pub async fn create_chat(
@@ -206,7 +206,7 @@ pub async fn create_chat(
 }
 pub async fn get_chat_messages(
     State(state): State<Arc<AppState>>,
-    Path(chat_id): Path<IdType>,
+    Path(chat_id): Path<i32>,
     // Query(params): Query<QueryStructCursom>,   // da vedere, se conviene o meno
     Extension(current_user): Extension<User>, // ottenuto dall'autenticazione tramite token jwt
 ) -> Result<Json<Vec<MessageDTO>>, AppError> {
@@ -214,15 +214,15 @@ pub async fn get_chat_messages(
 }
 pub async fn list_chat_members(
     State(state): State<Arc<AppState>>,
-    Path(chat_id): Path<IdType>,
+    Path(chat_id): Path<i32>,
 ) -> Result<Json<Vec<UserInChatDTO>>, AppError> {
     todo!()
 }
 
 pub async fn invite_to_chat(
     State(state): State<Arc<AppState>>,
-    Path(chat_id): Path<IdType>,
-    Path(user_id): Path<IdType>,
+    Path(chat_id): Path<i32>,
+    Path(user_id): Path<i32>,
     Extension(current_user): Extension<User>, // ottenuto dall'autenticazione tramite token jwt
 ) -> Result<(), AppError> {
     // possiamo dare più significato alla questione dei ruoli se solo admin o owner possono invitare persone
@@ -237,7 +237,7 @@ pub async fn invite_to_chat(
 #[debug_handler]
 pub async fn update_member_role(
     State(state): State<Arc<AppState>>,
-    Path(user_id): Path<IdType>,
+    Path(user_id): Path<i32>,
     Extension(current_user): Extension<User>, // ottenuto dall'autenticazione tramite token jwt
     Json(body): Json<UserRole>,
 ) -> Result<(), AppError> {
@@ -246,9 +246,9 @@ pub async fn update_member_role(
     // inviare messaggio di aggiornamento ruolo sul gruppo
     todo!()
 }
-pub async fn transfer_ownership(    
+pub async fn transfer_ownership(
     State(state): State<Arc<AppState>>,
-    Path(chat_id): Path<IdType>,
+    Path(chat_id): Path<i32>,
     Extension(current_user): Extension<User>, // ottenuto dall'autenticazione tramite token jwt
 ) -> Result<(), AppError> {
     //anche qui, devo controlalre se current user è owner per trasferire l'ownership
@@ -259,8 +259,8 @@ pub async fn transfer_ownership(
 }
 pub async fn remove_member(
     State(state): State<Arc<AppState>>,
-    Path(chat_id): Path<IdType>,
-    Path(user_id): Path<IdType>,
+    Path(chat_id): Path<i32>,
+    Path(user_id): Path<i32>,
     Extension(current_user): Extension<User>, // ottenuto dall'autenticazione tramite token jwt
 ) -> Result<(), AppError> {
     // controllare se sono admin o owner
@@ -271,7 +271,7 @@ pub async fn remove_member(
 }
 pub async fn leave_chat(
     State(state): State<Arc<AppState>>,
-    Path(chat_id): Path<IdType>,
+    Path(chat_id): Path<i32>,
     Extension(current_user): Extension<User>, // ottenuto dall'autenticazione tramite token jwt
 ) -> Result<(), AppError> {
     // solo cancellare il metadata
@@ -279,4 +279,3 @@ pub async fn leave_chat(
 
     todo!()
 }
-

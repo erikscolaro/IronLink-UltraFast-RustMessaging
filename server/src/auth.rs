@@ -1,5 +1,4 @@
 use crate::AppState;
-use crate::entities::IdType;
 use crate::error_handler::AppError;
 use axum::extract::State;
 use axum::{
@@ -20,11 +19,11 @@ use std::sync::Arc;
 pub struct Claims {
     pub exp: usize, // Expiry time of the token
     pub iat: usize, // Issued at time of the token
-    pub id: IdType,
+    pub id: i32,
     pub username: String,
 }
 
-pub fn encode_jwt(username: String, id: IdType, secret: &String) -> Result<String, Error> {
+pub fn encode_jwt(username: String, id: i32, secret: &String) -> Result<String, Error> {
     let now = Utc::now();
     let expire: chrono::TimeDelta = Duration::hours(24);
     let exp: usize = (now + expire).timestamp() as usize;
