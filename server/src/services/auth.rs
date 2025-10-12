@@ -10,6 +10,7 @@ use axum::{
     response::IntoResponse,
 };
 use std::sync::Arc;
+use validator::Validate;
 
 /// DTO per il login (solo username e password)
 #[derive(serde::Deserialize)]
@@ -75,38 +76,23 @@ pub async fn register_user(
     State(state): State<Arc<AppState>>,
     Json(body): Json<CreateUserDTO>, // JSON body
 ) -> Result<Json<UserDTO>, AppError> {
-    // 1. Verificare che lo username sia presente nel body, altrimenti ritornare errore BAD_REQUEST
-    // 2. Verificare che la password sia presente nel body e abbia almeno 8 caratteri, altrimenti ritornare errore BAD_REQUEST
-    // 3. Bloccare il caso in cui l'username è "Deleted User" (controllo string prima della query DB)
-    // 4. Generare l'hash della password fornita (prima della query DB per parallelizzare il lavoro CPU)
+    // 1. Validare il DTO con validator (username/password format, lunghezza, "Deleted User")
+    // 2. Controllare se esiste già un utente con lo stesso username nel database
+    // 3. Se l'utente esiste già, ritornare errore CONFLICT con messaggio "Username already exists"
+    // 4. Generare l'hash della password fornita
     // 5. Se la generazione dell'hash fallisce, ritornare errore INTERNAL_SERVER_ERROR
-    // 6. Controllare se esiste già un utente con lo stesso username nel database
-    // 7. Se l'utente esiste già, ritornare errore CONFLICT con messaggio "Username already exists"
-    // 8. Creare un nuovo oggetto CreateUserDTO con username e password hashata
-    // 9. Salvare il nuovo utente nel database tramite il metodo create, fornendo l'oggetto CreateUserDTO
-    // 10. Convertire l'utente creato ritornato dal metodo in UserDTO
-    // 11. Ritornare il DTO dell'utente creato come risposta JSON
+    // 6. Creare un nuovo oggetto CreateUserDTO con username e password hashata
+    // 7. Salvare il nuovo utente nel database tramite il metodo create
+    // 8. Convertire l'utente creato in UserDTO
+    // 9. Ritornare il DTO dell'utente creato come risposta JSON
 
-    if body.username.is_empty() {
-        return Err(AppError::with_message(
+    // Validazione con validator (include controllo "Deleted User")
+    body.validate().map_err(|e| {
+        AppError::with_message(
             StatusCode::BAD_REQUEST,
-            "Username is required",
-        ));
-    }
-
-    if body.password.len() < 8 {
-        return Err(AppError::with_message(
-            StatusCode::BAD_REQUEST,
-            "Password must be at least 8 characters",
-        ));
-    }
-
-    if body.username == "Deleted User" {
-        return Err(AppError::with_message(
-            StatusCode::BAD_REQUEST,
-            "Username not allowed",
-        ));
-    }
+            &format!("Validation error: {}", e),
+        )
+    })?;
 
     if state.user.find_by_username(&body.username).await.is_ok() {
         return Err(AppError::with_message(

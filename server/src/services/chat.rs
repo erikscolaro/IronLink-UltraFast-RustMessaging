@@ -13,6 +13,7 @@ use axum_macros::debug_handler;
 use chrono::Utc;
 use futures_util::future::try_join_all;
 use std::sync::Arc;
+use validator::Validate;
 
 /// DTO per creare una chat (estende CreateChatDTO con user_list per chat private)
 #[derive(serde::Deserialize)]
@@ -154,6 +155,15 @@ pub async fn create_chat(
                 description: body.description.clone(),
                 chat_type: ChatType::Group,
             };
+            
+            // Validazione con validator
+            new_chat.validate().map_err(|e| {
+                AppError::with_message(
+                    StatusCode::BAD_REQUEST,
+                    &format!("Validation error: {}", e),
+                )
+            })?;
+            
             chat = state.chat.create(&new_chat).await?;
 
             let now = Utc::now();

@@ -3,6 +3,7 @@
 use crate::entities::{Chat, ChatType};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use validator::Validate;
 
 /// Struct per gestire io col client
 #[derive(Serialize, Deserialize, Debug)]
@@ -27,16 +28,23 @@ impl From<Chat> for ChatDTO {
 }
 
 /// DTO per creare una nuova chat (senza chat_id)
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Validate)]
 pub struct CreateChatDTO {
+    #[validate(length(min = 1, max = 100, message = "Chat title must be between 1 and 100 characters"))]
     pub title: Option<String>,
+    
+    #[validate(length(max = 500, message = "Chat description must not exceed 500 characters"))]
     pub description: Option<String>,
+    
     pub chat_type: ChatType,
 }
 
 /// DTO per aggiornare una chat (solo campi modificabili)
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Validate)]
 pub struct UpdateChatDTO {
+    #[validate(length(min = 1, max = 100, message = "Chat title must be between 1 and 100 characters"))]
     pub title: Option<String>,
+    
+    #[validate(length(max = 500, message = "Chat description must not exceed 500 characters"))]
     pub description: Option<String>,
 }

@@ -3,6 +3,7 @@
 use crate::entities::{Message, MessageType};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use validator::Validate;
 
 /// Struct per gestire io col client
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -29,17 +30,21 @@ impl From<Message> for MessageDTO {
 }
 
 /// DTO per creare un nuovo messaggio (senza message_id)
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Validate)]
 pub struct CreateMessageDTO {
     pub chat_id: i32,
     pub sender_id: i32,
+    
+    #[validate(length(min = 1, max = 5000, message = "Message content must be between 1 and 5000 characters"))]
     pub content: String,
+    
     pub message_type: MessageType,
     pub created_at: DateTime<Utc>,
 }
 
 /// DTO per aggiornare un messaggio (solo campi modificabili)
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Validate)]
 pub struct UpdateMessageDTO {
+    #[validate(length(min = 1, max = 5000, message = "Message content must be between 1 and 5000 characters"))]
     pub content: Option<String>,
 }
