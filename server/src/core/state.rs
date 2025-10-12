@@ -16,22 +16,22 @@ use tokio::sync::mpsc::Sender;
 pub struct AppState {
     /// Repository per la gestione degli utenti
     pub user: UserRepository,
-    
+
     /// Repository per la gestione delle chat
     pub chat: ChatRepository,
-    
+
     /// Repository per la gestione dei messaggi
     pub msg: MessageRepository,
-    
+
     /// Repository per la gestione degli inviti
     pub invitation: InvitationRepository,
-    
+
     /// Repository per la gestione dei metadati utente-chat
     pub meta: UserChatMetadataRepository,
-    
+
     /// Secret key per JWT token
     pub jwt_secret: String,
-    
+
     /// Mappa concorrente degli utenti online con i loro canali WebSocket
     /// Key: user_id, Value: Sender per inviare messaggi al WebSocket dell'utente
     pub users_online: DashMap<i32, Sender<WsEventDTO>>,

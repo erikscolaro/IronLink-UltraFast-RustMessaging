@@ -37,3 +37,9 @@ pub struct CreateMessageDTO {
     pub message_type: MessageType,
     pub created_at: DateTime<Utc>,
 }
+
+/// DTO per aggiornare un messaggio (solo campi modificabili)
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct UpdateMessageDTO {
+    pub content: Option<String>,
+}

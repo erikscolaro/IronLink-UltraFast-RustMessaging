@@ -9,9 +9,8 @@ use crate::core::{AppState, Config, authentication_middleware};
 use crate::services::*;
 use crate::ws::ws_handler;
 use axum::{
-    middleware,
+    Router, middleware,
     routing::{any, delete, get, patch, post},
-    Router,
 };
 use sqlx::mysql::MySqlPoolOptions;
 use std::{net::SocketAddr, sync::Arc, time::Duration};
@@ -43,7 +42,10 @@ fn configure_chat_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/{chat_id}/messages", get(get_chat_messages))
         .route("/{chat_id}/members", get(list_chat_members))
         .route("/{chat_id}/invite/{user_id}", post(invite_to_chat))
-        .route("/{chat_id}/members/{user_id}/role", patch(update_member_role))
+        .route(
+            "/{chat_id}/members/{user_id}/role",
+            patch(update_member_role),
+        )
         .route("/{chat_id}/transfer_ownership", patch(transfer_ownership))
         .route("/{chat_id}/members/{user_id}", delete(remove_member))
         .route("/{chat_id}/leave", post(leave_chat))
@@ -56,8 +58,7 @@ fn configure_chat_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
 #[tokio::main]
 async fn main() {
     // Carica la configurazione dalle variabili d'ambiente
-    let config = Config::from_env()
-        .expect("Failed to load configuration. Check your .env file.");
+    let config = Config::from_env().expect("Failed to load configuration. Check your .env file.");
 
     // Stampa info sulla configurazione
     config.print_info();
@@ -81,9 +82,11 @@ async fn main() {
 
     // Definizione indirizzo del server
     let addr = SocketAddr::from((
-        config.server_host.parse::<std::net::IpAddr>()
+        config
+            .server_host
+            .parse::<std::net::IpAddr>()
             .expect("Invalid SERVER_HOST format"),
-        config.server_port
+        config.server_port,
     ));
     println!("Server listening on http://{}", addr);
 

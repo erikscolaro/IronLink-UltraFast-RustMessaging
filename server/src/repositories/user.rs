@@ -1,7 +1,7 @@
 //! UserRepository - Repository per la gestione degli utenti
 
-use crate::entities::User;
 use super::Crud;
+use crate::entities::User;
 use sqlx::{Error, MySqlPool};
 
 //MOD -> possibile modifica
@@ -50,7 +50,7 @@ impl UserRepository {
     }
 }
 
-impl Crud<User, crate::dtos::CreateUserDTO, i32> for UserRepository {
+impl Crud<User, crate::dtos::CreateUserDTO, crate::dtos::UpdateUserDTO, i32> for UserRepository {
     async fn create(&self, data: &crate::dtos::CreateUserDTO) -> Result<User, Error> {
         // Insert user and get the ID using MySQL syntax
         let result = sqlx::query!(
@@ -84,18 +84,29 @@ impl Crud<User, crate::dtos::CreateUserDTO, i32> for UserRepository {
         Ok(user)
     }
 
-    async fn update(&self, item: &User) -> Result<User, Error> {
-        sqlx::query!(
-            "UPDATE users SET username = ?, password = ? WHERE user_id = ?",
-            item.username,
-            item.password,
-            item.user_id
-        )
-        .execute(&self.connection_pool)
-        .await?;
+    async fn update(&self, id: &i32, data: &crate::dtos::UpdateUserDTO) -> Result<User, Error> {
+        // First, get the current user to ensure it exists
+        let current_user = self
+            .read(id)
+            .await?
+            .ok_or_else(|| sqlx::Error::RowNotFound)?;
 
-        // Return the updated user
-        Ok(item.clone())
+        // Only password can be updated
+        if let Some(ref password) = data.password {
+            sqlx::query!(
+                "UPDATE users SET password = ? WHERE user_id = ?",
+                password,
+                id
+            )
+            .execute(&self.connection_pool)
+            .await?;
+
+            // Fetch and return the updated user
+            self.read(id).await?.ok_or_else(|| sqlx::Error::RowNotFound)
+        } else {
+            // If no password provided, return current user unchanged
+            Ok(current_user)
+        }
     }
 
     /// Soft delete user by setting username to "Deleted User" and clearing password ""
@@ -108,6 +119,21 @@ impl Crud<User, crate::dtos::CreateUserDTO, i32> for UserRepository {
         .execute(&self.connection_pool)
         .await?;
 
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlx::MySqlPool;
+
+    /// Test generico - esempio di utilizzo di #[sqlx::test]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
+    async fn test_example(_pool: MySqlPool) -> sqlx::Result<()> {
+        // Il database è stato creato automaticamente con migrations applicate
+        // I fixtures users.sql sono stati caricati
+        // Implementa qui i tuoi test per UserRepository
         Ok(())
     }
 }

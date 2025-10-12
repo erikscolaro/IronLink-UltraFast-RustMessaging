@@ -1,8 +1,8 @@
 //! Invitation entity - Entità invito
 
+use super::enums::InvitationStatus;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use super::enums::InvitationStatus;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Invitation {

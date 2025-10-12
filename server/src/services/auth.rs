@@ -1,7 +1,7 @@
 //! Auth services - Gestione autenticazione e registrazione utenti
 
-use crate::core::{encode_jwt, AppError, AppState};
-use crate::dtos::UserDTO;
+use crate::core::{AppError, AppState, encode_jwt};
+use crate::dtos::{CreateUserDTO, UserDTO};
 use crate::entities::User;
 use crate::repositories::Crud;
 use axum::{
@@ -11,9 +11,16 @@ use axum::{
 };
 use std::sync::Arc;
 
+/// DTO per il login (solo username e password)
+#[derive(serde::Deserialize)]
+pub struct LoginDTO {
+    pub username: String,
+    pub password: String,
+}
+
 pub async fn login_user(
     State(state): State<Arc<AppState>>,
-    Json(body): Json<UserDTO>, // JSON body
+    Json(body): Json<LoginDTO>, // JSON body
 ) -> Result<impl IntoResponse, AppError> {
     // 1. Estrarre lo username dal body della richiesta, ritornare errore BAD_REQUEST se mancante
     // 2. Verificare che la password sia stata fornita nel body, altrimenti ritornare errore UNAUTHORIZED (fail-fast prima della query DB)
@@ -26,27 +33,23 @@ pub async fn login_user(
     // 9. Costruire un cookie HttpOnly, Secure, SameSite=Lax con il token e durata 24 ore
     // 10. Creare gli headers HTTP con Set-Cookie e Authorization (Bearer token)
     // 11. Ritornare StatusCode::OK con gli headers
-    let username = body.username.ok_or(AppError::with_message(
-        StatusCode::BAD_REQUEST,
-        "Invalid username or password",
-    ))?;
 
-    let user = match state.user.find_by_username(&username).await? {
+    if body.username == "Deleted User" {
+        return Err(AppError::with_message(
+            StatusCode::UNAUTHORIZED,
+            "Invalid username or password",
+        ));
+    }
+
+    let user = match state.user.find_by_username(&body.username).await? {
         Some(user) => user,
         None => return Err(AppError::with_status(StatusCode::UNAUTHORIZED)),
     };
 
-    if let Some(password) = &body.password {
-        if !user.verify_password(password) {
-            return Err(AppError::with_message(
-                StatusCode::UNAUTHORIZED,
-                "Username or password are not correct.",
-            ));
-        }
-    } else {
+    if !user.verify_password(&body.password) {
         return Err(AppError::with_message(
             StatusCode::UNAUTHORIZED,
-            "Password was not provided.",
+            "Username or password are not correct.",
         ));
     }
 
@@ -70,7 +73,7 @@ pub async fn login_user(
 
 pub async fn register_user(
     State(state): State<Arc<AppState>>,
-    Json(body): Json<UserDTO>, // JSON body
+    Json(body): Json<CreateUserDTO>, // JSON body
 ) -> Result<Json<UserDTO>, AppError> {
     // 1. Verificare che lo username sia presente nel body, altrimenti ritornare errore BAD_REQUEST
     // 2. Verificare che la password sia presente nel body e abbia almeno 8 caratteri, altrimenti ritornare errore BAD_REQUEST
@@ -83,42 +86,45 @@ pub async fn register_user(
     // 9. Salvare il nuovo utente nel database tramite il metodo create, fornendo l'oggetto CreateUserDTO
     // 10. Convertire l'utente creato ritornato dal metodo in UserDTO
     // 11. Ritornare il DTO dell'utente creato come risposta JSON
-    let username = if let Some(username) = &body.username {
-        username.clone()
-    } else {
+
+    if body.username.is_empty() {
         return Err(AppError::with_message(
             StatusCode::BAD_REQUEST,
-            "Username is required"
-        ));
-    };
-    let password = if let Some(password) = &body.password {
-        password.clone()
-    } else {
-        return Err(AppError::with_message(
-            StatusCode::BAD_REQUEST, 
-            "Password is required"
-        ));
-    };
-    if state.user.find_by_username(&username).await.is_ok() {
-        return Err(AppError::with_message(
-            StatusCode::CONFLICT, 
-            "Username already exists"
+            "Username is required",
         ));
     }
-    let password_hash = if let Ok(hash) = User::hash_password(&password) {
-        hash
-    } else {
+
+    if body.password.len() < 8 {
         return Err(AppError::with_message(
-            StatusCode::INTERNAL_SERVER_ERROR, 
-            "Failed to hash password"
+            StatusCode::BAD_REQUEST,
+            "Password must be at least 8 characters",
         ));
-    };
-    let new_user = crate::dtos::CreateUserDTO {
-        username,
+    }
+
+    if body.username == "Deleted User" {
+        return Err(AppError::with_message(
+            StatusCode::BAD_REQUEST,
+            "Username not allowed",
+        ));
+    }
+
+    if state.user.find_by_username(&body.username).await.is_ok() {
+        return Err(AppError::with_message(
+            StatusCode::CONFLICT,
+            "Username already exists",
+        ));
+    }
+
+    let password_hash = User::hash_password(&body.password).map_err(|_| {
+        AppError::with_message(StatusCode::INTERNAL_SERVER_ERROR, "Failed to hash password")
+    })?;
+
+    let new_user = CreateUserDTO {
+        username: body.username,
         password: password_hash,
     };
 
     let created_user = state.user.create(&new_user).await?;
-    
+
     Ok(Json(UserDTO::from(created_user)))
 }

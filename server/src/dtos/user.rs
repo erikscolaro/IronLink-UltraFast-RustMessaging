@@ -28,3 +28,9 @@ pub struct CreateUserDTO {
     pub username: String,
     pub password: String,
 }
+
+/// DTO per aggiornare un utente esistente (solo password modificabile)
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct UpdateUserDTO {
+    pub password: Option<String>,
+}

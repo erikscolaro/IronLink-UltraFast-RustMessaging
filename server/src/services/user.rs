@@ -5,10 +5,10 @@ use crate::dtos::{SearchQueryDTO, UserDTO};
 use crate::entities::User;
 use crate::repositories::Crud;
 use axum::{
+    Extension,
     extract::{Json, Path, Query, State},
     http::{HeaderMap, HeaderValue, StatusCode},
     response::IntoResponse,
-    Extension,
 };
 use std::sync::Arc;
 
@@ -50,7 +50,7 @@ pub async fn delete_my_account(
     // 2. Recuperare tutti i metadata dell'utente per identificare chat ownership (singola query)
     // 3. Gestire il caso degli ownership: se l'utente è owner di gruppi, trasferire l'ownership a un admin casuale se esiste, altrimenti a una persona a caso
     // 4. Cancellare tutti i metadata (UserChatMetadata) associati all'utente
-    // 5. Rinominare lo username dell'utente con "Deleted User" 
+    // 5. Rinominare lo username dell'utente con "Deleted User"
     // 6. Sostituire la password dell'utente con stringa vuota
     // 7. Creare un cookie con Max-Age=0 per forzare il logout lato client
     // 8. Inserire il cookie negli headers HTTP con Set-Cookie

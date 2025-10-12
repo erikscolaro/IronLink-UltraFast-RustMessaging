@@ -1,4 +1,40 @@
-CREATE DATABASE  IF NOT EXISTS `rugginedb` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
+-- ============================================================================
+-- Database Setup per Ruggine Chat Application
+-- ============================================================================
+-- Questo script crea:
+-- 1. Il database principale 'rugginedb'
+-- 2. Un utente dedicato 'ruggine' con privilegi limitati
+-- 3. Tutte le tabelle e indici necessari
+--
+-- NOTA: Eseguire questo script come utente root MySQL
+-- CREDENZIALI (devono corrispondere al file .env):
+--   - Username: ruggine
+--   - Password: ferro
+--   - Database: rugginedb
+--   - Connection: mysql://ruggine:ferro@127.0.0.1:3306/rugginedb
+-- ============================================================================
+
+-- Creazione database
+CREATE DATABASE IF NOT EXISTS `rugginedb` 
+    DEFAULT CHARACTER SET utf8mb4 
+    COLLATE utf8mb4_unicode_ci;
+
+-- Creazione utente dedicato per l'applicazione
+-- Creiamo l'utente per localhost, 127.0.0.1 e % (accesso remoto)
+CREATE USER IF NOT EXISTS 'ruggine'@'localhost' IDENTIFIED BY 'ferro';
+CREATE USER IF NOT EXISTS 'ruggine'@'127.0.0.1' IDENTIFIED BY 'ferro';
+CREATE USER IF NOT EXISTS 'ruggine'@'%' IDENTIFIED BY 'ferro';
+
+-- Assegnazione privilegi: solo quelli necessari (principio del minimo privilegio)
+-- SELECT, INSERT, UPDATE, DELETE per operazioni CRUD
+-- CREATE, INDEX, ALTER per gestione schema (migrazioni future)
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, INDEX, ALTER ON rugginedb.* TO 'ruggine'@'localhost';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, INDEX, ALTER ON rugginedb.* TO 'ruggine'@'127.0.0.1';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, INDEX, ALTER ON rugginedb.* TO 'ruggine'@'%';
+
+-- Applica i privilegi
+FLUSH PRIVILEGES;
+
 USE `rugginedb`;
 -- MySQL dump 10.13  Distrib 8.0.43, for Win64 (x86_64)
 --

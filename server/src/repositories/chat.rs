@@ -1,7 +1,7 @@
 //! ChatRepository - Repository per la gestione delle chat
 
-use crate::entities::{Chat, ChatType};
 use super::Crud;
+use crate::entities::{Chat, ChatType};
 use sqlx::{Error, MySqlPool};
 
 // CHAT REPOSITORY
@@ -139,7 +139,7 @@ impl ChatRepository {
     }
 }
 
-impl Crud<Chat, crate::dtos::CreateChatDTO, i32> for ChatRepository {
+impl Crud<Chat, crate::dtos::CreateChatDTO, crate::dtos::UpdateChatDTO, i32> for ChatRepository {
     async fn create(&self, data: &crate::dtos::CreateChatDTO) -> Result<Chat, Error> {
         // Insert chat using MySQL syntax
         let result = sqlx::query!(
@@ -186,23 +186,38 @@ impl Crud<Chat, crate::dtos::CreateChatDTO, i32> for ChatRepository {
         Ok(chat)
     }
 
-    async fn update(&self, item: &Chat) -> Result<Chat, Error> {
-        sqlx::query!(
-            r#"
-            UPDATE chats 
-            SET title = ?, description = ?, chat_type = ?
-            WHERE chat_id = ?
-            "#,
-            item.title,
-            item.description,
-            item.chat_type,
-            item.chat_id
-        )
-        .execute(&self.connection_pool)
-        .await?;
+    async fn update(&self, id: &i32, data: &crate::dtos::UpdateChatDTO) -> Result<Chat, Error> {
+        // First, get the current chat to ensure it exists
+        let current_chat = self
+            .read(id)
+            .await?
+            .ok_or_else(|| sqlx::Error::RowNotFound)?;
 
-        // Return the updated chat
-        Ok(item.clone())
+        // If no fields to update, return current chat
+        if data.title.is_none() && data.description.is_none() {
+            return Ok(current_chat);
+        }
+
+        // Build dynamic UPDATE query using QueryBuilder (idiomatic SQLx way)
+        let mut query_builder = sqlx::QueryBuilder::new("UPDATE chats SET ");
+        
+        let mut separated = query_builder.separated(", ");
+        if let Some(ref title) = data.title {
+            separated.push("title = ");
+            separated.push_bind_unseparated(title);
+        }
+        if let Some(ref description) = data.description {
+            separated.push("description = ");
+            separated.push_bind_unseparated(description);
+        }
+        
+        query_builder.push(" WHERE chat_id = ");
+        query_builder.push_bind(id);
+
+        query_builder.build().execute(&self.connection_pool).await?;
+
+        // Fetch and return the updated chat
+        self.read(id).await?.ok_or_else(|| sqlx::Error::RowNotFound)
     }
 
     async fn delete(&self, id: &i32) -> Result<(), Error> {
@@ -210,6 +225,20 @@ impl Crud<Chat, crate::dtos::CreateChatDTO, i32> for ChatRepository {
             .execute(&self.connection_pool)
             .await?;
 
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sqlx::MySqlPool;
+
+    /// Test generico - esempio di utilizzo di #[sqlx::test]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_example(_pool: MySqlPool) -> sqlx::Result<()> {
+        // Il database è stato creato automaticamente con migrations applicate
+        // I fixtures sono stati caricati in ordine: users, chats
+        // Implementa qui i tuoi test per ChatRepository
         Ok(())
     }
 }

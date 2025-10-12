@@ -1,5 +1,5 @@
 //! Repositories module - Coordinatore per tutti i repository del progetto
-//! 
+//!
 //! Questo modulo organizza i repository in sotto-moduli separati per una migliore manutenibilità.
 //! Ogni repository gestisce le operazioni di database per una specifica entità.
 
@@ -64,19 +64,19 @@
 // ************************* MODULI REPOSITORY ************************* //
 
 // Dichiarazione dei sotto-moduli
+pub mod chat;
+pub mod invitation;
+pub mod message;
 pub mod traits;
 pub mod user;
-pub mod message;
-pub mod chat;
 pub mod user_chat_metadata;
-pub mod invitation;
 
 // Re-esportazione dei trait per facilitare l'import
-pub use traits::{Crud, Pageable, Searchable};
+pub use traits::Crud;
 
 // Re-esportazione delle struct dei repository per facilitare l'import
-pub use user::UserRepository;
-pub use message::MessageRepository;
 pub use chat::ChatRepository;
-pub use user_chat_metadata::UserChatMetadataRepository;
 pub use invitation::InvitationRepository;
+pub use message::MessageRepository;
+pub use user::UserRepository;
+pub use user_chat_metadata::UserChatMetadataRepository;

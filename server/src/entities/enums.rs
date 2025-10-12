@@ -16,7 +16,7 @@ pub enum MessageType {
 pub enum UserRole {
     Owner,
     Admin,
-    Standard,
+    Member,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, sqlx::Type)]

@@ -1,4 +1,4 @@
-use crate::core::{AppState, AppError};
+use crate::core::{AppError, AppState};
 use axum::extract::State;
 use axum::{
     Error,

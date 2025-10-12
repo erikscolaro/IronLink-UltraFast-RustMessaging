@@ -1,7 +1,7 @@
 //! Chat entity - Entità chat
 
-use serde::{Deserialize, Serialize};
 use super::enums::ChatType;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Chat {

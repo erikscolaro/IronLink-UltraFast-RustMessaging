@@ -33,3 +33,10 @@ pub struct CreateChatDTO {
     pub description: Option<String>,
     pub chat_type: ChatType,
 }
+
+/// DTO per aggiornare una chat (solo campi modificabili)
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct UpdateChatDTO {
+    pub title: Option<String>,
+    pub description: Option<String>,
+}

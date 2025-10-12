@@ -1,18 +1,27 @@
 //! Chat services - Gestione operazioni sulle chat
 
 use crate::core::{AppError, AppState};
-use crate::dtos::{ChatDTO, MessageDTO};
+use crate::dtos::{ChatDTO, CreateChatDTO, MessageDTO};
 use crate::entities::{Chat, ChatType, User, UserRole};
 use crate::repositories::Crud;
 use axum::{
+    Extension,
     extract::{Json, Path, State},
     http::StatusCode,
-    Extension,
 };
 use axum_macros::debug_handler;
 use chrono::Utc;
 use futures_util::future::try_join_all;
 use std::sync::Arc;
+
+/// DTO per creare una chat (estende CreateChatDTO con user_list per chat private)
+#[derive(serde::Deserialize)]
+pub struct CreateChatRequestDTO {
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub chat_type: ChatType,
+    pub user_list: Option<Vec<i32>>, // Solo per chat private
+}
 
 pub async fn list_chats(
     State(state): State<Arc<AppState>>,
@@ -50,7 +59,7 @@ pub async fn list_chats(
 pub async fn create_chat(
     State(state): State<Arc<AppState>>,
     Extension(current_user): Extension<User>, // ottenuto dall'autenticazione tramite token jwt
-    Json(body): Json<ChatDTO>,
+    Json(body): Json<CreateChatRequestDTO>,
 ) -> Result<Json<ChatDTO>, AppError> {
     // CASO ChatType::Private:
     // 1. Verificare che user_list sia presente nel body, altrimenti errore BAD_REQUEST
@@ -61,49 +70,56 @@ pub async fn create_chat(
     // 6. Se esiste già, ritornare errore CONFLICT
     // 7. Creare ChatCreateDTO con title=None, description=None, chat_type=Private
     // 8. Salvare la chat nel database (la chiave primaria è autoincrementale)
-    // 9. Creare metadata per entrambi gli utenti con ruolo Standard e timestamp correnti (preparazione in memoria)
+    // 9. Creare metadata per entrambi gli utenti con ruolo Member e timestamp correnti (preparazione in memoria)
     // 10. Salvare entrambi i metadata nel database in batch/transazione
-    // 
+    //
     // CASO ChatType::Group:
     // 1. Creare ChatCreateDTO con title e description dal body, chat_type=Group
     // 2. Salvare la chat nel database (la chiave primaria è autoincrementale)
     // 3. Creare metadata per current_user con ruolo Owner e timestamp correnti
     // 4. Salvare il metadata nel database
-    // 
+    //
     // FINALE:
     // 1. Convertire la chat creata in ChatDTO (trasformazione in memoria)
     // 2. Ritornare il ChatDTO come risposta JSON
     let chat;
     match body.chat_type {
-        Some(ChatType::Private) =>{
-            
-            let user_list = body.user_list.as_ref().ok_or_else(|| AppError::with_message(
-                StatusCode::BAD_REQUEST,
-                "Private chat should specify user list.",
-            ))?;
-            
+        ChatType::Private => {
+            let user_list = body.user_list.as_ref().ok_or_else(|| {
+                AppError::with_message(
+                    StatusCode::BAD_REQUEST,
+                    "Private chat should specify user list.",
+                )
+            })?;
+
             if user_list.len() != 2 {
                 return Err(AppError::with_message(
                     StatusCode::BAD_REQUEST,
                     "Private chat should specify exactly two users.",
                 ));
             }
-            
-            let second_user_id = user_list.iter()
+
+            let second_user_id = user_list
+                .iter()
                 .find(|&&id| id != current_user.user_id)
-                .ok_or_else(|| AppError::with_message(
-                    StatusCode::BAD_REQUEST,
-                    "Current user must be one of the two users.",
-                ))?;
-            
-            let existing_chat = state.chat.get_private_chat_between_users(&current_user.user_id, second_user_id).await?;
+                .ok_or_else(|| {
+                    AppError::with_message(
+                        StatusCode::BAD_REQUEST,
+                        "Current user must be one of the two users.",
+                    )
+                })?;
+
+            let existing_chat = state
+                .chat
+                .get_private_chat_between_users(&current_user.user_id, second_user_id)
+                .await?;
             if existing_chat.is_some() {
                 return Err(AppError::with_message(
                     StatusCode::CONFLICT,
                     "A private chat between these users already exists.",
                 ));
             }
-            let new_chat = crate::dtos::CreateChatDTO {
+            let new_chat = CreateChatDTO {
                 title: None,
                 description: None,
                 chat_type: ChatType::Private,
@@ -114,7 +130,7 @@ pub async fn create_chat(
             let metadata_current_user = crate::dtos::CreateUserChatMetadataDTO {
                 user_id: current_user.user_id,
                 chat_id: chat.chat_id,
-                user_role: Some(UserRole::Standard),
+                user_role: Some(UserRole::Member),
                 member_since: now,
                 messages_visible_from: now,
                 messages_received_until: now,
@@ -123,7 +139,7 @@ pub async fn create_chat(
             let metadata_second_user = crate::dtos::CreateUserChatMetadataDTO {
                 user_id: second_user_id.clone(),
                 chat_id: chat.chat_id,
-                user_role: Some(UserRole::Standard),
+                user_role: Some(UserRole::Member),
                 member_since: now,
                 messages_visible_from: now,
                 messages_received_until: now,
@@ -132,8 +148,8 @@ pub async fn create_chat(
             state.meta.create(&metadata_second_user).await?;
         }
 
-        Some(ChatType::Group) => {
-            let new_chat = crate::dtos::CreateChatDTO {
+        ChatType::Group => {
+            let new_chat = CreateChatDTO {
                 title: body.title.clone(),
                 description: body.description.clone(),
                 chat_type: ChatType::Group,
@@ -152,18 +168,10 @@ pub async fn create_chat(
 
             state.meta.create(&metadata_owner).await?;
         }
-        
-        None => {
-            return Err(AppError::with_message(
-                StatusCode::BAD_REQUEST,
-                "chat_type is required",
-            ));
-        }
     }
 
     let chat_dto = ChatDTO::from(chat);
     Ok(Json(chat_dto))
-    
 }
 
 pub async fn get_chat_messages(

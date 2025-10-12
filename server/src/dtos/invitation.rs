@@ -35,3 +35,9 @@ pub struct CreateInvitationDTO {
     pub invited_id: i32,
     pub invitee_id: i32,
 }
+
+/// DTO per aggiornare un invito (solo lo stato è modificabile)
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct UpdateInvitationDTO {
+    pub state: Option<InvitationStatus>,
+}

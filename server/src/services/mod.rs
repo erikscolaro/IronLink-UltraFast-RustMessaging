@@ -4,17 +4,18 @@
 //! Ogni modulo gestisce gli endpoint HTTP per una specifica funzionalità.
 
 pub mod auth;
-pub mod user;
 pub mod chat;
 pub mod membership;
-pub mod admin;
+pub mod user;
 
 // Re-exports per facilitare l'import
 pub use auth::{login_user, register_user};
-pub use user::{delete_my_account, get_user_by_id, search_user_with_username};
 pub use chat::{create_chat, get_chat_messages, list_chats};
-pub use membership::{invite_to_chat, leave_chat, list_chat_members, remove_member};
-pub use admin::{transfer_ownership, update_member_role};
+pub use membership::{
+    invite_to_chat, leave_chat, list_chat_members, remove_member, transfer_ownership,
+    update_member_role,
+};
+pub use user::{delete_my_account, get_user_by_id, search_user_with_username};
 
 use crate::AppState;
 use axum::{extract::State, http::StatusCode, response::IntoResponse};

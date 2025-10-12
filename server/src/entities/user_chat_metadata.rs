@@ -1,8 +1,8 @@
 //! UserChatMetadata entity - Entità metadata utente-chat
 
+use super::enums::UserRole;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use super::enums::UserRole;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct UserChatMetadata {

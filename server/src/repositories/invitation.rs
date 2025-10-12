@@ -1,7 +1,7 @@
 //! InvitationRepository - Repository per la gestione degli inviti
 
-use crate::entities::{Invitation, InvitationStatus};
 use super::Crud;
+use crate::entities::{Invitation, InvitationStatus};
 use sqlx::{Error, MySqlPool};
 
 //INVITATION REPOSITORY
@@ -76,13 +76,15 @@ impl InvitationRepository {
     }
 }
 
-impl Crud<Invitation, crate::dtos::CreateInvitationDTO, i32> for InvitationRepository {
+impl Crud<Invitation, crate::dtos::CreateInvitationDTO, crate::dtos::UpdateInvitationDTO, i32>
+    for InvitationRepository
+{
     async fn create(&self, data: &crate::dtos::CreateInvitationDTO) -> Result<Invitation, Error> {
         // Insert invitation using MySQL syntax
         // state e created_at vengono gestiti dal database (default: Pending e NOW())
         let now = chrono::Utc::now();
         let state = InvitationStatus::Pending; // default state
-        
+
         let result = sqlx::query!(
             r#"
             INSERT INTO invitations (target_chat_id, invited_id, invitee_id, state, created_at) 
@@ -133,25 +135,38 @@ impl Crud<Invitation, crate::dtos::CreateInvitationDTO, i32> for InvitationRepos
         Ok(invitation)
     }
 
-    async fn update(&self, item: &Invitation) -> Result<Invitation, Error> {
-        sqlx::query!(
-            r#"
-            UPDATE invitations 
-            SET target_chat_id = ?, invited_id = ?, invitee_id = ?, state = ?, created_at = ?
-            WHERE invite_id = ?
-            "#,
-            item.target_chat_id,
-            item.invited_id,
-            item.invitee_id,
-            item.state,
-            item.created_at,
-            item.invite_id
-        )
-        .execute(&self.connection_pool)
-        .await?;
+    async fn update(
+        &self,
+        id: &i32,
+        data: &crate::dtos::UpdateInvitationDTO,
+    ) -> Result<Invitation, Error> {
+        // First, get the current invitation to ensure it exists
+        let current_invitation = self
+            .read(id)
+            .await?
+            .ok_or_else(|| sqlx::Error::RowNotFound)?;
 
-        // Return the updated invitation
-        Ok(item.clone())
+        // If no state to update, return current invitation
+        if data.state.is_none() {
+            return Ok(current_invitation);
+        }
+
+        // Build dynamic UPDATE query using QueryBuilder (idiomatic SQLx way)
+        let mut query_builder = sqlx::QueryBuilder::new("UPDATE invitations SET ");
+        
+        let mut separated = query_builder.separated(", ");
+        if let Some(ref state) = data.state {
+            separated.push("state = ");
+            separated.push_bind_unseparated(state);
+        }
+        
+        query_builder.push(" WHERE invite_id = ");
+        query_builder.push_bind(id);
+
+        query_builder.build().execute(&self.connection_pool).await?;
+
+        // Fetch and return the updated invitation
+        self.read(id).await?.ok_or_else(|| sqlx::Error::RowNotFound)
     }
 
     async fn delete(&self, id: &i32) -> Result<(), Error> {
@@ -159,6 +174,20 @@ impl Crud<Invitation, crate::dtos::CreateInvitationDTO, i32> for InvitationRepos
             .execute(&self.connection_pool)
             .await?;
 
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sqlx::MySqlPool;
+
+    /// Test generico - esempio di utilizzo di #[sqlx::test]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats", "invitations")))]
+    async fn test_example(_pool: MySqlPool) -> sqlx::Result<()> {
+        // Il database è stato creato automaticamente con migrations applicate
+        // I fixtures sono stati caricati in ordine: users, chats, invitations
+        // Implementa qui i tuoi test per InvitationRepository
         Ok(())
     }
 }

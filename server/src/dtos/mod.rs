@@ -3,19 +3,19 @@
 //! Questo modulo contiene tutti i DTOs usati per la comunicazione client-server.
 //! I DTOs separano la rappresentazione esterna (API) dalla rappresentazione interna (entities).
 
-pub mod user;
 pub mod chat;
-pub mod message;
 pub mod invitation;
-pub mod user_chat_metadata;
+pub mod message;
 pub mod query;
+pub mod user;
+pub mod user_chat_metadata;
 pub mod ws_event;
 
 // Re-exports per mantenere la compatibilità con il codice esistente
-pub use user::{CreateUserDTO, UserDTO};
-pub use chat::{ChatDTO, CreateChatDTO};
-pub use message::{CreateMessageDTO, MessageDTO};
-pub use invitation::{CreateInvitationDTO, InvitationDTO};
-pub use user_chat_metadata::{CreateUserChatMetadataDTO, UserInChatDTO};
+pub use chat::{ChatDTO, CreateChatDTO, UpdateChatDTO};
+pub use invitation::{CreateInvitationDTO, InvitationDTO, UpdateInvitationDTO};
+pub use message::{CreateMessageDTO, MessageDTO, UpdateMessageDTO};
 pub use query::SearchQueryDTO;
+pub use user::{CreateUserDTO, UpdateUserDTO, UserDTO};
+pub use user_chat_metadata::{CreateUserChatMetadataDTO, UpdateUserChatMetadataDTO, UserInChatDTO};
 pub use ws_event::WsEventDTO;

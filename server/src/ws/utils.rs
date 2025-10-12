@@ -1,19 +1,14 @@
 //! WebSocket Utilities - Funzioni di supporto per WebSocket
 
-use crate::dtos::WsEventDTO;
 use crate::AppState;
+use crate::dtos::WsEventDTO;
 
 /// Invia un messaggio di errore ad un utente specifico
 /// Operazioni:
 /// 1. Verificare se l'utente è online
 /// 2. Inviare WsEventDTO::Error sul suo canale
 /// 3. Gestire errore se l'utente si è disconnesso
-pub async fn send_error_to_user(
-    state: &AppState,
-    user_id: i32,
-    error_code: u16,
-    message: String,
-) {
+pub async fn send_error_to_user(state: &AppState, user_id: i32, error_code: u16, message: String) {
     if let Some(tx) = state.users_online.get(&user_id) {
         // invio direttamente il WsEventDTO sul canale
         if tx

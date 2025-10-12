@@ -15,11 +15,11 @@ pub mod utils;
 pub use connection::handle_socket;
 pub use utils::{broadcast_to_chat, send_error_to_user};
 
-use crate::{entities::User, AppState};
+use crate::{AppState, entities::User};
 use axum::{
-    extract::{ws::WebSocketUpgrade, State},
-    response::Response,
     Extension,
+    extract::{State, ws::WebSocketUpgrade},
+    response::Response,
 };
 use std::sync::Arc;
 

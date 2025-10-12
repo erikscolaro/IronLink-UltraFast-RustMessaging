@@ -1,7 +1,7 @@
 //! UserChatMetadataRepository - Repository per la gestione dei metadati utente-chat
 
-use crate::entities::{UserChatMetadata, UserRole};
 use super::Crud;
+use crate::entities::{UserChatMetadata, UserRole};
 use chrono::{DateTime, Utc};
 use sqlx::{Error, MySqlPool};
 
@@ -16,10 +16,7 @@ impl UserChatMetadataRepository {
     }
 
     /// Get all members of a specific chat
-    pub async fn get_members_by_chat(
-        &self,
-        chat_id: &i32,
-    ) -> Result<Vec<UserChatMetadata>, Error> {
+    pub async fn get_members_by_chat(&self, chat_id: &i32) -> Result<Vec<UserChatMetadata>, Error> {
         let metadata_list = sqlx::query_as!(
             UserChatMetadata,
             r#"
@@ -120,7 +117,10 @@ impl UserChatMetadataRepository {
         match result {
             Some(metadata) => {
                 // Check if user_role exists and is Admin or Owner
-                Ok(matches!(metadata.user_role, Some(UserRole::Admin) | Some(UserRole::Owner)))
+                Ok(matches!(
+                    metadata.user_role,
+                    Some(UserRole::Admin) | Some(UserRole::Owner)
+                ))
             }
             None => Ok(false),
         }
@@ -151,11 +151,7 @@ impl UserChatMetadataRepository {
     }
 
     /// Remove user from chat (delete metadata entry)
-    pub async fn remove_user_from_chat(
-        &self,
-        user_id: &i32,
-        chat_id: &i32,
-    ) -> Result<(), Error> {
+    pub async fn remove_user_from_chat(&self, user_id: &i32, chat_id: &i32) -> Result<(), Error> {
         sqlx::query!(
             "DELETE FROM userchatmetadata WHERE user_id = ? AND chat_id = ?",
             user_id,
@@ -202,10 +198,7 @@ impl UserChatMetadataRepository {
         Ok(())
     }
 
-    pub async fn find_all_by_user_id(
-        &self,
-        user_id: &i32,
-    ) -> Result<Vec<UserChatMetadata>, Error> {
+    pub async fn find_all_by_user_id(&self, user_id: &i32) -> Result<Vec<UserChatMetadata>, Error> {
         let result = sqlx::query_as!(
             UserChatMetadata,
             r#"
@@ -228,8 +221,18 @@ impl UserChatMetadataRepository {
     }
 }
 
-impl Crud<UserChatMetadata, crate::dtos::CreateUserChatMetadataDTO, i32> for UserChatMetadataRepository {
-    async fn create(&self, data: &crate::dtos::CreateUserChatMetadataDTO) -> Result<UserChatMetadata, Error> {
+impl
+    Crud<
+        UserChatMetadata,
+        crate::dtos::CreateUserChatMetadataDTO,
+        crate::dtos::UpdateUserChatMetadataDTO,
+        i32,
+    > for UserChatMetadataRepository
+{
+    async fn create(
+        &self,
+        data: &crate::dtos::CreateUserChatMetadataDTO,
+    ) -> Result<UserChatMetadata, Error> {
         sqlx::query!(
             r#"
             INSERT INTO userchatmetadata (user_id, chat_id, user_role, member_since, messages_visible_from, messages_received_until) 
@@ -281,22 +284,49 @@ impl Crud<UserChatMetadata, crate::dtos::CreateUserChatMetadataDTO, i32> for Use
         Ok(metadata)
     }
 
-    async fn update(&self, item: &UserChatMetadata) -> Result<UserChatMetadata, Error> {
-        sqlx::query!(
-            r#"
-            UPDATE userchatmetadata 
-            SET user_role = ?
-            WHERE user_id = ? AND chat_id = ?
-            "#,
-            item.user_role,
-            item.user_id,
-            item.chat_id
-        )
-        .execute(&self.connection_pool)
-        .await?;
+    async fn update(
+        &self,
+        id: &i32,
+        data: &crate::dtos::UpdateUserChatMetadataDTO,
+    ) -> Result<UserChatMetadata, Error> {
+        // First, get the current metadata to ensure it exists
+        let current_metadata = self
+            .read(id)
+            .await?
+            .ok_or_else(|| sqlx::Error::RowNotFound)?;
 
-        // Return the updated metadata
-        Ok(item.clone())
+        // If no fields to update, return current metadata
+        if data.user_role.is_none()
+            && data.messages_visible_from.is_none()
+            && data.messages_received_until.is_none()
+        {
+            return Ok(current_metadata);
+        }
+
+        // Build dynamic UPDATE query using QueryBuilder (idiomatic SQLx way)
+        let mut query_builder = sqlx::QueryBuilder::new("UPDATE userchatmetadata SET ");
+        
+        let mut separated = query_builder.separated(", ");
+        if let Some(ref role) = data.user_role {
+            separated.push("user_role = ");
+            separated.push_bind_unseparated(role);
+        }
+        if let Some(ref visible_from) = data.messages_visible_from {
+            separated.push("messages_visible_from = ");
+            separated.push_bind_unseparated(visible_from);
+        }
+        if let Some(ref received_until) = data.messages_received_until {
+            separated.push("messages_received_until = ");
+            separated.push_bind_unseparated(received_until);
+        }
+        
+        query_builder.push(" WHERE user_id = ");
+        query_builder.push_bind(id);
+
+        query_builder.build().execute(&self.connection_pool).await?;
+
+        // Fetch and return the updated metadata
+        self.read(id).await?.ok_or_else(|| sqlx::Error::RowNotFound)
     }
 
     async fn delete(&self, id: &i32) -> Result<(), Error> {
@@ -305,6 +335,20 @@ impl Crud<UserChatMetadata, crate::dtos::CreateUserChatMetadataDTO, i32> for Use
             .execute(&self.connection_pool)
             .await?;
 
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sqlx::MySqlPool;
+
+    /// Test generico - esempio di utilizzo di #[sqlx::test]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_example(_pool: MySqlPool) -> sqlx::Result<()> {
+        // Il database è stato creato automaticamente con migrations applicate
+        // I fixtures sono stati caricati in ordine: users, chats (con userchatmetadata)
+        // Implementa qui i tuoi test per UserChatMetadataRepository
         Ok(())
     }
 }

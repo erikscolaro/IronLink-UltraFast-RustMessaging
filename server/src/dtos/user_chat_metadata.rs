@@ -39,3 +39,11 @@ pub struct CreateUserChatMetadataDTO {
     pub messages_visible_from: DateTime<Utc>,
     pub messages_received_until: DateTime<Utc>,
 }
+
+/// DTO per aggiornare metadati utente-chat (solo campi modificabili)
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct UpdateUserChatMetadataDTO {
+    pub user_role: Option<UserRole>,
+    pub messages_visible_from: Option<DateTime<Utc>>,
+    pub messages_received_until: Option<DateTime<Utc>>,
+}

@@ -1,7 +1,7 @@
 //! MessageRepository - Repository per la gestione dei messaggi
 
-use crate::entities::{Message, MessageType};
 use super::Crud;
+use crate::entities::{Message, MessageType};
 use chrono::{DateTime, Utc};
 use sqlx::{Error, MySqlPool};
 
@@ -103,7 +103,9 @@ impl MessageRepository {
     }
 }
 
-impl Crud<Message, crate::dtos::CreateMessageDTO, i32> for MessageRepository {
+impl Crud<Message, crate::dtos::CreateMessageDTO, crate::dtos::UpdateMessageDTO, i32>
+    for MessageRepository
+{
     async fn create(&self, data: &crate::dtos::CreateMessageDTO) -> Result<Message, Error> {
         // Insert message using MySQL syntax
         let result = sqlx::query!(
@@ -156,25 +158,38 @@ impl Crud<Message, crate::dtos::CreateMessageDTO, i32> for MessageRepository {
         Ok(message)
     }
 
-    async fn update(&self, item: &Message) -> Result<Message, Error> {
-        sqlx::query!(
-            r#"
-            UPDATE messages 
-            SET chat_id = ?, sender_id = ?, content = ?, message_type = ?, created_at = ?
-            WHERE message_id = ?
-            "#,
-            item.chat_id,
-            item.sender_id,
-            item.content,
-            item.message_type,
-            item.created_at,
-            item.message_id
-        )
-        .execute(&self.connection_pool)
-        .await?;
+    async fn update(
+        &self,
+        id: &i32,
+        data: &crate::dtos::UpdateMessageDTO,
+    ) -> Result<Message, Error> {
+        // First, get the current message to ensure it exists
+        let current_message = self
+            .read(id)
+            .await?
+            .ok_or_else(|| sqlx::Error::RowNotFound)?;
 
-        // Return the updated message
-        Ok(item.clone())
+        // If no content to update, return current message
+        if data.content.is_none() {
+            return Ok(current_message);
+        }
+
+        // Build dynamic UPDATE query using QueryBuilder (idiomatic SQLx way)
+        let mut query_builder = sqlx::QueryBuilder::new("UPDATE messages SET ");
+        
+        let mut separated = query_builder.separated(", ");
+        if let Some(ref content) = data.content {
+            separated.push("content = ");
+            separated.push_bind_unseparated(content);
+        }
+        
+        query_builder.push(" WHERE message_id = ");
+        query_builder.push_bind(id);
+
+        query_builder.build().execute(&self.connection_pool).await?;
+
+        // Fetch and return the updated message
+        self.read(id).await?.ok_or_else(|| sqlx::Error::RowNotFound)
     }
 
     async fn delete(&self, id: &i32) -> Result<(), Error> {
@@ -182,6 +197,21 @@ impl Crud<Message, crate::dtos::CreateMessageDTO, i32> for MessageRepository {
             .execute(&self.connection_pool)
             .await?;
 
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlx::MySqlPool;
+
+    /// Test generico - esempio di utilizzo di #[sqlx::test]
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats", "messages")))]
+    async fn test_example(_pool: MySqlPool) -> sqlx::Result<()> {
+        // Il database è stato creato automaticamente con migrations applicate
+        // I fixtures sono stati caricati in ordine: users, chats, messages
+        // Implementa qui i tuoi test per MessageRepository
         Ok(())
     }
 }

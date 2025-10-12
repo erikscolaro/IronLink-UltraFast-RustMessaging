@@ -21,14 +21,12 @@ impl Config {
         let database_url = env::var("DATABASE_URL")
             .map_err(|_| "DATABASE_URL must be set in .env file".to_string())?;
 
-        let jwt_secret = env::var("JWT_SECRET")
-            .unwrap_or_else(|_| {
-                eprintln!("WARNING: JWT_SECRET not set, using default (not secure for production!)");
-                "un segreto meno bello".to_string()
-            });
+        let jwt_secret = env::var("JWT_SECRET").unwrap_or_else(|_| {
+            eprintln!("WARNING: JWT_SECRET not set, using default (not secure for production!)");
+            "un segreto meno bello".to_string()
+        });
 
-        let server_host = env::var("SERVER_HOST")
-            .unwrap_or_else(|_| "127.0.0.1".to_string());
+        let server_host = env::var("SERVER_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
 
         let server_port = env::var("SERVER_PORT")
             .unwrap_or_else(|_| "3000".to_string())
@@ -43,10 +41,11 @@ impl Config {
         let connection_lifetime_secs = env::var("DB_CONNECTION_LIFETIME_SECS")
             .unwrap_or_else(|_| "1".to_string())
             .parse::<u64>()
-            .map_err(|_| "Invalid DB_CONNECTION_LIFETIME_SECS: must be a positive number".to_string())?;
+            .map_err(|_| {
+                "Invalid DB_CONNECTION_LIFETIME_SECS: must be a positive number".to_string()
+            })?;
 
-        let app_env = env::var("APP_ENV")
-            .unwrap_or_else(|_| "development".to_string());
+        let app_env = env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
 
         Ok(Config {
             database_url,
@@ -63,15 +62,21 @@ impl Config {
     pub fn print_info(&self) {
         println!("   Server Configuration:");
         println!("   Environment: {}", self.app_env);
-        println!("   Server Address: {}:{}", self.server_host, self.server_port);
+        println!(
+            "   Server Address: {}:{}",
+            self.server_host, self.server_port
+        );
         println!("   Database: {}", Self::mask_url(&self.database_url));
         println!("   Max DB Connections: {}", self.max_connections);
         println!("   Connection Lifetime: {}s", self.connection_lifetime_secs);
-        println!("   JWT Secret: {}", if self.jwt_secret == "un segreto meno bello" { 
-            "   USING DEFAULT (INSECURE!)" 
-        } else { 
-            "✓ Custom secret configured" 
-        });
+        println!(
+            "   JWT Secret: {}",
+            if self.jwt_secret == "un segreto meno bello" {
+                "   USING DEFAULT (INSECURE!)"
+            } else {
+                "✓ Custom secret configured"
+            }
+        );
     }
 
     /// Maschera l'URL del database per il logging

@@ -1,8 +1,8 @@
 //! Message entity - Entità messaggio
 
+use super::enums::MessageType;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use super::enums::MessageType;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Message {
