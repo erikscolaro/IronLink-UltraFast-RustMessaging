@@ -1,45 +1,26 @@
-use crate::dtos::{InvitationDTO, MessageDTO};
-use crate::{
-    AppState,
-    dtos::WsEventDTO,
-    entities::User,
-};
-use axum::extract::ws::Utf8Bytes;
-use axum::{
-    Extension,
-    extract::{
-        State,
-        ws::{Message, WebSocket, WebSocketUpgrade},
-    },
-    response::Response,
-};
+//! WebSocket Connection Management - Gestione connessioni WebSocket
+
+use crate::dtos::WsEventDTO;
+use crate::ws::event_handlers::{process_chat_message, process_invitation};
+use crate::AppState;
+use axum::extract::ws::{Message, WebSocket, Utf8Bytes};
 use futures_util::{
-    SinkExt,
     stream::{SplitSink, SplitStream, StreamExt},
+    SinkExt,
 };
 use std::sync::Arc;
 use tokio::{
-    sync::mpsc::{Receiver, channel},
-    time::{Duration, sleep},
+    sync::mpsc::{channel, Receiver},
+    time::{sleep, Duration},
 };
 
-pub async fn ws_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<Arc<AppState>>,
-    Extension(current_user): Extension<User>, // ottenuto dall'autenticazione JWT
-) -> Response {
-    let user_id = current_user.user_id;
-
-    // Gestisce automaticamente l'upgrade a WebSocket.
-    // Se l'upgrade fallisce, ritorna un errore; altrimenti restituisce la nuova connessione al client.
-    ws
-        // Possibile limitazione dei buffer, default 128 KB
-        //.read_buffer_size(4*1024)
-        //.write_buffer_size(16*1024)
-        .on_upgrade(move |socket| handle_socket(socket, state, user_id))
-}
-
-async fn handle_socket(ws: WebSocket, state: Arc<AppState>, user_id: i32) {
+/// Gestisce la connessione WebSocket dopo l'upgrade
+/// Operazioni:
+/// 1. Dividere il WebSocket in sender e receiver
+/// 2. Creare un canale MPSC per comunicazione interna
+/// 3. Registrare l'utente nella mappa users_online
+/// 4. Avviare due task separati per lettura e scrittura
+pub async fn handle_socket(ws: WebSocket, state: Arc<AppState>, user_id: i32) {
     // Dividiamo il WebSocket in due metà: sender e receiver
     let (sender, receiver) = ws.split();
 
@@ -56,6 +37,13 @@ async fn handle_socket(ws: WebSocket, state: Arc<AppState>, user_id: i32) {
     tokio::spawn(read_from_ws(receiver, user_id, state.clone()));
 }
 
+/// Legge messaggi dal WebSocket del client
+/// Operazioni:
+/// 1. Ricevere messaggi dal WebSocket
+/// 2. Gestire frame Close, Text, Ping/Pong
+/// 3. Deserializzare eventi JSON (WsEventDTO)
+/// 4. Inoltrare agli handler appropriati
+/// 5. Cleanup: rimuovere utente da users_online alla disconnessione
 pub async fn read_from_ws(
     mut receiver: SplitStream<WebSocket>,
     user_id: i32,
@@ -112,10 +100,16 @@ pub async fn read_from_ws(
     }
 }
 
+/// Scrive messaggi sul WebSocket verso il client
+/// Operazioni:
+/// 1. Ricevere eventi dal canale MPSC interno
+/// 2. Serializzare WsEventDTO in JSON
+/// 3. Inviare il messaggio sul WebSocket
+/// 4. Applicare rate limiting (1 secondo tra invii)
 pub async fn write_on_ws(
     mut sender: SplitSink<WebSocket, Message>,
     mut rx: Receiver<WsEventDTO>,
-    state: Arc<AppState>,
+    _state: Arc<AppState>,
 ) {
     // intervallo tra un invio e l'altro per fare batching
     let send_interval = Duration::from_millis(1000);
@@ -151,48 +145,4 @@ pub async fn write_on_ws(
     if cfg!(debug_assertions) {
         println!("Task write_on_ws terminato per un utente");
     }
-}
-
-pub async fn send_error_to_user(
-    state: &AppState,
-    user_id: i32,
-    error_code: u16,
-    message: String,
-) {
-    if let Some(tx) = state.users_online.get(&user_id) {
-        // invio direttamente il WsEventDTO sul canale
-        if tx
-            .send(WsEventDTO::Error {
-                code: error_code,
-                message,
-            })
-            .await
-            .is_err()
-        {
-            if cfg!(debug_assertions) {
-                eprintln!(
-                    "Client disconnesso, errore non inviato all'utente {}",
-                    user_id
-                );
-            }
-        }
-    }
-}
-
-async fn process_chat_message(state: Arc<AppState>, user_id: i32, event: MessageDTO) {
-    /*
-    - controllare se la chat con l'utente esiste
-    - salvare a db il messaggio
-     */
-
-    /*
-    state.user_online.get(event.destinatario) => tx (se online) altrimenti none
-    se online => tx.send(event)
-     */
-
-    todo!()
-}
-
-async fn process_invitation(state: Arc<AppState>, user_id: i32, event: InvitationDTO) {
-    todo!()
 }

@@ -1,52 +1,62 @@
-mod auth;
-mod config;
+mod core;
 mod dtos;
 mod entities;
-mod error_handler;
 mod repositories;
 mod services;
-mod ws_services;
+mod ws;
 
-use crate::auth::authentication_middleware;
-use crate::dtos::WsEventDTO;
-use crate::services::login_user;
-use crate::ws_services::ws_handler;
-use crate::{
-    repositories::{
-        ChatRepository, InvitationRepository, MessageRepository, UserChatMetadataRepository,
-        UserRepository,
-    },
-    services::{
-        create_chat, delete_my_account, get_chat_messages, get_user_by_id, invite_to_chat,
-        leave_chat, list_chat_members, list_chats, register_user, remove_member, root,
-        search_user_with_username, transfer_ownership, update_member_role,
-    },
-};
-use axum::routing::any;
+use crate::core::{AppState, Config, authentication_middleware};
+use crate::services::*;
+use crate::ws::ws_handler;
 use axum::{
-    Router, middleware,
-    routing::{delete, get, patch, post},
+    middleware,
+    routing::{any, delete, get, patch, post},
+    Router,
 };
-use dashmap::DashMap;
 use sqlx::mysql::MySqlPoolOptions;
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 use tokio::net::TcpListener;
-use tokio::sync::mpsc::Sender;
 
-struct AppState {
-    user: UserRepository,
-    chat: ChatRepository,
-    msg: MessageRepository,
-    invitation: InvitationRepository,
-    meta: UserChatMetadataRepository,
-    jwt_secret: String,
-    users_online: DashMap<i32, Sender<WsEventDTO>>,
+/// Configura le routes di autenticazione (login, register)
+fn configure_auth_routes() -> Router<Arc<AppState>> {
+    Router::new()
+        .route("/login", post(login_user))
+        .route("/register", post(register_user))
+}
+
+/// Configura le routes per la gestione degli utenti
+fn configure_user_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
+    Router::new()
+        .route("/", get(search_user_with_username))
+        .route("/{user_id}", get(get_user_by_id))
+        .route("/me", delete(delete_my_account))
+        .layer(middleware::from_fn_with_state(
+            state,
+            authentication_middleware,
+        ))
+}
+
+/// Configura le routes per la gestione delle chat
+fn configure_chat_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
+    Router::new()
+        .route("/", get(list_chats).post(create_chat))
+        .route("/{chat_id}/messages", get(get_chat_messages))
+        .route("/{chat_id}/members", get(list_chat_members))
+        .route("/{chat_id}/invite/{user_id}", post(invite_to_chat))
+        .route("/{chat_id}/members/{user_id}/role", patch(update_member_role))
+        .route("/{chat_id}/transfer_ownership", patch(transfer_ownership))
+        .route("/{chat_id}/members/{user_id}", delete(remove_member))
+        .route("/{chat_id}/leave", post(leave_chat))
+        .layer(middleware::from_fn_with_state(
+            state,
+            authentication_middleware,
+        ))
 }
 
 #[tokio::main]
 async fn main() {
     // Carica la configurazione dalle variabili d'ambiente
-    let config = config::Config::from_env()
+    let config = Config::from_env()
         .expect("Failed to load configuration. Check your .env file.");
 
     // Stampa info sulla configurazione
@@ -64,18 +74,10 @@ async fn main() {
         .await
         .expect("Error connecting to the database");
 
-    println!("✓ Database connection established");
+    println!("Database connection established");
 
-    // Creiamo una struct repos per poterla condividere come stato alle varie routes
-    let state = Arc::new(AppState {
-        user: UserRepository::new(connection_pool.clone()),
-        chat: ChatRepository::new(connection_pool.clone()),
-        msg: MessageRepository::new(connection_pool.clone()),
-        invitation: InvitationRepository::new(connection_pool.clone()),
-        meta: UserChatMetadataRepository::new(connection_pool.clone()),
-        jwt_secret: config.jwt_secret.clone(),
-        users_online: Default::default(),
-    });
+    // Creiamo lo stato dell'applicazione con i repository e la configurazione
+    let state = Arc::new(AppState::new(connection_pool, config.jwt_secret.clone()));
 
     // Definizione indirizzo del server
     let addr = SocketAddr::from((
@@ -90,52 +92,12 @@ async fn main() {
         .await
         .expect("Unable to start TCP listener.");
 
-    let root_route = Router::new().route("/", get(root));
-
-    // autenticazione
-    let auth_routes = Router::new().route("/login", post(login_user)).route(
-        "/register",
-        post(register_user).layer(middleware::from_fn_with_state(
-            state.clone(),
-            authentication_middleware,
-        )),
-    );
-
-    // utenti
-    let user_routes = Router::new()
-        .route("/", get(search_user_with_username)) // http: GET users?search=
-        .route("/{user_id}", get(get_user_by_id))
-        .route("/me", delete(delete_my_account))
-        .layer(middleware::from_fn_with_state(
-            state.clone(),
-            authentication_middleware,
-        ));
-
-    // chat
-    let chat_routes = Router::new()
-        .route("/", get(list_chats).post(create_chat))
-        .route("/{chat_id}/messages", get(get_chat_messages))
-        .route("/{chat_id}/members", get(list_chat_members))
-        .route("/{chat_id}/invite/{user_id}", post(invite_to_chat))
-        .route(
-            "/{chat_id}/members/{user_id}/role",
-            patch(update_member_role),
-        )
-        .route("/{chat_id}/transfer_ownership", patch(transfer_ownership))
-        .route("/{chat_id}/members/{user_id}", delete(remove_member))
-        .route("/{chat_id}/leave", post(leave_chat))
-        .layer(middleware::from_fn_with_state(
-            state.clone(),
-            authentication_middleware,
-        ));
-
-    // router principale con nesting
+    // Costruzione del router principale con tutte le routes
     let app = Router::new()
-        .merge(root_route)
-        .nest("/auth", auth_routes)
-        .nest("/users", user_routes)
-        .nest("/chats", chat_routes)
-        //autenticazione fatta prima di upgrade a ws
+        .route("/", get(root))
+        .nest("/auth", configure_auth_routes())
+        .nest("/users", configure_user_routes(state.clone()))
+        .nest("/chats", configure_chat_routes(state.clone()))
         .route(
             "/ws",
             any(ws_handler).layer(middleware::from_fn_with_state(
@@ -144,8 +106,6 @@ async fn main() {
             )),
         )
         .with_state(state);
-
-    // NOTA: rimosse le route degli inviti visto che vengono inviati in chat privata come messaggio di sistema
 
     // Avvia il server
     axum::serve(listener, app)
