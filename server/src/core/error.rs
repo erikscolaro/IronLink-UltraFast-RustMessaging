@@ -1,6 +1,5 @@
 use axum::{Json, http::StatusCode, response::IntoResponse};
 use serde::Serialize;
-use std::fmt::Display;
 
 #[derive(Serialize)]
 struct ErrorResponse {

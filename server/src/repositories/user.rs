@@ -125,7 +125,7 @@ impl Crud<User, crate::dtos::CreateUserDTO, crate::dtos::UpdateUserDTO, i32> for
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    
     use sqlx::MySqlPool;
 
     /// Test generico - esempio di utilizzo di #[sqlx::test]

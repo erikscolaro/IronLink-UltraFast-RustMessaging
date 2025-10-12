@@ -203,7 +203,7 @@ impl Crud<Message, crate::dtos::CreateMessageDTO, crate::dtos::UpdateMessageDTO,
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    
     use sqlx::MySqlPool;
 
     /// Test generico - esempio di utilizzo di #[sqlx::test]

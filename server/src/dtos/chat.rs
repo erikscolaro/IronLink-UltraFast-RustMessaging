@@ -1,7 +1,6 @@
 //! Chat DTOs - Data Transfer Objects per chat
 
 use crate::entities::{Chat, ChatType};
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 

@@ -12,7 +12,7 @@ pub mod error;
 pub mod state;
 
 // Re-exports per facilitare l'import
-pub use auth::{Claims, authentication_middleware, decode_jwt, encode_jwt};
+pub use auth::{authentication_middleware, encode_jwt};
 pub use config::Config;
 pub use error::AppError;
 pub use state::AppState;

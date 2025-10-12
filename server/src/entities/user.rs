@@ -16,7 +16,7 @@ pub struct User {
 impl User {
     /// Verify if target_password matches the stored hashed password
     pub fn verify_password(&self, target_password: &String) -> bool {
-        verify(target_password, &self.password).unwrap_or_else(|_| false)
+        verify(target_password, &self.password).unwrap_or(false)
     }
 
     /// Hash a password using bcrypt with default cost

@@ -90,7 +90,7 @@ pub async fn register_user(
     body.validate().map_err(|e| {
         AppError::with_message(
             StatusCode::BAD_REQUEST,
-            &format!("Validation error: {}", e),
+            format!("Validation error: {}", e),
         )
     })?;
 

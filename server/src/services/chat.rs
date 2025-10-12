@@ -48,7 +48,7 @@ pub async fn list_chats(
     }))
     .await?
     .into_iter()
-    .filter_map(|c| c)
+    .flatten()
     .collect();
 
     let chats_dto: Vec<ChatDTO> = chats.into_iter().map(ChatDTO::from).collect();
@@ -138,7 +138,7 @@ pub async fn create_chat(
             };
 
             let metadata_second_user = crate::dtos::CreateUserChatMetadataDTO {
-                user_id: second_user_id.clone(),
+                user_id: *second_user_id,
                 chat_id: chat.chat_id,
                 user_role: Some(UserRole::Member),
                 member_since: now,
@@ -160,7 +160,7 @@ pub async fn create_chat(
             new_chat.validate().map_err(|e| {
                 AppError::with_message(
                     StatusCode::BAD_REQUEST,
-                    &format!("Validation error: {}", e),
+                    format!("Validation error: {}", e),
                 )
             })?;
             

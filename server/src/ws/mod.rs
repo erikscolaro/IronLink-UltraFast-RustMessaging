@@ -13,7 +13,6 @@ pub mod utils;
 
 // Re-exports pubblici
 pub use connection::handle_socket;
-pub use utils::{broadcast_to_chat, send_error_to_user};
 
 use crate::{AppState, entities::User};
 use axum::{
