@@ -1,7 +1,7 @@
 //! Chat services - Gestione operazioni sulle chat
 
 use crate::core::{AppError, AppState};
-use crate::dtos::{ChatDTO, CreateChatDTO, MessageDTO};
+use crate::dtos::{ChatDTO, CreateChatDTO, CreateUserChatMetadataDTO, MessageDTO};
 use crate::entities::{Chat, ChatType, User, UserRole};
 use crate::repositories::Crud;
 use axum::{
@@ -128,7 +128,7 @@ pub async fn create_chat(
             chat = state.chat.create(&new_chat).await?;
 
             let now = Utc::now();
-            let metadata_current_user = crate::dtos::CreateUserChatMetadataDTO {
+            let metadata_current_user = CreateUserChatMetadataDTO {
                 user_id: current_user.user_id,
                 chat_id: chat.chat_id,
                 user_role: Some(UserRole::Member),
@@ -137,7 +137,7 @@ pub async fn create_chat(
                 messages_received_until: now,
             };
 
-            let metadata_second_user = crate::dtos::CreateUserChatMetadataDTO {
+            let metadata_second_user = CreateUserChatMetadataDTO {
                 user_id: *second_user_id,
                 chat_id: chat.chat_id,
                 user_role: Some(UserRole::Member),
@@ -155,19 +155,16 @@ pub async fn create_chat(
                 description: body.description.clone(),
                 chat_type: ChatType::Group,
             };
-            
+
             // Validazione con validator
             new_chat.validate().map_err(|e| {
-                AppError::with_message(
-                    StatusCode::BAD_REQUEST,
-                    format!("Validation error: {}", e),
-                )
+                AppError::with_message(StatusCode::BAD_REQUEST, format!("Validation error: {}", e))
             })?;
-            
+
             chat = state.chat.create(&new_chat).await?;
 
             let now = Utc::now();
-            let metadata_owner = crate::dtos::CreateUserChatMetadataDTO {
+            let metadata_owner = CreateUserChatMetadataDTO {
                 user_id: current_user.user_id,
                 chat_id: chat.chat_id,
                 user_role: Some(UserRole::Owner),

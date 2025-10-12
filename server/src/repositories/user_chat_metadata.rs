@@ -1,6 +1,7 @@
 //! UserChatMetadataRepository - Repository per la gestione dei metadati utente-chat
 
 use super::Crud;
+use crate::dtos::{CreateUserChatMetadataDTO, UpdateUserChatMetadataDTO};
 use crate::entities::{UserChatMetadata, UserRole};
 use chrono::{DateTime, Utc};
 use sqlx::{Error, MySqlPool};
@@ -221,18 +222,10 @@ impl UserChatMetadataRepository {
     }
 }
 
-impl
-    Crud<
-        UserChatMetadata,
-        crate::dtos::CreateUserChatMetadataDTO,
-        crate::dtos::UpdateUserChatMetadataDTO,
-        i32,
-    > for UserChatMetadataRepository
+impl Crud<UserChatMetadata, CreateUserChatMetadataDTO, UpdateUserChatMetadataDTO, i32>
+    for UserChatMetadataRepository
 {
-    async fn create(
-        &self,
-        data: &crate::dtos::CreateUserChatMetadataDTO,
-    ) -> Result<UserChatMetadata, Error> {
+    async fn create(&self, data: &CreateUserChatMetadataDTO) -> Result<UserChatMetadata, Error> {
         sqlx::query!(
             r#"
             INSERT INTO userchatmetadata (user_id, chat_id, user_role, member_since, messages_visible_from, messages_received_until) 
@@ -287,7 +280,7 @@ impl
     async fn update(
         &self,
         id: &i32,
-        data: &crate::dtos::UpdateUserChatMetadataDTO,
+        data: &UpdateUserChatMetadataDTO,
     ) -> Result<UserChatMetadata, Error> {
         // First, get the current metadata to ensure it exists
         let current_metadata = self
@@ -305,7 +298,7 @@ impl
 
         // Build dynamic UPDATE query using QueryBuilder (idiomatic SQLx way)
         let mut query_builder = sqlx::QueryBuilder::new("UPDATE userchatmetadata SET ");
-        
+
         let mut separated = query_builder.separated(", ");
         if let Some(ref role) = data.user_role {
             separated.push("user_role = ");
@@ -319,7 +312,7 @@ impl
             separated.push("messages_received_until = ");
             separated.push_bind_unseparated(received_until);
         }
-        
+
         query_builder.push(" WHERE user_id = ");
         query_builder.push_bind(id);
 

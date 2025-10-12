@@ -1,6 +1,7 @@
 //! MessageRepository - Repository per la gestione dei messaggi
 
 use super::Crud;
+use crate::dtos::{CreateMessageDTO, UpdateMessageDTO};
 use crate::entities::{Message, MessageType};
 use chrono::{DateTime, Utc};
 use sqlx::{Error, MySqlPool};
@@ -103,10 +104,8 @@ impl MessageRepository {
     }
 }
 
-impl Crud<Message, crate::dtos::CreateMessageDTO, crate::dtos::UpdateMessageDTO, i32>
-    for MessageRepository
-{
-    async fn create(&self, data: &crate::dtos::CreateMessageDTO) -> Result<Message, Error> {
+impl Crud<Message, CreateMessageDTO, UpdateMessageDTO, i32> for MessageRepository {
+    async fn create(&self, data: &CreateMessageDTO) -> Result<Message, Error> {
         // Insert message using MySQL syntax
         let result = sqlx::query!(
             r#"
@@ -158,11 +157,7 @@ impl Crud<Message, crate::dtos::CreateMessageDTO, crate::dtos::UpdateMessageDTO,
         Ok(message)
     }
 
-    async fn update(
-        &self,
-        id: &i32,
-        data: &crate::dtos::UpdateMessageDTO,
-    ) -> Result<Message, Error> {
+    async fn update(&self, id: &i32, data: &UpdateMessageDTO) -> Result<Message, Error> {
         // First, get the current message to ensure it exists
         let current_message = self
             .read(id)
@@ -176,13 +171,13 @@ impl Crud<Message, crate::dtos::CreateMessageDTO, crate::dtos::UpdateMessageDTO,
 
         // Build dynamic UPDATE query using QueryBuilder (idiomatic SQLx way)
         let mut query_builder = sqlx::QueryBuilder::new("UPDATE messages SET ");
-        
+
         let mut separated = query_builder.separated(", ");
         if let Some(ref content) = data.content {
             separated.push("content = ");
             separated.push_bind_unseparated(content);
         }
-        
+
         query_builder.push(" WHERE message_id = ");
         query_builder.push_bind(id);
 
@@ -203,7 +198,7 @@ impl Crud<Message, crate::dtos::CreateMessageDTO, crate::dtos::UpdateMessageDTO,
 
 #[cfg(test)]
 mod tests {
-    
+
     use sqlx::MySqlPool;
 
     /// Test generico - esempio di utilizzo di #[sqlx::test]

@@ -1,6 +1,7 @@
 //! ChatRepository - Repository per la gestione delle chat
 
 use super::Crud;
+use crate::dtos::{CreateChatDTO, UpdateChatDTO};
 use crate::entities::{Chat, ChatType};
 use sqlx::{Error, MySqlPool};
 
@@ -139,8 +140,8 @@ impl ChatRepository {
     }
 }
 
-impl Crud<Chat, crate::dtos::CreateChatDTO, crate::dtos::UpdateChatDTO, i32> for ChatRepository {
-    async fn create(&self, data: &crate::dtos::CreateChatDTO) -> Result<Chat, Error> {
+impl Crud<Chat, CreateChatDTO, UpdateChatDTO, i32> for ChatRepository {
+    async fn create(&self, data: &CreateChatDTO) -> Result<Chat, Error> {
         // Insert chat using MySQL syntax
         let result = sqlx::query!(
             r#"
@@ -186,7 +187,7 @@ impl Crud<Chat, crate::dtos::CreateChatDTO, crate::dtos::UpdateChatDTO, i32> for
         Ok(chat)
     }
 
-    async fn update(&self, id: &i32, data: &crate::dtos::UpdateChatDTO) -> Result<Chat, Error> {
+    async fn update(&self, id: &i32, data: &UpdateChatDTO) -> Result<Chat, Error> {
         // First, get the current chat to ensure it exists
         let current_chat = self
             .read(id)
@@ -200,7 +201,7 @@ impl Crud<Chat, crate::dtos::CreateChatDTO, crate::dtos::UpdateChatDTO, i32> for
 
         // Build dynamic UPDATE query using QueryBuilder (idiomatic SQLx way)
         let mut query_builder = sqlx::QueryBuilder::new("UPDATE chats SET ");
-        
+
         let mut separated = query_builder.separated(", ");
         if let Some(ref title) = data.title {
             separated.push("title = ");
@@ -210,7 +211,7 @@ impl Crud<Chat, crate::dtos::CreateChatDTO, crate::dtos::UpdateChatDTO, i32> for
             separated.push("description = ");
             separated.push_bind_unseparated(description);
         }
-        
+
         query_builder.push(" WHERE chat_id = ");
         query_builder.push_bind(id);
 

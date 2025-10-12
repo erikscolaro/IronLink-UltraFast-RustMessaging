@@ -34,10 +34,14 @@ impl From<Message> for MessageDTO {
 pub struct CreateMessageDTO {
     pub chat_id: i32,
     pub sender_id: i32,
-    
-    #[validate(length(min = 1, max = 5000, message = "Message content must be between 1 and 5000 characters"))]
+
+    #[validate(length(
+        min = 1,
+        max = 5000,
+        message = "Message content must be between 1 and 5000 characters"
+    ))]
     pub content: String,
-    
+
     pub message_type: MessageType,
     pub created_at: DateTime<Utc>,
 }
@@ -45,6 +49,10 @@ pub struct CreateMessageDTO {
 /// DTO per aggiornare un messaggio (solo campi modificabili)
 #[derive(Serialize, Deserialize, Debug, Clone, Validate)]
 pub struct UpdateMessageDTO {
-    #[validate(length(min = 1, max = 5000, message = "Message content must be between 1 and 5000 characters"))]
+    #[validate(length(
+        min = 1,
+        max = 5000,
+        message = "Message content must be between 1 and 5000 characters"
+    ))]
     pub content: Option<String>,
 }

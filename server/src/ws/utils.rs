@@ -17,7 +17,9 @@ pub async fn send_error_to_user(state: &AppState, user_id: i32, error_code: u16,
                 message,
             })
             .await
-            .is_err() && cfg!(debug_assertions) {
+            .is_err()
+            && cfg!(debug_assertions)
+        {
             eprintln!(
                 "Client disconnesso, errore non inviato all'utente {}",
                 user_id

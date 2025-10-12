@@ -88,10 +88,7 @@ pub async fn register_user(
 
     // Validazione con validator (include controllo "Deleted User")
     body.validate().map_err(|e| {
-        AppError::with_message(
-            StatusCode::BAD_REQUEST,
-            format!("Validation error: {}", e),
-        )
+        AppError::with_message(StatusCode::BAD_REQUEST, format!("Validation error: {}", e))
     })?;
 
     if state.user.find_by_username(&body.username).await.is_ok() {

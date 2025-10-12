@@ -1,6 +1,7 @@
 //! UserRepository - Repository per la gestione degli utenti
 
 use super::Crud;
+use crate::dtos::{CreateUserDTO, UpdateUserDTO};
 use crate::entities::User;
 use sqlx::{Error, MySqlPool};
 
@@ -50,8 +51,8 @@ impl UserRepository {
     }
 }
 
-impl Crud<User, crate::dtos::CreateUserDTO, crate::dtos::UpdateUserDTO, i32> for UserRepository {
-    async fn create(&self, data: &crate::dtos::CreateUserDTO) -> Result<User, Error> {
+impl Crud<User, CreateUserDTO, UpdateUserDTO, i32> for UserRepository {
+    async fn create(&self, data: &CreateUserDTO) -> Result<User, Error> {
         // Insert user and get the ID using MySQL syntax
         let result = sqlx::query!(
             "INSERT INTO users (username, password) VALUES (?, ?)",
@@ -84,7 +85,7 @@ impl Crud<User, crate::dtos::CreateUserDTO, crate::dtos::UpdateUserDTO, i32> for
         Ok(user)
     }
 
-    async fn update(&self, id: &i32, data: &crate::dtos::UpdateUserDTO) -> Result<User, Error> {
+    async fn update(&self, id: &i32, data: &UpdateUserDTO) -> Result<User, Error> {
         // First, get the current user to ensure it exists
         let current_user = self
             .read(id)
@@ -125,7 +126,7 @@ impl Crud<User, crate::dtos::CreateUserDTO, crate::dtos::UpdateUserDTO, i32> for
 
 #[cfg(test)]
 mod tests {
-    
+
     use sqlx::MySqlPool;
 
     /// Test generico - esempio di utilizzo di #[sqlx::test]

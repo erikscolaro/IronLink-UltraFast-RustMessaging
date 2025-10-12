@@ -1,6 +1,7 @@
 //! InvitationRepository - Repository per la gestione degli inviti
 
 use super::Crud;
+use crate::dtos::{CreateInvitationDTO, UpdateInvitationDTO};
 use crate::entities::{Invitation, InvitationStatus};
 use sqlx::{Error, MySqlPool};
 
@@ -76,10 +77,8 @@ impl InvitationRepository {
     }
 }
 
-impl Crud<Invitation, crate::dtos::CreateInvitationDTO, crate::dtos::UpdateInvitationDTO, i32>
-    for InvitationRepository
-{
-    async fn create(&self, data: &crate::dtos::CreateInvitationDTO) -> Result<Invitation, Error> {
+impl Crud<Invitation, CreateInvitationDTO, UpdateInvitationDTO, i32> for InvitationRepository {
+    async fn create(&self, data: &CreateInvitationDTO) -> Result<Invitation, Error> {
         // Insert invitation using MySQL syntax
         // state e created_at vengono gestiti dal database (default: Pending e NOW())
         let now = chrono::Utc::now();
@@ -135,11 +134,7 @@ impl Crud<Invitation, crate::dtos::CreateInvitationDTO, crate::dtos::UpdateInvit
         Ok(invitation)
     }
 
-    async fn update(
-        &self,
-        id: &i32,
-        data: &crate::dtos::UpdateInvitationDTO,
-    ) -> Result<Invitation, Error> {
+    async fn update(&self, id: &i32, data: &UpdateInvitationDTO) -> Result<Invitation, Error> {
         // First, get the current invitation to ensure it exists
         let current_invitation = self
             .read(id)
@@ -153,13 +148,13 @@ impl Crud<Invitation, crate::dtos::CreateInvitationDTO, crate::dtos::UpdateInvit
 
         // Build dynamic UPDATE query using QueryBuilder (idiomatic SQLx way)
         let mut query_builder = sqlx::QueryBuilder::new("UPDATE invitations SET ");
-        
+
         let mut separated = query_builder.separated(", ");
         if let Some(ref state) = data.state {
             separated.push("state = ");
             separated.push_bind_unseparated(state);
         }
-        
+
         query_builder.push(" WHERE invite_id = ");
         query_builder.push_bind(id);
 
