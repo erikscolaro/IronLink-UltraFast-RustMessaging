@@ -63,19 +63,28 @@ async fn main() {
     // Stampa info sulla configurazione
     config.print_info();
 
-    // Builder per configurare le connessioni al database
+    // Builder per configurare le connessioni al database con retry automatico
     let pool_options = MySqlPoolOptions::new()
         .max_connections(config.max_connections)
         .max_lifetime(Duration::from_secs(config.connection_lifetime_secs))
+        .acquire_timeout(Duration::from_secs(2)) // Timeout per l'acquisizione di una connessione dal pool
         .test_before_acquire(true);
 
-    // Avvio il pool di connessioni al database
-    let connection_pool = pool_options
-        .connect(&config.database_url)
-        .await
-        .expect("Error connecting to the database");
-
-    println!("Database connection established");
+    // Avvio il pool di connessioni al database con retry automatico ogni 2 secondi
+    println!("Attempting to connect to database...");
+    let connection_pool = loop {
+        match pool_options.clone().connect(&config.database_url).await {
+            Ok(pool) => {
+                println!("✓ Database connection established successfully!");
+                break pool;
+            }
+            Err(e) => {
+                eprintln!("✗ Failed to connect to database: {}", e);
+                eprintln!("  Retrying in 2 seconds...");
+                tokio::time::sleep(Duration::from_secs(2)).await;
+            }
+        }
+    };
 
     // Creiamo lo stato dell'applicazione con i repository e la configurazione
     let state = Arc::new(AppState::new(connection_pool, config.jwt_secret.clone()));
