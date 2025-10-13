@@ -87,27 +87,18 @@ pub async fn create_chat(
     match body.chat_type {
         ChatType::Private => {
             let user_list = body.user_list.as_ref().ok_or_else(|| {
-                AppError::with_message(
-                    StatusCode::BAD_REQUEST,
-                    "Private chat should specify user list.",
-                )
+                AppError::bad_request("Private chat should specify user list.")
             })?;
 
             if user_list.len() != 2 {
-                return Err(AppError::with_message(
-                    StatusCode::BAD_REQUEST,
-                    "Private chat should specify exactly two users.",
-                ));
+                return Err(AppError::bad_request("Private chat should specify exactly two users."));
             }
 
             let second_user_id = user_list
                 .iter()
                 .find(|&&id| id != current_user.user_id)
                 .ok_or_else(|| {
-                    AppError::with_message(
-                        StatusCode::BAD_REQUEST,
-                        "Current user must be one of the two users.",
-                    )
+                    AppError::bad_request("Current user must be one of the two users.")
                 })?;
 
             let existing_chat = state
@@ -115,10 +106,7 @@ pub async fn create_chat(
                 .get_private_chat_between_users(&current_user.user_id, second_user_id)
                 .await?;
             if existing_chat.is_some() {
-                return Err(AppError::with_message(
-                    StatusCode::CONFLICT,
-                    "A private chat between these users already exists.",
-                ));
+                return Err(AppError::conflict("A private chat between these users already exists."));
             }
             let new_chat = CreateChatDTO {
                 title: None,
@@ -158,7 +146,7 @@ pub async fn create_chat(
 
             // Validazione con validator
             new_chat.validate().map_err(|e| {
-                AppError::with_message(StatusCode::BAD_REQUEST, format!("Validation error: {}", e))
+                AppError::bad_request(format!("Validation error: {}", e))
             })?;
 
             chat = state.chat.create(&new_chat).await?;

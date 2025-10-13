@@ -58,17 +58,9 @@ pub async fn authentication_middleware(
 ) -> Result<Response<Body>, AppError> {
     let auth_header = req.headers_mut().get(http::header::AUTHORIZATION);
     let auth_header = match auth_header {
-        Some(header) => header.to_str().map_err(|_| AppError {
-            code: StatusCode::FORBIDDEN,
-            message: Option::from("Empty header is not allowed".to_string()),
-            details: None,
-        })?,
+        Some(header) => header.to_str().map_err(|_| AppError::forbidden("Empty header is not allowed"))?,
         None => {
-            return Err(AppError {
-                code: StatusCode::FORBIDDEN,
-                message: Option::from("Please add the JWT token to the header".to_string()),
-                details: None,
-            });
+            return Err(AppError::forbidden("Please add the JWT token to the header"));
         }
     };
     let mut header = auth_header.split_whitespace();
@@ -76,11 +68,7 @@ pub async fn authentication_middleware(
     let token_data = match decode_jwt(token.unwrap().to_string(), &state.jwt_secret) {
         Ok(data) => data,
         Err(_) => {
-            return Err(AppError {
-                code: StatusCode::UNAUTHORIZED,
-                message: Option::from("Unable to decode token".to_string()),
-                details: None,
-            });
+            return Err(AppError::unauthorized("Unable to decode token"));
         }
     };
 
@@ -92,11 +80,7 @@ pub async fn authentication_middleware(
     {
         Some(user) => user,
         None => {
-            return Err(AppError {
-                code: StatusCode::UNAUTHORIZED,
-                message: Option::from("You are not an authorized user".to_string()),
-                details: None,
-            });
+            return Err(AppError::unauthorized("You are not an authorized user"));
         }
     };
     req.extensions_mut().insert(current_user);

@@ -1,58 +1,82 @@
-use axum::{Json, http::StatusCode, response::IntoResponse};
+use axum::{http::StatusCode, response::IntoResponse, Json};
 use serde::Serialize;
 
 #[derive(Serialize)]
 struct ErrorResponse {
-    error: Option<String>,
+    error: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     details: Option<String>,
 }
 
 pub struct AppError {
-    pub code: StatusCode,
-    pub message: Option<String>,
-    pub details: Option<String>,
+    status: StatusCode,
+    message: String,
+    details: Option<String>,
 }
 
 impl AppError {
-    pub fn with_status(code: StatusCode) -> Self {
+    pub fn new(status: StatusCode, message: impl Into<String>) -> Self {
         Self {
-            code,
-            message: None,
+            status,
+            message: message.into(),
             details: None,
         }
     }
 
-    pub fn with_message<S: Into<String>>(code: StatusCode, message: S) -> Self {
-        Self {
-            code,
-            message: Some(message.into()),
-            details: None,
-        }
+    pub fn with_details(mut self, details: impl Into<String>) -> Self {
+        self.details = Some(details.into());
+        self
     }
 
-    pub fn with_details<E: std::fmt::Debug>(
-        code: StatusCode,
-        message: Option<String>,
-        err: Option<E>,
-    ) -> Self {
-        Self {
-            code,
-            message,
-            details: err.map(|e| format!("{:#?}", e)),
+    // Common error constructors
+    pub fn not_found(message: impl Into<String>) -> Self {
+        Self::new(StatusCode::NOT_FOUND, message)
+    }
+
+    pub fn bad_request(message: impl Into<String>) -> Self {
+        Self::new(StatusCode::BAD_REQUEST, message)
+    }
+
+    pub fn unauthorized(message: impl Into<String>) -> Self {
+        Self::new(StatusCode::UNAUTHORIZED, message)
+    }
+
+    pub fn forbidden(message: impl Into<String>) -> Self {
+        Self::new(StatusCode::FORBIDDEN, message)
+    }
+
+    pub fn conflict(message: impl Into<String>) -> Self {
+        Self::new(StatusCode::CONFLICT, message)
+    }
+
+    pub fn internal_server_error(message: impl Into<String>) -> Self {
+        Self::new(StatusCode::INTERNAL_SERVER_ERROR, message)
+    }
+
+    pub fn service_unavailable(message: impl Into<String>) -> Self {
+        Self::new(StatusCode::SERVICE_UNAVAILABLE, message)
+    }
+}
+
+impl From<sqlx::Error> for AppError {
+    fn from(err: sqlx::Error) -> Self {
+        match err {
+            sqlx::Error::RowNotFound => Self::not_found("Resource not found"),
+
+            sqlx::Error::Database(_) => Self::bad_request("Database error"),
+
+            sqlx::Error::PoolTimedOut | sqlx::Error::PoolClosed => {
+                Self::service_unavailable("Database unavailable")
+            }
+
+            _ => Self::internal_server_error("Internal server error"),
         }
     }
 }
 
-impl<E> From<E> for AppError
-where
-    E: std::fmt::Display + std::error::Error,
-{
-    fn from(value: E) -> Self {
-        AppError {
-            code: StatusCode::INTERNAL_SERVER_ERROR,
-            message: Some("Internal Server Error".to_string()),
-            details: Some(value.to_string()),
-        }
+impl From<axum::Error> for AppError {
+    fn from(err: axum::Error) -> Self {
+        Self::internal_server_error("Internal server error").with_details(err.to_string())
     }
 }
 
@@ -62,6 +86,6 @@ impl IntoResponse for AppError {
             error: self.message,
             details: self.details,
         });
-        (self.code, body).into_response()
+        (self.status, body).into_response()
     }
 }

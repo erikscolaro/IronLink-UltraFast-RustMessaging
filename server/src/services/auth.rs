@@ -36,22 +36,16 @@ pub async fn login_user(
     // 11. Ritornare StatusCode::OK con gli headers
 
     if body.username == "Deleted User" {
-        return Err(AppError::with_message(
-            StatusCode::UNAUTHORIZED,
-            "Invalid username or password",
-        ));
+        return Err(AppError::unauthorized("Invalid username or password"));
     }
 
     let user = match state.user.find_by_username(&body.username).await? {
         Some(user) => user,
-        None => return Err(AppError::with_status(StatusCode::UNAUTHORIZED)),
+        None => return Err(AppError::unauthorized("Invalid username or password")),
     };
 
     if !user.verify_password(&body.password) {
-        return Err(AppError::with_message(
-            StatusCode::UNAUTHORIZED,
-            "Username or password are not correct.",
-        ));
+        return Err(AppError::unauthorized("Username or password are not correct."));
     }
 
     let token = encode_jwt(user.username, user.user_id, &state.jwt_secret)?;
@@ -88,18 +82,15 @@ pub async fn register_user(
 
     // Validazione con validator (include controllo "Deleted User")
     body.validate().map_err(|e| {
-        AppError::with_message(StatusCode::BAD_REQUEST, format!("Validation error: {}", e))
+        AppError::bad_request(format!("Validation error: {}", e))
     })?;
 
     if state.user.find_by_username(&body.username).await.is_ok() {
-        return Err(AppError::with_message(
-            StatusCode::CONFLICT,
-            "Username already exists",
-        ));
+        return Err(AppError::conflict("Username already exists"));
     }
 
     let password_hash = User::hash_password(&body.password).map_err(|_| {
-        AppError::with_message(StatusCode::INTERNAL_SERVER_ERROR, "Failed to hash password")
+        AppError::internal_server_error("Failed to hash password")
     })?;
 
     let new_user = CreateUserDTO {

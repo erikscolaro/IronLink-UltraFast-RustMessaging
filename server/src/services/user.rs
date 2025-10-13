@@ -23,7 +23,7 @@ pub async fn search_user_with_username(
     // 5. Convertire ogni utente trovato in UserDTO
     // 6. Ritornare la lista di UserDTO come risposta JSON
     let query = params.search.filter(|v| v.len() >= 3).ok_or_else(|| {
-        AppError::with_message(StatusCode::BAD_REQUEST, "Query search param too short.")
+        AppError::bad_request("Query search param too short.")
     })?;
     let users = state.user.search_by_username_partial(&query).await?;
     let users_dto = users.into_iter().map(UserDTO::from).collect::<Vec<_>>();
