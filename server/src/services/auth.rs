@@ -83,7 +83,8 @@ pub async fn register_user(
     // Validazione con validator (include controllo "Deleted User")
     body.validate()?;
 
-    if state.user.find_by_username(&body.username).await.is_ok() {
+    // Controllare se esiste già un utente con lo stesso username
+    if let Some(_) = state.user.find_by_username(&body.username).await? {
         return Err(AppError::conflict("Username already exists"));
     }
 
