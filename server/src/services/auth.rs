@@ -45,7 +45,9 @@ pub async fn login_user(
     };
 
     if !user.verify_password(&body.password) {
-        return Err(AppError::unauthorized("Username or password are not correct."));
+        return Err(AppError::unauthorized(
+            "Username or password are not correct.",
+        ));
     }
 
     let token = encode_jwt(user.username, user.user_id, &state.jwt_secret)?;
@@ -88,9 +90,8 @@ pub async fn register_user(
         return Err(AppError::conflict("Username already exists"));
     }
 
-    let password_hash = User::hash_password(&body.password).map_err(|_| {
-        AppError::internal_server_error("Failed to hash password")
-    })?;
+    let password_hash = User::hash_password(&body.password)
+        .map_err(|_| AppError::internal_server_error("Failed to hash password"))?;
 
     let new_user = CreateUserDTO {
         username: body.username,

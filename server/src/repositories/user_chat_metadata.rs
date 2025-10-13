@@ -16,7 +16,10 @@ impl UserChatMetadataRepository {
     }
 
     /// Get all members of a specific chat
-    pub async fn find_many_by_chat_id(&self, chat_id: &i32) -> Result<Vec<UserChatMetadata>, Error> {
+    pub async fn find_many_by_chat_id(
+        &self,
+        chat_id: &i32,
+    ) -> Result<Vec<UserChatMetadata>, Error> {
         let metadata_list = sqlx::query_as!(
             UserChatMetadata,
             r#"
@@ -73,7 +76,10 @@ impl UserChatMetadataRepository {
     }
 
     /// Get all chats for a specific user
-    pub async fn find_many_by_user_id(&self, user_id: &i32) -> Result<Vec<UserChatMetadata>, Error> {
+    pub async fn find_many_by_user_id(
+        &self,
+        user_id: &i32,
+    ) -> Result<Vec<UserChatMetadata>, Error> {
         let result = sqlx::query_as!(
             UserChatMetadata,
             r#"
@@ -97,7 +103,10 @@ impl UserChatMetadataRepository {
 
     /// Create multiple metadata entries in a single transaction
     /// Ensures atomicity: either all are created or none
-    pub async fn create_many(&self, metadata_list: &[CreateUserChatMetadataDTO]) -> Result<Vec<UserChatMetadata>, Error> {
+    pub async fn create_many(
+        &self,
+        metadata_list: &[CreateUserChatMetadataDTO],
+    ) -> Result<Vec<UserChatMetadata>, Error> {
         if metadata_list.is_empty() {
             return Ok(Vec::new());
         }
@@ -105,7 +114,7 @@ impl UserChatMetadataRepository {
         let mut tx = self.connection_pool.begin().await?;
 
         let mut created = Vec::with_capacity(metadata_list.len());
-        
+
         for data in metadata_list {
             sqlx::query!(
                 r#"

@@ -41,18 +41,18 @@ impl MessageRepository {
     }
 
     /// Get paginated messages for a chat within a time range
-    /// 
+    ///
     /// Retrieves messages visible to a user based on their `messages_visible_from` timestamp
     /// (from UserChatMetadata). Supports both:
     /// - Loading recent messages (when `before_date` is None): gets the most recent `limit` messages
     /// - Loading older messages (when `before_date` is Some): gets `limit` messages before that date
-    /// 
+    ///
     /// # Arguments
     /// * `chat_id` - The chat ID
     /// * `messages_visible_from` - Lower bound timestamp (from UserChatMetadata.messages_visible_from)
     /// * `before_date` - Optional upper bound timestamp for pagination
     /// * `limit` - Maximum number of messages to return
-    /// 
+    ///
     /// # Returns
     /// Messages ordered from newest to oldest (DESC), limited to `limit` count
     pub async fn find_many_paginated(

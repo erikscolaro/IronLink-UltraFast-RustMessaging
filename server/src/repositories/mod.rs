@@ -72,7 +72,7 @@ pub mod user;
 pub mod user_chat_metadata;
 
 // Re-esportazione dei trait per facilitare l'import
-pub use traits::{Create, Delete, Read, ReadMany, Update};
+pub use traits::{Create, Delete, Read, Update};
 
 // Note: ReadMany is exported but not yet used. It will be available when needed.
 

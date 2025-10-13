@@ -1,13 +1,6 @@
 use crate::core::{AppError, AppState};
 use axum::extract::State;
-use axum::{
-    Error,
-    body::Body,
-    extract::Request,
-    http,
-    http::{Response, StatusCode},
-    middleware::Next,
-};
+use axum::{Error, body::Body, extract::Request, http, http::Response, middleware::Next};
 use chrono::{Duration, Utc};
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, TokenData, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
@@ -58,9 +51,13 @@ pub async fn authentication_middleware(
 ) -> Result<Response<Body>, AppError> {
     let auth_header = req.headers_mut().get(http::header::AUTHORIZATION);
     let auth_header = match auth_header {
-        Some(header) => header.to_str().map_err(|_| AppError::forbidden("Empty header is not allowed"))?,
+        Some(header) => header
+            .to_str()
+            .map_err(|_| AppError::forbidden("Empty header is not allowed"))?,
         None => {
-            return Err(AppError::forbidden("Please add the JWT token to the header"));
+            return Err(AppError::forbidden(
+                "Please add the JWT token to the header",
+            ));
         }
     };
     let mut header = auth_header.split_whitespace();

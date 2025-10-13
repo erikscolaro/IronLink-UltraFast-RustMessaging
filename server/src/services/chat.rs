@@ -7,7 +7,6 @@ use crate::repositories::{Create, Read};
 use axum::{
     Extension,
     extract::{Json, Path, State},
-    http::StatusCode,
 };
 use axum_macros::debug_handler;
 use chrono::Utc;
@@ -86,12 +85,15 @@ pub async fn create_chat(
     let chat;
     match body.chat_type {
         ChatType::Private => {
-            let user_list = body.user_list.as_ref().ok_or_else(|| {
-                AppError::bad_request("Private chat should specify user list.")
-            })?;
+            let user_list = body
+                .user_list
+                .as_ref()
+                .ok_or_else(|| AppError::bad_request("Private chat should specify user list."))?;
 
             if user_list.len() != 2 {
-                return Err(AppError::bad_request("Private chat should specify exactly two users."));
+                return Err(AppError::bad_request(
+                    "Private chat should specify exactly two users.",
+                ));
             }
 
             let second_user_id = user_list
@@ -106,7 +108,9 @@ pub async fn create_chat(
                 .get_private_chat_between_users(&current_user.user_id, second_user_id)
                 .await?;
             if existing_chat.is_some() {
-                return Err(AppError::conflict("A private chat between these users already exists."));
+                return Err(AppError::conflict(
+                    "A private chat between these users already exists.",
+                ));
             }
             let new_chat = CreateChatDTO {
                 title: None,
@@ -133,9 +137,12 @@ pub async fn create_chat(
                 messages_visible_from: now,
                 messages_received_until: now,
             };
-            
+
             // Create both metadata in a single transaction for atomicity
-            state.meta.create_many(&[metadata_current_user, metadata_second_user]).await?;
+            state
+                .meta
+                .create_many(&[metadata_current_user, metadata_second_user])
+                .await?;
         }
 
         ChatType::Group => {

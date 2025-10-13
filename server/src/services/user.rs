@@ -22,9 +22,10 @@ pub async fn search_user_with_username(
     // 4. Cercare nel database tutti gli utenti con username che contiene parzialmente la query, cercando solo all'inizio dello username
     // 5. Convertire ogni utente trovato in UserDTO
     // 6. Ritornare la lista di UserDTO come risposta JSON
-    let query = params.search.filter(|v| v.len() >= 3).ok_or_else(|| {
-        AppError::bad_request("Query search param too short.")
-    })?;
+    let query = params
+        .search
+        .filter(|v| v.len() >= 3)
+        .ok_or_else(|| AppError::bad_request("Query search param too short."))?;
     let users = state.user.search_by_username_partial(&query).await?;
     let users_dto = users.into_iter().map(UserDTO::from).collect::<Vec<_>>();
     Ok(Json::from(users_dto))
@@ -48,14 +49,17 @@ pub async fn delete_my_account(
 ) -> Result<impl IntoResponse, AppError> {
     // 1. Ottenere l'utente corrente dall'Extension (autenticato tramite JWT)
     // 2. Recuperare tutti i metadata dell'utente per identificare chat ownership (singola query)
-    let user_metadata = state.meta.find_many_by_user_id(&current_user.user_id).await?;
+    let user_metadata = state
+        .meta
+        .find_many_by_user_id(&current_user.user_id)
+        .await?;
 
     // 3. Gestire il caso degli ownership: se l'utente è owner di gruppi
     for metadata in &user_metadata {
         if matches!(metadata.user_role, Some(UserRole::Owner)) {
             // Recuperare tutti i membri della chat
             let chat_members = state.meta.find_many_by_chat_id(&metadata.chat_id).await?;
-            
+
             if chat_members.len() == 1 {
                 // Se l'owner è l'unico membro, cancellare la chat completamente
                 // ON DELETE CASCADE cancellerà automaticamente i metadata e i messaggi
@@ -64,7 +68,10 @@ pub async fn delete_my_account(
                 // Cercare un admin a cui trasferire l'ownership
                 let new_owner = chat_members
                     .iter()
-                    .find(|m| m.user_id != current_user.user_id && matches!(m.user_role, Some(UserRole::Admin)))
+                    .find(|m| {
+                        m.user_id != current_user.user_id
+                            && matches!(m.user_role, Some(UserRole::Admin))
+                    })
                     .or_else(|| {
                         // Se non c'è un admin, prendi qualsiasi altro membro
                         chat_members
@@ -74,11 +81,14 @@ pub async fn delete_my_account(
 
                 if let Some(new_owner) = new_owner {
                     // Trasferire l'ownership
-                    state.meta.transfer_ownership(
-                        &current_user.user_id,
-                        &new_owner.user_id,
-                        &metadata.chat_id,
-                    ).await?;
+                    state
+                        .meta
+                        .transfer_ownership(
+                            &current_user.user_id,
+                            &new_owner.user_id,
+                            &metadata.chat_id,
+                        )
+                        .await?;
                 }
             }
         }

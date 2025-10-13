@@ -16,10 +16,7 @@ impl InvitationRepository {
     }
 
     /// Get all pending invitations for a specific user
-    pub async fn find_many_by_user_id(
-        &self,
-        user_id: &i32,
-    ) -> Result<Vec<Invitation>, Error> {
+    pub async fn find_many_by_user_id(&self, user_id: &i32) -> Result<Vec<Invitation>, Error> {
         let invitations = sqlx::query_as!(
             Invitation,
             r#"
@@ -58,7 +55,6 @@ impl InvitationRepository {
 
         Ok(count.count > 0)
     }
-
 }
 
 impl Create<Invitation, CreateInvitationDTO> for InvitationRepository {
