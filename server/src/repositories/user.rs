@@ -1,6 +1,6 @@
 //! UserRepository - Repository per la gestione degli utenti
 
-use super::Crud;
+use super::{Create, Delete, Read, Update};
 use crate::dtos::{CreateUserDTO, UpdateUserDTO};
 use crate::entities::User;
 use sqlx::{Error, MySqlPool};
@@ -51,7 +51,7 @@ impl UserRepository {
     }
 }
 
-impl Crud<User, CreateUserDTO, UpdateUserDTO, i32> for UserRepository {
+impl Create<User, CreateUserDTO> for UserRepository {
     async fn create(&self, data: &CreateUserDTO) -> Result<User, Error> {
         // Insert user and get the ID using MySQL syntax
         let result = sqlx::query!(
@@ -72,7 +72,9 @@ impl Crud<User, CreateUserDTO, UpdateUserDTO, i32> for UserRepository {
             password: data.password.clone(),
         })
     }
+}
 
+impl Read<User, i32> for UserRepository {
     async fn read(&self, id: &i32) -> Result<Option<User>, Error> {
         let user = sqlx::query_as!(
             User,
@@ -84,7 +86,9 @@ impl Crud<User, CreateUserDTO, UpdateUserDTO, i32> for UserRepository {
 
         Ok(user)
     }
+}
 
+impl Update<User, UpdateUserDTO, i32> for UserRepository {
     async fn update(&self, id: &i32, data: &UpdateUserDTO) -> Result<User, Error> {
         // First, get the current user to ensure it exists
         let current_user = self
@@ -109,7 +113,9 @@ impl Crud<User, CreateUserDTO, UpdateUserDTO, i32> for UserRepository {
             Ok(current_user)
         }
     }
+}
 
+impl Delete<i32> for UserRepository {
     /// Soft delete user by setting username to "Deleted User" and clearing password ""
     /// This preserves message history while anonymizing the user
     async fn delete(&self, user_id: &i32) -> Result<(), Error> {

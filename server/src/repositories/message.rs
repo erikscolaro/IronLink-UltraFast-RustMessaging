@@ -1,6 +1,6 @@
 //! MessageRepository - Repository per la gestione dei messaggi
 
-use super::Crud;
+use super::{Create, Delete, Read, Update};
 use crate::dtos::{CreateMessageDTO, UpdateMessageDTO};
 use crate::entities::{Message, MessageType};
 use chrono::{DateTime, Utc};
@@ -104,7 +104,7 @@ impl MessageRepository {
     }
 }
 
-impl Crud<Message, CreateMessageDTO, UpdateMessageDTO, i32> for MessageRepository {
+impl Create<Message, CreateMessageDTO> for MessageRepository {
     async fn create(&self, data: &CreateMessageDTO) -> Result<Message, Error> {
         // Insert message using MySQL syntax
         let result = sqlx::query!(
@@ -134,7 +134,9 @@ impl Crud<Message, CreateMessageDTO, UpdateMessageDTO, i32> for MessageRepositor
             message_type: data.message_type.clone(),
         })
     }
+}
 
+impl Read<Message, i32> for MessageRepository {
     async fn read(&self, id: &i32) -> Result<Option<Message>, Error> {
         let message = sqlx::query_as!(
             Message,
@@ -156,7 +158,9 @@ impl Crud<Message, CreateMessageDTO, UpdateMessageDTO, i32> for MessageRepositor
 
         Ok(message)
     }
+}
 
+impl Update<Message, UpdateMessageDTO, i32> for MessageRepository {
     async fn update(&self, id: &i32, data: &UpdateMessageDTO) -> Result<Message, Error> {
         // First, get the current message to ensure it exists
         let current_message = self
@@ -186,7 +190,9 @@ impl Crud<Message, CreateMessageDTO, UpdateMessageDTO, i32> for MessageRepositor
         // Fetch and return the updated message
         self.read(id).await?.ok_or_else(|| sqlx::Error::RowNotFound)
     }
+}
 
+impl Delete<i32> for MessageRepository {
     async fn delete(&self, id: &i32) -> Result<(), Error> {
         sqlx::query!("DELETE FROM messages WHERE message_id = ?", id)
             .execute(&self.connection_pool)

@@ -1,38 +1,94 @@
-//! Trait comuni per le repository
+//! Common repository traits
 //!
-//! Definisce interfacce generiche per operazioni CRUD e funzionalità aggiuntive
+//! This module defines generic interfaces for database operations.
 
-/// Trait per operazioni CRUD generiche
+/// Trait for creating new entities in the database
 ///
 /// # Type Parameters
-/// * `T` - Tipo dell'entità gestita dalla repository (es. User, Message, Chat)
-/// * `CreateDTO` - DTO per creazione senza ID autogenerato (es. CreateUserDTO)
-/// * `UpdateDTO` - DTO per aggiornamento parziale con campi opzionali (es. UpdateUserDTO)
-/// * `Id` - Tipo della chiave primaria (può essere i32, (i32, i32), etc.)
-///
-/// # Nota sul DTO Pattern
-/// Il pattern DTO risolve diversi problemi:
-///
-/// **CreateDTO**: Gestisce ID autogenerati
-/// - Le entities hanno ID (generato dal DB)
-/// - I CreateDTO non hanno ID (verrà assegnato dal DB)
-/// - create() accetta CreateDTO e restituisce l'entity completa con ID
-///
-/// **UpdateDTO**: Gestisce aggiornamenti parziali e sicurezza
-/// - Tutti i campi sono Option<T> per permettere update parziali
-/// - Solo i campi con Some(_) vengono aggiornati nel DB
-/// - Campi immutabili (id, created_at) non sono presenti nell'UpdateDTO
-/// - update() richiede ID esplicito + UpdateDTO
-pub trait Crud<T, CreateDTO, UpdateDTO, Id> {
-    /// Crea un nuovo record usando CreateDTO (senza ID) e restituisce l'entità completa con ID
-    async fn create(&self, data: &CreateDTO) -> Result<T, sqlx::Error>;
+/// * `Entity` - Type of the returned entity (with ID assigned by the database)
+/// * `CreateDTO` - DTO for creation (without ID, will be automatically generated)
+pub trait Create<Entity, CreateDTO> {
+    /// Creates a new entity in the database
+    ///
+    /// # Arguments
+    /// * `data` - DTO containing the data for creation (without ID)
+    ///
+    /// # Returns
+    /// * `Ok(Entity)` - Created entity with ID assigned by the database
+    /// * `Err(sqlx::Error)` - Error during insertion
+    async fn create(&self, data: &CreateDTO) -> Result<Entity, sqlx::Error>;
+}
 
-    /// Legge un record tramite ID
-    async fn read(&self, id: &Id) -> Result<Option<T>, sqlx::Error>;
+/// Trait for reading a single entity by primary key
+///
+/// # Type Parameters
+/// * `Entity` - Type of the entity to read
+/// * `Id` - Type of the primary key (e.g. `i32`, `String`, `(i32, i32)`)
+pub trait Read<Entity, Id> {
+    /// Reads an entity from the database by its primary key
+    ///
+    /// # Arguments
+    /// * `id` - Primary key of the entity to read
+    ///
+    /// # Returns
+    /// * `Ok(Some(Entity))` - Entity found
+    /// * `Ok(None)` - No entity with that ID
+    /// * `Err(sqlx::Error)` - Error during reading
+    async fn read(&self, id: &Id) -> Result<Option<Entity>, sqlx::Error>;
+}
 
-    /// Aggiorna un record esistente usando UpdateDTO (campi parziali)
-    async fn update(&self, id: &Id, data: &UpdateDTO) -> Result<T, sqlx::Error>;
+/// Trait for reading multiple entities by list of primary keys
+///
+/// # Type Parameters
+/// * `Entity` - Type of the entities to read
+/// * `Id` - Type of the primary key (e.g. `i32`, `String`, `(i32, i32)`)
+pub trait ReadMany<Entity, Id> {
+    /// Reads multiple entities from the database by their primary keys
+    ///
+    /// # Arguments
+    /// * `ids` - Slice of primary keys of the entities to read
+    ///
+    /// # Returns
+    /// * `Ok(Vec<Entity>)` - Vec containing all found entities (can be empty)
+    /// * `Err(sqlx::Error)` - Error during reading
+    ///
+    /// # Note
+    /// Entities are returned in the order they are found in the database,
+    /// which may not match the order of the provided IDs.
+    async fn read_many(&self, ids: &[Id]) -> Result<Vec<Entity>, sqlx::Error>;
+}
 
-    /// Cancella un record tramite ID
+/// Trait for updating existing entities
+///
+/// # Type Parameters
+/// * `Entity` - Type of the updated entity
+/// * `UpdateDTO` - DTO for updating (optional fields for partial updates)
+/// * `Id` - Type of the primary key
+pub trait Update<Entity, UpdateDTO, Id> {
+    /// Updates an existing entity in the database
+    ///
+    /// # Arguments
+    /// * `id` - Primary key of the entity to update
+    /// * `data` - DTO containing the fields to update (only `Some(_)` fields are modified)
+    ///
+    /// # Returns
+    /// * `Ok(Entity)` - Updated entity
+    /// * `Err(sqlx::Error)` - Error during update (e.g. entity not found)
+    async fn update(&self, id: &Id, data: &UpdateDTO) -> Result<Entity, sqlx::Error>;
+}
+
+/// Trait for deleting entities
+///
+/// # Type Parameters
+/// * `Id` - Type of the primary key
+pub trait Delete<Id> {
+    /// Deletes an entity from the database
+    ///
+    /// # Arguments
+    /// * `id` - Primary key of the entity to delete
+    ///
+    /// # Returns
+    /// * `Ok(())` - Deletion successful
+    /// * `Err(sqlx::Error)` - Error during deletion
     async fn delete(&self, id: &Id) -> Result<(), sqlx::Error>;
 }

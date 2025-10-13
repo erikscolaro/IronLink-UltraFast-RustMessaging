@@ -3,7 +3,7 @@
 use crate::core::{AppError, AppState};
 use crate::dtos::{SearchQueryDTO, UserDTO};
 use crate::entities::User;
-use crate::repositories::Crud;
+use crate::repositories::Read;
 use axum::{
     Extension,
     extract::{Json, Path, Query, State},

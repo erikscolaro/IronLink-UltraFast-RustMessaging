@@ -3,7 +3,7 @@
 use crate::core::{AppError, AppState};
 use crate::dtos::{ChatDTO, CreateChatDTO, CreateUserChatMetadataDTO, MessageDTO};
 use crate::entities::{Chat, ChatType, User, UserRole};
-use crate::repositories::Crud;
+use crate::repositories::{Create, Read};
 use axum::{
     Extension,
     extract::{Json, Path, State},

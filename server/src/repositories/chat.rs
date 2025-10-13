@@ -1,6 +1,6 @@
 //! ChatRepository - Repository per la gestione delle chat
 
-use super::Crud;
+use super::{Create, Delete, Read, Update};
 use crate::dtos::{CreateChatDTO, UpdateChatDTO};
 use crate::entities::{Chat, ChatType};
 use sqlx::{Error, MySqlPool};
@@ -140,7 +140,7 @@ impl ChatRepository {
     }
 }
 
-impl Crud<Chat, CreateChatDTO, UpdateChatDTO, i32> for ChatRepository {
+impl Create<Chat, CreateChatDTO> for ChatRepository {
     async fn create(&self, data: &CreateChatDTO) -> Result<Chat, Error> {
         // Insert chat using MySQL syntax
         let result = sqlx::query!(
@@ -166,7 +166,9 @@ impl Crud<Chat, CreateChatDTO, UpdateChatDTO, i32> for ChatRepository {
             chat_type: data.chat_type.clone(),
         })
     }
+}
 
+impl Read<Chat, i32> for ChatRepository {
     async fn read(&self, id: &i32) -> Result<Option<Chat>, Error> {
         let chat = sqlx::query_as!(
             Chat,
@@ -186,7 +188,9 @@ impl Crud<Chat, CreateChatDTO, UpdateChatDTO, i32> for ChatRepository {
 
         Ok(chat)
     }
+}
 
+impl Update<Chat, UpdateChatDTO, i32> for ChatRepository {
     async fn update(&self, id: &i32, data: &UpdateChatDTO) -> Result<Chat, Error> {
         // First, get the current chat to ensure it exists
         let current_chat = self
@@ -220,7 +224,9 @@ impl Crud<Chat, CreateChatDTO, UpdateChatDTO, i32> for ChatRepository {
         // Fetch and return the updated chat
         self.read(id).await?.ok_or_else(|| sqlx::Error::RowNotFound)
     }
+}
 
+impl Delete<i32> for ChatRepository {
     async fn delete(&self, id: &i32) -> Result<(), Error> {
         sqlx::query!("DELETE FROM chats WHERE chat_id = ?", id)
             .execute(&self.connection_pool)

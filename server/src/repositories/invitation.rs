@@ -1,6 +1,6 @@
 //! InvitationRepository - Repository per la gestione degli inviti
 
-use super::Crud;
+use super::{Create, Delete, Read, Update};
 use crate::dtos::{CreateInvitationDTO, UpdateInvitationDTO};
 use crate::entities::{Invitation, InvitationStatus};
 use sqlx::{Error, MySqlPool};
@@ -77,7 +77,7 @@ impl InvitationRepository {
     }
 }
 
-impl Crud<Invitation, CreateInvitationDTO, UpdateInvitationDTO, i32> for InvitationRepository {
+impl Create<Invitation, CreateInvitationDTO> for InvitationRepository {
     async fn create(&self, data: &CreateInvitationDTO) -> Result<Invitation, Error> {
         // Insert invitation using MySQL syntax
         // state e created_at vengono gestiti dal database (default: Pending e NOW())
@@ -111,7 +111,9 @@ impl Crud<Invitation, CreateInvitationDTO, UpdateInvitationDTO, i32> for Invitat
             created_at: now,
         })
     }
+}
 
+impl Read<Invitation, i32> for InvitationRepository {
     async fn read(&self, id: &i32) -> Result<Option<Invitation>, Error> {
         let invitation = sqlx::query_as!(
             Invitation,
@@ -133,7 +135,9 @@ impl Crud<Invitation, CreateInvitationDTO, UpdateInvitationDTO, i32> for Invitat
 
         Ok(invitation)
     }
+}
 
+impl Update<Invitation, UpdateInvitationDTO, i32> for InvitationRepository {
     async fn update(&self, id: &i32, data: &UpdateInvitationDTO) -> Result<Invitation, Error> {
         // First, get the current invitation to ensure it exists
         let current_invitation = self
@@ -163,7 +167,9 @@ impl Crud<Invitation, CreateInvitationDTO, UpdateInvitationDTO, i32> for Invitat
         // Fetch and return the updated invitation
         self.read(id).await?.ok_or_else(|| sqlx::Error::RowNotFound)
     }
+}
 
+impl Delete<i32> for InvitationRepository {
     async fn delete(&self, id: &i32) -> Result<(), Error> {
         sqlx::query!("DELETE FROM invitations WHERE invite_id = ?", id)
             .execute(&self.connection_pool)

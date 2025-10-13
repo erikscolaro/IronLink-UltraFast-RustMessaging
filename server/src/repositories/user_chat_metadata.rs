@@ -1,6 +1,6 @@
 //! UserChatMetadataRepository - Repository per la gestione dei metadati utente-chat
 
-use super::Crud;
+use super::{Create, Delete, Read, Update};
 use crate::dtos::{CreateUserChatMetadataDTO, UpdateUserChatMetadataDTO};
 use crate::entities::{UserChatMetadata, UserRole};
 use chrono::{DateTime, Utc};
@@ -222,9 +222,7 @@ impl UserChatMetadataRepository {
     }
 }
 
-impl Crud<UserChatMetadata, CreateUserChatMetadataDTO, UpdateUserChatMetadataDTO, i32>
-    for UserChatMetadataRepository
-{
+impl Create<UserChatMetadata, CreateUserChatMetadataDTO> for UserChatMetadataRepository {
     async fn create(&self, data: &CreateUserChatMetadataDTO) -> Result<UserChatMetadata, Error> {
         sqlx::query!(
             r#"
@@ -251,7 +249,9 @@ impl Crud<UserChatMetadata, CreateUserChatMetadataDTO, UpdateUserChatMetadataDTO
             messages_received_until: data.messages_received_until,
         })
     }
+}
 
+impl Read<UserChatMetadata, i32> for UserChatMetadataRepository {
     async fn read(&self, id: &i32) -> Result<Option<UserChatMetadata>, Error> {
         // For UserChatMetadata, we'll interpret the ID as user_id for simplicity
         // In real scenarios, you might want a composite key approach
@@ -276,7 +276,9 @@ impl Crud<UserChatMetadata, CreateUserChatMetadataDTO, UpdateUserChatMetadataDTO
 
         Ok(metadata)
     }
+}
 
+impl Update<UserChatMetadata, UpdateUserChatMetadataDTO, i32> for UserChatMetadataRepository {
     async fn update(
         &self,
         id: &i32,
@@ -321,7 +323,9 @@ impl Crud<UserChatMetadata, CreateUserChatMetadataDTO, UpdateUserChatMetadataDTO
         // Fetch and return the updated metadata
         self.read(id).await?.ok_or_else(|| sqlx::Error::RowNotFound)
     }
+}
 
+impl Delete<i32> for UserChatMetadataRepository {
     async fn delete(&self, id: &i32) -> Result<(), Error> {
         // Delete all metadata for a user (interpretation of the ID parameter)
         sqlx::query!("DELETE FROM userchatmetadata WHERE user_id = ?", id)

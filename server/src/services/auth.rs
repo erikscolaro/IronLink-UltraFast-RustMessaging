@@ -3,7 +3,7 @@
 use crate::core::{AppError, AppState, encode_jwt};
 use crate::dtos::{CreateUserDTO, UserDTO};
 use crate::entities::User;
-use crate::repositories::Crud;
+use crate::repositories::Create;
 use axum::{
     extract::{Json, State},
     http::{HeaderMap, HeaderValue, StatusCode},
