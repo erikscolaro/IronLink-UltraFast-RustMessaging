@@ -2,8 +2,8 @@
 
 use crate::core::{AppError, AppState};
 use crate::dtos::{SearchQueryDTO, UserDTO};
-use crate::entities::User;
-use crate::repositories::Read;
+use crate::entities::{User, UserRole};
+use crate::repositories::{Delete, Read};
 use axum::{
     Extension,
     extract::{Json, Path, Query, State},
@@ -48,16 +48,54 @@ pub async fn delete_my_account(
 ) -> Result<impl IntoResponse, AppError> {
     // 1. Ottenere l'utente corrente dall'Extension (autenticato tramite JWT)
     // 2. Recuperare tutti i metadata dell'utente per identificare chat ownership (singola query)
-    // 3. Gestire il caso degli ownership: se l'utente è owner di gruppi, trasferire l'ownership a un admin casuale se esiste, altrimenti a una persona a caso
+    let user_metadata = state.meta.find_many_by_user_id(&current_user.user_id).await?;
+
+    // 3. Gestire il caso degli ownership: se l'utente è owner di gruppi
+    for metadata in &user_metadata {
+        if matches!(metadata.user_role, Some(UserRole::Owner)) {
+            // Recuperare tutti i membri della chat
+            let chat_members = state.meta.find_many_by_chat_id(&metadata.chat_id).await?;
+            
+            if chat_members.len() == 1 {
+                // Se l'owner è l'unico membro, cancellare la chat completamente
+                // ON DELETE CASCADE cancellerà automaticamente i metadata e i messaggi
+                state.chat.delete(&metadata.chat_id).await?;
+            } else {
+                // Cercare un admin a cui trasferire l'ownership
+                let new_owner = chat_members
+                    .iter()
+                    .find(|m| m.user_id != current_user.user_id && matches!(m.user_role, Some(UserRole::Admin)))
+                    .or_else(|| {
+                        // Se non c'è un admin, prendi qualsiasi altro membro
+                        chat_members
+                            .iter()
+                            .find(|m| m.user_id != current_user.user_id)
+                    });
+
+                if let Some(new_owner) = new_owner {
+                    // Trasferire l'ownership
+                    state.meta.transfer_ownership(
+                        &current_user.user_id,
+                        &new_owner.user_id,
+                        &metadata.chat_id,
+                    ).await?;
+                }
+            }
+        }
+    }
+
     // 4. Cancellare tutti i metadata (UserChatMetadata) associati all'utente
-    // 5. Rinominare lo username dell'utente con "Deleted User"
-    // 6. Sostituire la password dell'utente con stringa vuota
-    // 7. Creare un cookie con Max-Age=0 per forzare il logout lato client
-    // 8. Inserire il cookie negli headers HTTP con Set-Cookie
-    // 9. Ritornare StatusCode::OK con gli headers e messaggio "Logged out"
-    // Nota: i messaggi dell'utente rimangono nel database ma lato client vanno mostrati come "Deleted User"
+    // (solo per le chat non eliminate al punto 3 - quelle erano già cancellate da CASCADE)
+    state.meta.delete(&current_user.user_id).await?;
+
+    // 5-6. Rinominare lo username dell'utente con "Deleted User" e sostituire la password con stringa vuota
+    state.user.delete(&current_user.user_id).await?;
+
+    // 7-8. Creare un cookie con Max-Age=0 per forzare il logout lato client
     let cookie = "token=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0";
     let mut headers = HeaderMap::new();
     headers.insert("Set-Cookie", HeaderValue::from_str(cookie).unwrap());
-    Ok((StatusCode::OK, headers, "Logged out"))
+
+    // 9. Ritornare StatusCode::OK con gli headers e messaggio
+    Ok((StatusCode::OK, headers, "Account deleted successfully"))
 }
