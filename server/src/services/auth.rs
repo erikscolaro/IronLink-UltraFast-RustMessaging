@@ -81,9 +81,7 @@ pub async fn register_user(
     // 9. Ritornare il DTO dell'utente creato come risposta JSON
 
     // Validazione con validator (include controllo "Deleted User")
-    body.validate().map_err(|e| {
-        AppError::bad_request(format!("Validation error: {}", e))
-    })?;
+    body.validate()?;
 
     if state.user.find_by_username(&body.username).await.is_ok() {
         return Err(AppError::conflict("Username already exists"));

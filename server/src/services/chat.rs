@@ -145,9 +145,7 @@ pub async fn create_chat(
             };
 
             // Validazione con validator
-            new_chat.validate().map_err(|e| {
-                AppError::bad_request(format!("Validation error: {}", e))
-            })?;
+            new_chat.validate()?;
 
             chat = state.chat.create(&new_chat).await?;
 

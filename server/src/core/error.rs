@@ -80,6 +80,12 @@ impl From<axum::Error> for AppError {
     }
 }
 
+impl From<validator::ValidationErrors> for AppError {
+    fn from(err: validator::ValidationErrors) -> Self {
+        Self::bad_request("Validation error").with_details(err.to_string())
+    }
+}
+
 impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
         let body = Json(ErrorResponse {
