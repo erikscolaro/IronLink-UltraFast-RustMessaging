@@ -29,14 +29,14 @@ pub async fn list_chats(
     Extension(current_user): Extension<User>,
 ) -> Result<Json<Vec<ChatDTO>>, AppError> {
     // 1. Ottenere l'utente corrente dall'Extension (autenticato tramite JWT)
-    // 2. Recuperare tutti i metadata dell'utente dal database tramite user_id (singola query, da implementare)
+    // 2. Recuperare tutti i metadata dell'utente dal database tramite user_id (singola query)
     // 3. Estrarre tutti i chat_id dai metadata trovati
-    // 4. Recuperare tutte le chat in una singola query batch (WHERE chat_id IN (...)) invece di query multiple. chiamarlo find_multiple
+    // 4. Recuperare tutte le chat con query parallele (primary key lookup, velocissimo)
     // 5. Convertire ogni Chat in ChatDTO (trasformazione in memoria, nessun I/O)
     // 6. Ritornare la lista di ChatDTO come risposta JSON
     let chat_ids: Vec<i32> = state
         .meta
-        .find_all_by_user_id(&current_user.user_id)
+        .find_many_by_user_id(&current_user.user_id)
         .await?
         .into_iter()
         .map(|s| s.chat_id)
@@ -133,8 +133,9 @@ pub async fn create_chat(
                 messages_visible_from: now,
                 messages_received_until: now,
             };
-            state.meta.create(&metadata_current_user).await?;
-            state.meta.create(&metadata_second_user).await?;
+            
+            // Create both metadata in a single transaction for atomicity
+            state.meta.create_many(&[metadata_current_user, metadata_second_user]).await?;
         }
 
         ChatType::Group => {
