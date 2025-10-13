@@ -16,7 +16,7 @@ impl InvitationRepository {
     }
 
     /// Get all pending invitations for a specific user
-    pub async fn get_pending_invitations_for_user(
+    pub async fn find_many_by_user_id(
         &self,
         user_id: &i32,
     ) -> Result<Vec<Invitation>, Error> {
@@ -59,22 +59,6 @@ impl InvitationRepository {
         Ok(count.count > 0)
     }
 
-    /// Update invitation status (accept/reject)
-    pub async fn update_invitation_status(
-        &self,
-        invitation_id: &i32,
-        new_status: &InvitationStatus,
-    ) -> Result<(), Error> {
-        sqlx::query!(
-            "UPDATE invitations SET state = ? WHERE invite_id = ?",
-            new_status as &InvitationStatus,
-            invitation_id
-        )
-        .execute(&self.connection_pool)
-        .await?;
-
-        Ok(())
-    }
 }
 
 impl Create<Invitation, CreateInvitationDTO> for InvitationRepository {
@@ -150,19 +134,14 @@ impl Update<Invitation, UpdateInvitationDTO, i32> for InvitationRepository {
             return Ok(current_invitation);
         }
 
-        // Build dynamic UPDATE query using QueryBuilder (idiomatic SQLx way)
-        let mut query_builder = sqlx::QueryBuilder::new("UPDATE invitations SET ");
-
-        let mut separated = query_builder.separated(", ");
-        if let Some(ref state) = data.state {
-            separated.push("state = ");
-            separated.push_bind_unseparated(state);
-        }
-
-        query_builder.push(" WHERE invite_id = ");
-        query_builder.push_bind(id);
-
-        query_builder.build().execute(&self.connection_pool).await?;
+        // Update invitation state
+        sqlx::query!(
+            "UPDATE invitations SET state = ? WHERE invite_id = ?",
+            data.state,
+            id
+        )
+        .execute(&self.connection_pool)
+        .await?;
 
         // Fetch and return the updated invitation
         self.read(id).await?.ok_or_else(|| sqlx::Error::RowNotFound)

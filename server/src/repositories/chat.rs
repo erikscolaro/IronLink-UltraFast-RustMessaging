@@ -15,9 +15,14 @@ impl ChatRepository {
         Self { connection_pool }
     }
 
-    /// Get all chats where user is a member
-    pub async fn get_chats_by_user(&self, user_id: &i32) -> Result<Vec<Chat>, Error> {
-        let chats = sqlx::query_as!(
+    /// Get private chat between two users (if exists)
+    /// Optimized query: uses GROUP BY + HAVING instead of multiple JOINs for better performance
+    pub async fn get_private_chat_between_users(
+        &self,
+        user1_id: &i32,
+        user2_id: &i32,
+    ) -> Result<Option<Chat>, Error> {
+        let chat = sqlx::query_as!(
             Chat,
             r#"
             SELECT 
@@ -27,37 +32,10 @@ impl ChatRepository {
                 c.chat_type as "chat_type: ChatType"
             FROM chats c
             INNER JOIN userchatmetadata ucm ON c.chat_id = ucm.chat_id
-            WHERE ucm.user_id = ?
-            "#,
-            user_id
-        )
-        .fetch_all(&self.connection_pool)
-        .await?;
-
-        Ok(chats)
-    }
-    //MOD opzione in piu per cercare chat private tra due utenti (possiamo evitare un ud come input)
-    /// Get private chat between two users (if exists)
-    pub async fn get_private_chat_between_users(
-        &self,
-        user1_id: &i32,
-        user2_id: &i32,
-    ) -> Result<Option<Chat>, Error> {
-        let chat = sqlx::query_as!(
-            Chat,
-            r#"
-            SELECT DISTINCT
-                c.chat_id,
-                c.title,
-                c.description,
-                c.chat_type as "chat_type: ChatType"
-            FROM chats c
-            INNER JOIN userchatmetadata ucm1 ON c.chat_id = ucm1.chat_id
-            INNER JOIN userchatmetadata ucm2 ON c.chat_id = ucm2.chat_id
             WHERE c.chat_type = 'PRIVATE' 
-            AND ucm1.user_id = ? 
-            AND ucm2.user_id = ?
-            AND ucm1.user_id != ucm2.user_id
+            AND ucm.user_id IN (?, ?)
+            GROUP BY c.chat_id, c.title, c.description, c.chat_type
+            HAVING COUNT(DISTINCT ucm.user_id) = 2
             "#,
             user1_id,
             user2_id
@@ -66,77 +44,6 @@ impl ChatRepository {
         .await?;
 
         Ok(chat)
-    }
-
-    //MOD: assumo title univoco
-    /// Get group chat by title
-    pub async fn get_groups_by_title(
-        &self,
-        title_group: &Option<String>,
-    ) -> Result<Option<Chat>, Error> {
-        let chats = sqlx::query_as!(
-            Chat,
-            r#"
-            SELECT 
-                chat_id,
-                title,
-                description,
-                chat_type as "chat_type: ChatType"
-            FROM chats 
-            WHERE chat_type = 'GROUP' and title = ?
-            "#,
-            title_group
-        )
-        .fetch_optional(&self.connection_pool)
-        .await?;
-
-        Ok(chats)
-    }
-
-    //MOD: forse utile per controlli
-    /// Check if chat exists and is of specified type
-    pub async fn is_chat_type(
-        &self,
-        chat_id: &i32,
-        expected_type: &ChatType,
-    ) -> Result<bool, Error> {
-        let result = sqlx::query_as!(
-            Chat,
-            r#"
-            SELECT 
-                chat_id,
-                title,
-                description,
-                chat_type as "chat_type: ChatType"
-            FROM chats 
-            WHERE chat_id = ?
-            "#,
-            chat_id
-        )
-        .fetch_optional(&self.connection_pool)
-        .await?;
-
-        match result {
-            Some(chat) => Ok(&chat.chat_type == expected_type),
-            None => Ok(false),
-        }
-    }
-
-    /// Update chat title and description (for groups)
-    pub async fn update_chat_description(
-        &self,
-        chat_id: &i32,
-        description: &Option<String>,
-    ) -> Result<(), Error> {
-        sqlx::query!(
-            "UPDATE chats SET description = ? WHERE chat_id = ?",
-            description,
-            chat_id
-        )
-        .execute(&self.connection_pool)
-        .await?;
-
-        Ok(())
     }
 }
 

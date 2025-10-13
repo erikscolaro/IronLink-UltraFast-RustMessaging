@@ -17,7 +17,7 @@ impl MessageRepository {
     }
 
     /// Get all messages for a specific chat, ordered by creation time
-    pub async fn get_messages_by_chat_id(&self, chat_id: &i32) -> Result<Vec<Message>, Error> {
+    pub async fn find_many_by_chat_id(&self, chat_id: &i32) -> Result<Vec<Message>, Error> {
         let messages = sqlx::query_as!(
             Message,
             r#"
@@ -40,65 +40,77 @@ impl MessageRepository {
         Ok(messages)
     }
 
-    //MOD: imposta timestamp  after_timestamp = current_time-20minuti?????
-    /// Get messages for a chat after a specific timestamp (for pagination)
-    pub async fn get_messages_after_timestamp(
+    /// Get paginated messages for a chat within a time range
+    /// 
+    /// Retrieves messages visible to a user based on their `messages_visible_from` timestamp
+    /// (from UserChatMetadata). Supports both:
+    /// - Loading recent messages (when `before_date` is None): gets the most recent `limit` messages
+    /// - Loading older messages (when `before_date` is Some): gets `limit` messages before that date
+    /// 
+    /// # Arguments
+    /// * `chat_id` - The chat ID
+    /// * `messages_visible_from` - Lower bound timestamp (from UserChatMetadata.messages_visible_from)
+    /// * `before_date` - Optional upper bound timestamp for pagination
+    /// * `limit` - Maximum number of messages to return
+    /// 
+    /// # Returns
+    /// Messages ordered from newest to oldest (DESC), limited to `limit` count
+    pub async fn find_many_paginated(
         &self,
         chat_id: &i32,
-        after_timestamp: &DateTime<Utc>,
-    ) -> Result<Vec<Message>, Error> {
-        let messages = sqlx::query_as!(
-            Message,
-            r#"
-            SELECT 
-                message_id, 
-                chat_id, 
-                sender_id, 
-                content, 
-                created_at,
-                message_type as "message_type: MessageType"
-            FROM messages 
-            WHERE chat_id = ? AND created_at > ?
-            ORDER BY created_at ASC
-            "#,
-            chat_id,
-            after_timestamp
-        )
-        .fetch_all(&self.connection_pool)
-        .await?;
-
-        Ok(messages)
-    }
-
-    //MOD: se vogliomano caricare solo fino a 50 (limit) messaggi
-    /// Get messages for a chat with limit (for pagination)
-    pub async fn get_messages_with_limit(
-        &self,
-        chat_id: &i32,
+        messages_visible_from: &DateTime<Utc>,
+        before_date: Option<&DateTime<Utc>>,
         limit: i64,
-        offset: i64,
     ) -> Result<Vec<Message>, Error> {
-        let messages = sqlx::query_as!(
-            Message,
-            r#"
-            SELECT 
-                message_id, 
-                chat_id, 
-                sender_id, 
-                content, 
-                created_at,
-                message_type as "message_type: MessageType"
-            FROM messages 
-            WHERE chat_id = ? 
-            ORDER BY created_at DESC
-            LIMIT ? OFFSET ?
-            "#,
-            chat_id,
-            limit,
-            offset
-        )
-        .fetch_all(&self.connection_pool)
-        .await?;
+        let messages = if let Some(before) = before_date {
+            sqlx::query_as!(
+                Message,
+                r#"
+                SELECT 
+                    message_id, 
+                    chat_id, 
+                    sender_id, 
+                    content, 
+                    created_at,
+                    message_type as "message_type: MessageType"
+                FROM messages 
+                WHERE chat_id = ? 
+                  AND created_at >= ? 
+                  AND created_at < ?
+                ORDER BY created_at DESC
+                LIMIT ?
+                "#,
+                chat_id,
+                messages_visible_from,
+                before,
+                limit
+            )
+            .fetch_all(&self.connection_pool)
+            .await?
+        } else {
+            sqlx::query_as!(
+                Message,
+                r#"
+                SELECT 
+                    message_id, 
+                    chat_id, 
+                    sender_id, 
+                    content, 
+                    created_at,
+                    message_type as "message_type: MessageType"
+                FROM messages 
+                WHERE chat_id = ? 
+                  AND created_at >= ?
+                ORDER BY created_at DESC
+                LIMIT ?
+                "#,
+                chat_id,
+                messages_visible_from,
+                limit
+            )
+            .fetch_all(&self.connection_pool)
+            .await?
+        };
 
         Ok(messages)
     }
@@ -173,19 +185,14 @@ impl Update<Message, UpdateMessageDTO, i32> for MessageRepository {
             return Ok(current_message);
         }
 
-        // Build dynamic UPDATE query using QueryBuilder (idiomatic SQLx way)
-        let mut query_builder = sqlx::QueryBuilder::new("UPDATE messages SET ");
-
-        let mut separated = query_builder.separated(", ");
-        if let Some(ref content) = data.content {
-            separated.push("content = ");
-            separated.push_bind_unseparated(content);
-        }
-
-        query_builder.push(" WHERE message_id = ");
-        query_builder.push_bind(id);
-
-        query_builder.build().execute(&self.connection_pool).await?;
+        // Update message content
+        sqlx::query!(
+            "UPDATE messages SET content = ? WHERE message_id = ?",
+            data.content,
+            id
+        )
+        .execute(&self.connection_pool)
+        .await?;
 
         // Fetch and return the updated message
         self.read(id).await?.ok_or_else(|| sqlx::Error::RowNotFound)
