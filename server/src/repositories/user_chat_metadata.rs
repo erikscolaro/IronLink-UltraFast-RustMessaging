@@ -3,7 +3,6 @@
 use super::{Create, Delete, Read, Update};
 use crate::dtos::{CreateUserChatMetadataDTO, UpdateUserChatMetadataDTO};
 use crate::entities::{UserChatMetadata, UserRole};
-use chrono::{DateTime, Utc};
 use sqlx::{Error, MySqlPool};
 
 // USERCHATMETADATA REPO
@@ -17,7 +16,7 @@ impl UserChatMetadataRepository {
     }
 
     /// Get all members of a specific chat
-    pub async fn get_members_by_chat(&self, chat_id: &i32) -> Result<Vec<UserChatMetadata>, Error> {
+    pub async fn find_many_by_chat_id(&self, chat_id: &i32) -> Result<Vec<UserChatMetadata>, Error> {
         let metadata_list = sqlx::query_as!(
             UserChatMetadata,
             r#"
@@ -39,132 +38,6 @@ impl UserChatMetadataRepository {
         Ok(metadata_list)
     }
 
-    /// Update user role in a chat
-    pub async fn update_user_role(
-        &self,
-        user_id: &i32,
-        chat_id: &i32,
-        new_role: &Option<UserRole>,
-    ) -> Result<(), Error> {
-        sqlx::query!(
-            "UPDATE userchatmetadata SET user_role = ? WHERE user_id = ? AND chat_id = ?",
-            new_role as &Option<UserRole>,
-            user_id,
-            chat_id
-        )
-        .execute(&self.connection_pool)
-        .await?;
-
-        Ok(())
-    }
-
-    /// Update messages received until timestamp
-    pub async fn update_messages_received_until(
-        &self,
-        user_id: &i32,
-        chat_id: &i32,
-        timestamp: &DateTime<Utc>,
-    ) -> Result<(), Error> {
-        sqlx::query!(
-            "UPDATE userchatmetadata SET messages_received_until = ? WHERE user_id = ? AND chat_id = ?",
-            timestamp,
-            user_id,
-            chat_id
-        )
-        .execute(&self.connection_pool)
-        .await?;
-
-        Ok(())
-    }
-
-    /// Check if user is member of chat
-    pub async fn is_user_member(&self, user_id: &i32, chat_id: &i32) -> Result<bool, Error> {
-        let count = sqlx::query!(
-            "SELECT COUNT(*) as count FROM userchatmetadata WHERE user_id = ? AND chat_id = ?",
-            user_id,
-            chat_id
-        )
-        .fetch_one(&self.connection_pool)
-        .await?;
-
-        Ok(count.count > 0)
-    }
-
-    /// Check if user has admin or owner role in chat
-    pub async fn is_user_admin_or_owner(
-        &self,
-        user_id: &i32,
-        chat_id: &i32,
-    ) -> Result<bool, Error> {
-        let result = sqlx::query_as!(
-            UserChatMetadata,
-            r#"
-            SELECT 
-                user_id,
-                chat_id,
-                user_role as "user_role: UserRole",
-                member_since,
-                messages_visible_from,
-                messages_received_until
-            FROM userchatmetadata 
-            WHERE user_id = ? AND chat_id = ?
-            "#,
-            user_id,
-            chat_id
-        )
-        .fetch_optional(&self.connection_pool)
-        .await?;
-
-        match result {
-            Some(metadata) => {
-                // Check if user_role exists and is Admin or Owner
-                Ok(matches!(
-                    metadata.user_role,
-                    Some(UserRole::Admin) | Some(UserRole::Owner)
-                ))
-            }
-            None => Ok(false),
-        }
-    }
-
-    //MOD inutile??
-    /// Get chat owner
-    pub async fn get_chat_owner(&self, chat_id: &i32) -> Result<Option<i32>, Error> {
-        let result = sqlx::query_as!(
-            UserChatMetadata,
-            r#"
-            SELECT 
-                user_id,
-                chat_id,
-                user_role as "user_role: UserRole",
-                member_since,
-                messages_visible_from,
-                messages_received_until
-            FROM userchatmetadata 
-            WHERE chat_id = ? AND user_role = 'OWNER'
-            "#,
-            chat_id
-        )
-        .fetch_optional(&self.connection_pool)
-        .await?;
-
-        Ok(result.map(|metadata| metadata.user_id))
-    }
-
-    /// Remove user from chat (delete metadata entry)
-    pub async fn remove_user_from_chat(&self, user_id: &i32, chat_id: &i32) -> Result<(), Error> {
-        sqlx::query!(
-            "DELETE FROM userchatmetadata WHERE user_id = ? AND chat_id = ?",
-            user_id,
-            chat_id
-        )
-        .execute(&self.connection_pool)
-        .await?;
-
-        Ok(())
-    }
-
-    //MOD: inutile? si puo far tutto con 'update user role'
     /// Transfer ownership from one user to another in a chat
     pub async fn transfer_ownership(
         &self,
@@ -199,7 +72,8 @@ impl UserChatMetadataRepository {
         Ok(())
     }
 
-    pub async fn find_all_by_user_id(&self, user_id: &i32) -> Result<Vec<UserChatMetadata>, Error> {
+    /// Get all chats for a specific user
+    pub async fn find_many_by_user_id(&self, user_id: &i32) -> Result<Vec<UserChatMetadata>, Error> {
         let result = sqlx::query_as!(
             UserChatMetadata,
             r#"
@@ -219,6 +93,48 @@ impl UserChatMetadataRepository {
         .await?;
 
         Ok(result)
+    }
+
+    /// Create multiple metadata entries in a single transaction
+    /// Ensures atomicity: either all are created or none
+    pub async fn create_many(&self, metadata_list: &[CreateUserChatMetadataDTO]) -> Result<Vec<UserChatMetadata>, Error> {
+        if metadata_list.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut tx = self.connection_pool.begin().await?;
+
+        let mut created = Vec::with_capacity(metadata_list.len());
+        
+        for data in metadata_list {
+            sqlx::query!(
+                r#"
+                INSERT INTO userchatmetadata (user_id, chat_id, user_role, member_since, messages_visible_from, messages_received_until) 
+                VALUES (?, ?, ?, ?, ?, ?)
+                "#,
+                data.user_id,
+                data.chat_id,
+                data.user_role,
+                data.member_since,
+                data.messages_visible_from,
+                data.messages_received_until
+            )
+            .execute(&mut *tx)
+            .await?;
+
+            created.push(UserChatMetadata {
+                user_id: data.user_id,
+                chat_id: data.chat_id,
+                user_role: data.user_role.clone(),
+                member_since: data.member_since,
+                messages_visible_from: data.messages_visible_from,
+                messages_received_until: data.messages_received_until,
+            });
+        }
+
+        tx.commit().await?;
+
+        Ok(created)
     }
 }
 
