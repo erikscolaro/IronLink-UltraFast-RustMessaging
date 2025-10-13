@@ -131,7 +131,9 @@ CREATE TABLE `userchatmetadata` (
   `member_since` timestamp NOT NULL,
   PRIMARY KEY (`chat_id`,`user_id`),
   KEY `idx_UCM_user` (`user_id`),
-  KEY `idx_UCM_chat` (`chat_id`)
+  KEY `idx_UCM_chat` (`chat_id`),
+  CONSTRAINT `userchatmetadata_ibfk_1` FOREIGN KEY (`chat_id`) REFERENCES `chats` (`chat_id`) ON DELETE CASCADE,
+  CONSTRAINT `userchatmetadata_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
