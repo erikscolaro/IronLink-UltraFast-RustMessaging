@@ -40,7 +40,7 @@ pub async fn broadcast_to_chat(
     event: WsEventDTO,
 ) -> Result<usize, sqlx::Error> {
     // 1. Recuperare i membri della chat
-    let members = state.meta.get_members_by_chat(&chat_id).await?;
+    let members = state.meta.find_many_by_chat_id(&chat_id).await?;
 
     let mut sent_count = 0;
 
