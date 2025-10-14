@@ -24,7 +24,40 @@ pub async fn list_chat_members(
     // 7. Combinare le informazioni degli utenti con i metadata (join in memoria)
     // 8. Convertire ogni combinazione in UserInChatDTO (trasformazione in memoria)
     // 9. Ritornare la lista di UserInChatDTO come risposta JSON
-    todo!()
+    
+    let meta = state
+        .meta
+        .find_many_by_chat_id(&chat_id)
+        .await?;
+
+    let is_member = meta.iter().any(|m| m.user_id == current_user.user_id);
+    if !is_member {
+        return Err(AppError::forbidden(
+            "You are not a member of this chat".to_string(),
+        ));
+    }
+
+    let user_ids: Vec<i32> = meta.iter().map(|m| m.user_id).collect();
+
+    let users = state
+        .user
+        .find_many_by_ids(&user_ids)
+        .await?;
+
+    let mut result: Vec<UserInChatDTO> = Vec::new();
+    for user in users {
+        if let Some(m) = meta.iter().find(|m| m.user_id == user.user_id) {
+            result.push(UserInChatDTO {
+                user_id: Some(user.user_id),
+                chat_id: Some(m.chat_id),
+                username: Some(user.username),
+                user_role: m.user_role.clone(),
+                member_since: Some(m.member_since)
+            });
+        }
+    }
+
+    Ok(Json(result))
 }
 
 pub async fn invite_to_chat(
