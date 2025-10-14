@@ -10,10 +10,11 @@ use serde::{Deserialize, Serialize};
 pub struct UserInChatDTO {
     pub user_id: Option<i32>,
     pub chat_id: Option<i32>,
+    pub username: Option<String>,
     pub user_role: Option<UserRole>,
     pub member_since: Option<DateTime<Utc>>,
-    pub messages_visible_from: Option<DateTime<Utc>>,
-    pub messages_received_until: Option<DateTime<Utc>>,
+    //pub messages_visible_from: Option<DateTime<Utc>>,         // superfluo per il tipo di operazione
+    //pub messages_received_until: Option<DateTime<Utc>>,       // superfluo per il tipo di operazione
 }
 
 impl From<UserChatMetadata> for UserInChatDTO {
@@ -21,10 +22,11 @@ impl From<UserChatMetadata> for UserInChatDTO {
         Self {
             user_id: Some(value.user_id),
             chat_id: Some(value.chat_id),
+            username: None, // Non è presente in UserChatMetadata, va popolato altrove
             user_role: value.user_role,
             member_since: Some(value.member_since),
-            messages_visible_from: Some(value.messages_visible_from),
-            messages_received_until: Some(value.messages_received_until),
+            // messages_visible_from: Some(value.messages_visible_from),
+            // messages_received_until: Some(value.messages_received_until),
         }
     }
 }

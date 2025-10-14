@@ -49,6 +49,30 @@ impl UserRepository {
 
         Ok(users)
     }
+
+    pub async fn find_many_by_ids(
+        &self, 
+        user_ids: &Vec<i32>
+    ) -> Result<Vec<User>, Error> {
+        
+        let ids = user_ids
+            .iter()
+            .map(|_| "?".to_string())
+            .collect::<Vec<String>>()
+            .join(", ");
+
+        let users = sqlx::query_as!(
+            User,
+            "SELECT user_id, username, password 
+             FROM users 
+             WHERE user_id IN ({})",
+            ids
+        ) ()
+        .fetch_all(&self.connection_pool)
+        .await?;
+
+        Ok(users)
+    }
 }
 
 impl Create<User, CreateUserDTO> for UserRepository {
