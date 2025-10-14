@@ -101,6 +101,34 @@ impl UserChatMetadataRepository {
         Ok(result)
     }
 
+    /// Find metadata for a specific user in a specific chat
+    pub async fn find_by_user_and_chat_id(
+        &self,
+        user_id: &i32,
+        chat_id: &i32,
+    ) -> Result<Option<UserChatMetadata>, Error> {
+        let metadata = sqlx::query_as!(
+            UserChatMetadata,
+            r#"
+            SELECT 
+                user_id,
+                chat_id,
+                user_role as "user_role: UserRole",
+                member_since,
+                messages_visible_from,
+                messages_received_until
+            FROM userchatmetadata 
+            WHERE user_id = ? AND chat_id = ?
+            "#,
+            user_id,
+            chat_id
+        )
+        .fetch_optional(&self.connection_pool)
+        .await?;
+
+        Ok(metadata)
+    }
+
     /// Create multiple metadata entries in a single transaction
     /// Ensures atomicity: either all are created or none
     pub async fn create_many(

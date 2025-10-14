@@ -82,6 +82,10 @@ pub async fn create_chat(
     // FINALE:
     // 1. Convertire la chat creata in ChatDTO (trasformazione in memoria)
     // 2. Ritornare il ChatDTO come risposta JSON
+
+    // !!! Da rivedere se il parametro user_list sia superfluo, 
+    //     potrebbe essere un vettore di metadata piuttosto che id?
+      
     let chat;
     match body.chat_type {
         ChatType::Private => {
@@ -189,5 +193,22 @@ pub async fn get_chat_messages(
     // 6. Convertire ogni messaggio in MessageDTO (trasformazione in memoria, nessun I/O)
     // 7. Ritornare la lista di MessageDTO come risposta JSON
     // Nota: paginazione (limit, offset) da implementare in futuro tramite Query params
-    todo!()
+    // Nota: la query dei messaggi può richiedere un numero massimo di messaggi definito
+
+    let metadata = state
+        .meta
+        .find_by_user_and_chat_id(&current_user.user_id, &chat_id)
+        .await?
+        .ok_or_else(|| AppError::forbidden("User is not a member of this chat."))?; // !!! devo sostituire ok_or_else ?
+
+    let messages = state
+        .msg
+        .find_many_paginated(&chat_id, &metadata.messages_visible_from, None, 100)
+        .await?;
+
+    // 6. Convertire ogni messaggio in MessageDTO (trasformazione in memoria, nessun I/O)
+    let messages_dto: Vec<MessageDTO> = messages.into_iter().map(MessageDTO::from).collect();
+
+    // 7. Ritornare la lista di MessageDTO come risposta JSON
+    Ok(Json(messages_dto))
 }
