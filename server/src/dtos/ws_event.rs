@@ -1,6 +1,5 @@
 //! WebSocket Event DTOs - Data Transfer Objects per eventi WebSocket
 
-use crate::entities::{Message, User};
 use serde::{Deserialize, Serialize};
 
 use crate::dtos::{InvitationDTO, MessageDTO};
@@ -15,11 +14,7 @@ use crate::dtos::{InvitationDTO, MessageDTO};
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "type", content = "data")]
 pub enum WsEventDTO {
-    NewMessage(Message),
-    UserJoined(User),
-    UserLeft(User),
     Message(MessageDTO),
     Invitation(InvitationDTO),
-    Error { code: u16, message: String },
     // ... altri eventi
 }
