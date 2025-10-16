@@ -1,14 +1,16 @@
 //! Membership services - Gestione membri e ruoli nelle chat
 
 use crate::core::{AppError, AppState};
-use crate::dtos::UserInChatDTO;
-use crate::entities::{User, UserRole};
+use crate::dtos::{UserInChatDTO, CreateChatDTO, CreateUserChatMetadataDTO, CreateMessageDTO};
+use crate::entities::{ChatType, User, UserRole, MessageType};
+use crate::repositories::{Create, Read};
 use axum::{
     Extension,
     extract::{Json, Path, State},
 };
 use axum_macros::debug_handler;
 use std::sync::Arc;
+use chrono::Utc;
 
 pub async fn list_chat_members(
     State(state): State<Arc<AppState>>,
@@ -39,10 +41,9 @@ pub async fn list_chat_members(
 
     let user_ids: Vec<i32> = meta.iter().map(|m| m.user_id).collect();
 
-    let users = state
-        .user
-        .find_many_by_ids(&user_ids)
-        .await?;
+    let var: Vec<_> = user_ids.iter().map(|id| state.user.read(id)).collect();
+    let results: Vec<Option<User>> = futures::future::try_join_all(var).await?;
+    let users: Vec<User> = results.into_iter().filter_map(|u| u).collect();
 
     let mut result: Vec<UserInChatDTO> = Vec::new();
     for user in users {
@@ -81,7 +82,125 @@ pub async fn invite_to_chat(
     // 13. Salvare il messaggio di invito nel database
     // 14. Inviare il messaggio tramite WebSocket all'utente target se online (operazione non bloccante)
     // 15. Ritornare StatusCode::OK
-    todo!()
+
+    let meta = state
+        .meta
+        .find_by_user_and_chat_id(&current_user.user_id, &chat_id)
+        .await?;
+
+    let meta = match meta {
+    Some(m) => m,
+    None => {
+        return Err(AppError::forbidden(
+            "You are not a member of this chat".to_string(),
+            ));
+        }
+    };
+
+    match meta.user_role {
+        Some(UserRole::Member) => {},
+        _ => {
+            return Err(AppError::forbidden(
+                "You do not have permission to invite users to this chat".to_string(),
+            ));
+        }
+    }
+
+    let is_present = state
+        .meta
+        .find_by_user_and_chat_id(&user_id, &chat_id)
+        .await?
+        .is_some();
+    if is_present {
+        return Err(AppError::conflict(
+            "User is already a member of this chat".to_string(),
+        ));
+    }
+
+    let has_pending_invite = state
+        .invitation
+        .has_pending_invitation(&user_id, &chat_id)
+        .await?;
+    if has_pending_invite {
+        return Err(AppError::conflict(
+            "There is already a pending invitation for this user to this chat".to_string(),
+        ));
+    }
+
+    let user = state
+        .user
+        .read(&user_id)
+        .await?;
+    if user.is_none() {
+        return Err(AppError::not_found("User not found".to_string()));
+    }
+
+    let chat = state
+        .chat
+        .get_private_chat_between_users(&current_user.user_id, &user_id)
+        .await?;
+
+    let final_chat_id = if let Some(existing_chat) = chat {
+        existing_chat.chat_id
+    } else {
+        let new_chat_dto = CreateChatDTO {
+            title: None,
+            description: None,
+            chat_type: ChatType::Private,
+        };
+
+        let new_chat = state
+            .chat
+            .create(&new_chat_dto)
+            .await?;
+
+        let now = Utc::now();
+            let metadata_current_user = CreateUserChatMetadataDTO {
+                user_id: current_user.user_id,
+                chat_id: new_chat.chat_id,
+                user_role: Some(UserRole::Member),
+                member_since: now,
+                messages_visible_from: now,
+                messages_received_until: now,
+            };
+
+            let metadata_second_user = CreateUserChatMetadataDTO {
+                user_id: user_id,
+                chat_id: new_chat.chat_id,
+                user_role: Some(UserRole::Member),
+                member_since: now,
+                messages_visible_from: now,
+                messages_received_until: now,
+            };
+
+            // Create both metadata in a single transaction for atomicity
+            state
+                .meta
+                .create_many(&[metadata_current_user, metadata_second_user])
+                .await?;
+        new_chat.chat_id
+    };
+
+    let create_message_dto = CreateMessageDTO {
+        chat_id: final_chat_id,
+        sender_id: current_user.user_id,
+        content: format!("User {} has invited you to the chat", current_user.username),
+        message_type: MessageType::SystemMessage, // usa un valore concreto invece di None
+        created_at: Utc::now(), 
+    };
+
+    let _saved_message = state
+        .msg
+        .create(&create_message_dto)
+        .await?;
+
+    let ws_state = state.ws.clone();
+    let invite_message = create_message_dto.clone();
+    tokio::spawn(async move {
+        ws_state.send_message_to_user(user_id, invite_message).await;
+    });    
+
+    Ok(())
 }
 
 pub async fn leave_chat(
