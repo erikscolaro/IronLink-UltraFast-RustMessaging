@@ -83,18 +83,18 @@ pub async fn invite_to_chat(
     // 14. Inviare il messaggio tramite WebSocket all'utente target se online (operazione non bloccante)
     // 15. Ritornare StatusCode::OK
 
-    let meta = state
+    let meta_opt = state
         .meta
         .find_by_user_and_chat_id(&current_user.user_id, &chat_id)
         .await?;
 
-    let meta = match meta {
-    Some(m) => m,
-    None => {
-        return Err(AppError::forbidden(
-            "You are not a member of this chat".to_string(),
-            ));
-        }
+    let meta = match meta_opt {
+        Some(m) => m,
+        None => {
+            return Err(AppError::forbidden(
+                "You are not a member of this chat".to_string(),
+                ));
+            }
     };
 
     match meta.user_role {
@@ -185,7 +185,7 @@ pub async fn invite_to_chat(
         chat_id: final_chat_id,
         sender_id: current_user.user_id,
         content: format!("User {} has invited you to the chat", current_user.username),
-        message_type: MessageType::SystemMessage, // usa un valore concreto invece di None
+        message_type: MessageType::SystemMessage, 
         created_at: Utc::now(), 
     };
 
@@ -230,7 +230,78 @@ pub async fn leave_chat(
     // 8. Salvare il messaggio nel database
     // 9. Inviare il messaggio tramite WebSocket a tutti i membri online (operazione non bloccante)
     // 10. Ritornare StatusCode::OK
-    todo!()
+
+    let meta_opt = state
+        .meta
+        .find_by_user_and_chat_id(&current_user.user_id, &chat_id)
+        .await?;
+
+    let meta = match meta_opt {
+        Some(m) => m,
+        None => {
+            return Err(AppError::not_found(
+                "You are not a member of this chat".to_string(),
+                ));
+            }
+    };
+
+    match meta.user_role {
+        Some(UserRole::Owner) => {
+            return Err(AppError::conflict(
+                "The owner cannot leave the chat. Transfer ownership or delete the chat.".to_string(),
+            ));
+        },
+        _ => {}
+    }
+
+    let members = state
+        .meta
+        .find_many_by_chat_id(&chat_id)
+        .await?;
+
+    state
+        .meta
+        .delete_by_user_and_chat_id(&current_user.user_id, &chat_id)
+        .await?;
+
+    let create_message_dto = CreateMessageDTO {
+        chat_id: chat_id,
+        sender_id: current_user.user_id,
+        content: format!("User {} has left the chat", current_user.username),
+        message_type: MessageType::SystemMessage,
+        created_at: Utc::now(),
+    };
+
+    let _saved_message = state
+        .msg
+        .create(&create_message_dto)
+        .await?;
+
+    let message_dto = MessageDTO {
+        message_id: None,
+        chat_id: Some(create_message_dto.chat_id),
+        sender_id: Some(create_message_dto.sender_id),
+        content: Some(create_message_dto.content.clone()),
+        message_type: Some(create_message_dto.message_type.clone()),
+        created_at: Some(create_message_dto.created_at),
+    };
+
+    for member in members {
+        if member.user_id == current_user.user_id {
+            continue;
+        }
+
+        if let Some(sender_ref) = state.users_online.get(&member.user_id) {
+            let sender = sender_ref.clone();
+            // costruisco l'evento WS; adattalo se il variant/shape di WsEventDTO è diverso
+            let ws_event = WsEventDTO::Message(message_dto.clone());
+            tokio::spawn(async move {
+                let _ = sender.send(ws_event).await;
+            });   
+        }
+    }
+
+    Ok(())
 }
 
 pub async fn remove_member(

@@ -173,6 +173,26 @@ impl UserChatMetadataRepository {
 
         Ok(created)
     }
+
+    /// Delete metadata for a specific user in a specific chat
+    pub async fn delete_by_user_and_chat_id(
+        &self,
+        user_id: &i32,
+        chat_id: &i32,
+    ) -> Result<(), Error> {
+        sqlx::query!(
+            r#"
+            DELETE FROM userchatmetadata
+            WHERE user_id = ? AND chat_id = ?
+            "#,
+            user_id,
+            chat_id
+        )
+        .execute(&self.connection_pool)
+        .await?;
+
+        Ok(())
+    }
 }
 
 impl Create<UserChatMetadata, CreateUserChatMetadataDTO> for UserChatMetadataRepository {
