@@ -293,7 +293,6 @@ pub async fn leave_chat(
 
         if let Some(sender_ref) = state.users_online.get(&member.user_id) {
             let sender = sender_ref.clone();
-            // costruisco l'evento WS; adattalo se il variant/shape di WsEventDTO è diverso
             let ws_event = WsEventDTO::Message(message_dto.clone());
             tokio::spawn(async move {
                 let _ = sender.send(ws_event).await;
@@ -321,7 +320,106 @@ pub async fn remove_member(
     // 9. Salvare il messaggio nel database
     // 10. Inviare il messaggio tramite WebSocket a tutti i membri online incluso il rimosso (operazione non bloccante)
     // 11. Ritornare StatusCode::OK
-    todo!()
+
+    let current_meta_opt = state
+        .meta
+        .find_by_user_and_chat_id(&current_user.user_id, &chat_id)
+        .await?;
+
+    let current_meta = match current_meta_opt {
+        Some(m) => m,
+        None => {
+            return Err(AppError::forbidden(
+                "You are not a member of this chat".to_string(),
+                ));
+            }
+    };
+
+    match current_meta.user_role {
+        Some(UserRole::Member) => {
+            return Err(AppError::forbidden(
+                "You do not have permission to remove users from this chat".to_string(),
+            ));
+        },
+        _ => {}
+    }
+
+    let target_meta_opt = state
+        .meta
+        .find_by_user_and_chat_id(&user_id, &chat_id)
+        .await?;
+
+    let target_meta = match target_meta_opt {
+        Some(m) => m,
+        None => {
+            return Err(AppError::not_found(
+                "The user to be removed is not a member of this chat".to_string(),
+                ));
+            }
+    };
+
+    match target_meta.user_role {
+        Some(UserRole::Owner) => {
+            return Err(AppError::forbidden(
+                "You cannot remove the owner of the chat".to_string(),
+            ));
+        },
+        _ => {}
+    }
+
+    let members = state
+        .meta
+        .find_many_by_chat_id(&chat_id)
+        .await?;
+
+    state
+        .meta
+        .delete_by_user_and_chat_id(&user_id, &chat_id)
+        .await?;
+
+    let target_user_opt = state
+        .user
+        .read(&user_id)
+        .await?;
+
+    let target_username = target_user_opt
+        .as_ref()
+        .map(|u| u.username.clone())
+        .unwrap_or_else(|| "Unknown User".to_string());
+
+    let create_message_dto = CreateMessageDTO {
+        chat_id: chat_id,
+        sender_id: current_user.user_id,
+        content: format!("User {} has removed {} from the chat", current_user.username, target_username),
+        message_type: MessageType::SystemMessage,
+        created_at: Utc::now(),
+    };
+
+    let _saved_message = state
+        .msg
+        .create(&create_message_dto)
+        .await?;
+
+    let message_dto = MessageDTO {
+        message_id: None,
+        chat_id: Some(create_message_dto.chat_id),
+        sender_id: Some(create_message_dto.sender_id),
+        content: Some(create_message_dto.content.clone()),
+        message_type: Some(create_message_dto.message_type.clone()),
+        created_at: Some(create_message_dto.created_at),
+    };
+
+    for member in members {
+        if let Some(sender_ref) = state.users_online.get(&member.user_id) {
+            let sender = sender_ref.clone();
+            let ws_event = WsEventDTO::Message(message_dto.clone());
+            tokio::spawn(async move {
+                let _ = sender.send(ws_event).await;
+            });   
+        }
+    }
+
+    Ok(())
 }
 
 #[debug_handler]
