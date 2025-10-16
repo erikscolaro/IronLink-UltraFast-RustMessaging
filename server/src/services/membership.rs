@@ -1,7 +1,7 @@
 //! Membership services - Gestione membri e ruoli nelle chat
 
 use crate::core::{AppError, AppState};
-use crate::dtos::{UserInChatDTO, CreateChatDTO, CreateUserChatMetadataDTO, CreateMessageDTO};
+use crate::dtos::{CreateChatDTO, CreateMessageDTO, CreateUserChatMetadataDTO, MessageDTO, UserInChatDTO, WsEventDTO};
 use crate::entities::{ChatType, User, UserRole, MessageType};
 use crate::repositories::{Create, Read};
 use axum::{
@@ -194,11 +194,23 @@ pub async fn invite_to_chat(
         .create(&create_message_dto)
         .await?;
 
-    let ws_state = state.ws.clone();
-    let invite_message = create_message_dto.clone();
-    tokio::spawn(async move {
-        ws_state.send_message_to_user(user_id, invite_message).await;
-    });    
+    let message_dto = MessageDTO {
+        message_id: None,
+        chat_id: Some(create_message_dto.chat_id),
+        sender_id: Some(create_message_dto.sender_id),
+        content: Some(create_message_dto.content.clone()),
+        message_type: Some(create_message_dto.message_type.clone()),
+        created_at: Some(create_message_dto.created_at),
+    };
+
+    if let Some(sender_ref) = state.users_online.get(&user_id) {
+        let sender = sender_ref.clone();
+        // costruisco l'evento WS; adattalo se il variant/shape di WsEventDTO è diverso
+        let ws_event = WsEventDTO::Message(message_dto.clone());
+        tokio::spawn(async move {
+            let _ = sender.send(ws_event).await;
+        });   
+    }
 
     Ok(())
 }
