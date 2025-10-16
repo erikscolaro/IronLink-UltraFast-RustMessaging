@@ -83,7 +83,7 @@ pub async fn create_chat(
     // 1. Convertire la chat creata in ChatDTO (trasformazione in memoria)
     // 2. Ritornare il ChatDTO come risposta JSON
 
-    // !!! Da rivedere se il parametro user_list sia superfluo, 
+    // ??? Da rivedere se il parametro user_list sia superfluo, 
     //     potrebbe essere un vettore di metadata piuttosto che id?
       
     let chat;
@@ -199,7 +199,7 @@ pub async fn get_chat_messages(
         .meta
         .find_by_user_and_chat_id(&current_user.user_id, &chat_id)
         .await?
-        .ok_or_else(|| AppError::forbidden("User is not a member of this chat."))?; // !!! devo sostituire ok_or_else ?
+        .ok_or_else(|| AppError::forbidden("User is not a member of this chat."))?; // ??? sostituire ok_or_else() ?
 
     let messages = state
         .msg
