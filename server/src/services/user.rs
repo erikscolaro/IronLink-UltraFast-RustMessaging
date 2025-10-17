@@ -17,16 +17,10 @@ pub async fn search_user_with_username(
     Query(params): Query<SearchQueryDTO>, // query params /users/find?search=username
 ) -> Result<Json<Vec<UserDTO>>, AppError> {
     // 1. Estrarre il parametro search dalla query string
-    // 2. Verificare che la lunghezza della stringa di ricerca sia almeno 3 caratteri
-    // 3. Se troppo corta, ritornare errore BAD_REQUEST con messaggio "Query search param too short."
-    // 4. Cercare nel database tutti gli utenti con username che contiene parzialmente la query, cercando solo all'inizio dello username
-    // 5. Convertire ogni utente trovato in UserDTO
-    // 6. Ritornare la lista di UserDTO come risposta JSON
-    let query = params
-        .search
-        .filter(|v| v.len() >= 3)
-        .ok_or_else(|| AppError::bad_request("Query search param too short."))?;
-    let users = state.user.search_by_username_partial(&query).await?;
+    // 2. Cercare nel database tutti gli utenti con username che contiene parzialmente la query, cercando solo all'inizio dello username
+    // 3. Convertire ogni utente trovato in UserDTO
+    // 4. Ritornare la lista di UserDTO come risposta JSON
+    let users = state.user.search_by_username_partial(&params).await?;
     let users_dto = users.into_iter().map(UserDTO::from).collect::<Vec<_>>();
     Ok(Json::from(users_dto))
 }
