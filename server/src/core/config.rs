@@ -10,6 +10,7 @@ pub struct Config {
     pub max_connections: u32,
     pub connection_lifetime_secs: u64,
     pub app_env: String,
+    pub log_level: String,
 }
 
 impl Config {
@@ -47,6 +48,8 @@ impl Config {
 
         let app_env = env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
 
+        let log_level = env::var("LOG_LEVEL").unwrap_or_else(|_| "info".to_string());
+
         Ok(Config {
             database_url,
             jwt_secret,
@@ -55,6 +58,7 @@ impl Config {
             max_connections,
             connection_lifetime_secs,
             app_env,
+            log_level,
         })
     }
 
@@ -62,6 +66,7 @@ impl Config {
     pub fn print_info(&self) {
         println!("   Server Configuration:");
         println!("   Environment: {}", self.app_env);
+        println!("   Log Level: {}", self.log_level);
         println!(
             "   Server Address: {}:{}",
             self.server_host, self.server_port
