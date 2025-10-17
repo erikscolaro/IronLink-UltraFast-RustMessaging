@@ -560,9 +560,11 @@ pub async fn update_member_role(
     Ok(())
 }
 
+
 pub async fn transfer_ownership(
     State(state): State<Arc<AppState>>,
     Path(chat_id): Path<i32>,
+    Path(new_owner_id): Path<i32>,
     Extension(current_user): Extension<User>, // ottenuto dall'autenticazione tramite token jwt
 ) -> Result<(), AppError> {
     // 1. Estrarre chat_id dal path della URL
@@ -576,5 +578,108 @@ pub async fn transfer_ownership(
     // 9. Salvare il messaggio nel database
     // 10. Inviare il messaggio tramite WebSocket a tutti i membri online (operazione non bloccante)
     // 11. Ritornare StatusCode::OK
-    todo!()
+
+    let meta_opt = state
+        .meta
+        .find_by_user_and_chat_id(&current_user.user_id, &chat_id)
+        .await?;
+
+    let meta = match meta_opt {
+        Some(m) => m,
+        None => {
+            return Err(AppError::forbidden(
+                "You are not a member of this chat".to_string(),
+            ));
+        }
+    };
+
+    match meta.user_role {
+        Some(UserRole::Owner) => {},
+        _ => {
+            return Err(AppError::forbidden(
+                "Only the owner can transfer ownership".to_string(),
+            ));
+        }
+    }
+
+    if current_user.user_id == new_owner_id {
+        return Err(AppError::bad_request(
+            "Cannot transfer ownership to yourself".to_string(),
+        ));
+    }
+
+    let chat = state
+        .chat
+        .read(&chat_id)
+        .await?;
+
+    if let Some(chat_data) = chat {
+        if chat_data.chat_type != ChatType::Group {
+            return Err(AppError::bad_request(
+                "Cannot transfer ownership of private chats".to_string(),
+            ));
+        }
+    } else {
+        return Err(AppError::not_found("Chat not found".to_string()));
+    }
+
+    let new_owner_user = state
+        .user
+        .read(&new_owner_id)
+        .await?;
+    
+    let new_owner_username = match new_owner_user {
+        Some(user) => user.username,
+        None => {
+            return Err(AppError::not_found("New owner user not found".to_string()));
+        }
+    };
+
+    // Trasferisce la proprietà dal current_user al nuovo owner
+    state.meta.transfer_ownership(&current_user.user_id, &new_owner_id, &chat_id).await?;
+
+    let members = state
+        .meta
+        .find_many_by_chat_id(&chat_id)
+        .await?;
+
+    let create_message_dto = CreateMessageDTO {
+        chat_id: chat_id,
+        sender_id: current_user.user_id,
+        content: format!(
+            "User {} has transferred ownership to {}",
+            current_user.username,
+            new_owner_username
+        ),
+        message_type: MessageType::SystemMessage,
+        created_at: Utc::now(),
+    };
+
+    let _saved_message = state
+        .msg
+        .create(&create_message_dto)
+        .await?;
+
+    let message_dto = MessageDTO {
+        message_id: None,
+        chat_id: Some(create_message_dto.chat_id),
+        sender_id: Some(create_message_dto.sender_id),
+        content: Some(create_message_dto.content.clone()),
+        message_type: Some(create_message_dto.message_type.clone()),
+        created_at: Some(create_message_dto.created_at),
+    };
+
+    for member in members {
+        if let Some(sender_ref) = state.users_online.get(&member.user_id) {
+            let sender = sender_ref.clone();
+            let ws_event = WsEventDTO::Message(message_dto.clone());
+            tokio::spawn(async move {
+                let _ = sender.send(ws_event).await;
+            });
+        }
+    }
+
+    Ok(())
+
 }
+
