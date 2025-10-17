@@ -10,7 +10,7 @@ use axum::extract::ws::Utf8Bytes;
 use axum::extract::ws::{Message, WebSocket};
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
-use std::{alloc::System, sync::Arc};
+use std::{sync::Arc};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio::time::Duration;
 use tokio::time::{interval, timeout};
@@ -78,7 +78,7 @@ pub async fn write_ws(
 
     'external: loop {
         tokio::select! {
-            Some((chat_id, result)) = tokio_stream::StreamExt::next(&mut stream_map) => {
+            Some((_, result)) = tokio_stream::StreamExt::next(&mut stream_map) => {
                 if let Ok(msg) = result {
                     batch.push(msg);
                     if batch.len() >= BATCH_MAX_SIZE {
@@ -206,7 +206,7 @@ pub async fn listen_ws(
                     Message::Text(text) => {
                         if let Ok(event) = serde_json::from_str::<MessageDTO>(&text) {
                             info!("Message received from client");
-                            process_message(&state, user_id, event);
+                            process_message(&state, user_id, event).await;
                         } else {
                             warn!("Failed to deserialize message");
                         }

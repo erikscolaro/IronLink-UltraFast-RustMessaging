@@ -1,17 +1,14 @@
 //! WebSocket Event Handlers - Handler per eventi WebSocket
 
-use tokio::sync::broadcast::error::SendError;
 use tracing::{error, info, instrument, warn};
 use validator::Validate;
 
 use crate::AppState;
-use crate::dtos::{CreateMessageDTO, InvitationDTO, MessageDTO};
+use crate::dtos::{CreateMessageDTO, MessageDTO};
 use crate::entities::MessageType;
 use crate::repositories::{Create, Read};
 use crate::ws::usermap::InternalSignal;
-use std::error::Error;
 use std::sync::Arc;
-use tokio::task;
 
 #[instrument(skip(state, msg), fields(user_id, chat_id = msg.chat_id))]
 pub async fn process_message(state: &Arc<AppState>, user_id: i32, msg: MessageDTO) {
@@ -47,7 +44,7 @@ pub async fn process_message(state: &Arc<AppState>, user_id: i32, msg: MessageDT
     }
 
     // se la chat non esistesse, allora non esisterebbe neanche il metadata, quindi non controllo l'esistenza della chat.
-    let metadata = match state.meta.read(&(user_id, input_message.chat_id)).await {
+    match state.meta.read(&(user_id, input_message.chat_id)).await {
         Ok(Some(val)) => val,
         Ok(None) => {
             warn!(
