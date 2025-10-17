@@ -1,33 +1,100 @@
 //! WebSocket Event Handlers - Handler per eventi WebSocket
 
+use tokio::sync::broadcast::error::SendError;
+use tracing::{error, info, instrument, warn};
+use validator::Validate;
+
 use crate::AppState;
-use crate::dtos::{InvitationDTO, MessageDTO};
+use crate::dtos::{CreateMessageDTO, InvitationDTO, MessageDTO};
+use crate::entities::MessageType;
+use crate::repositories::{Create, Read};
+use crate::ws::usermap::InternalSignal;
+use std::error::Error;
 use std::sync::Arc;
 
-/// Handler per messaggi di chat
-/// Operazioni:
-/// 1. Validare il messaggio (chat esiste? utente è membro?)
-/// 2. Salvare il messaggio nel database
-/// 3. Inoltrare il messaggio a tutti i membri online della chat
-pub async fn process_chat_message(_state: &Arc<AppState>, _user_id: i32, _event: MessageDTO) {
-    /*
-    - controllare se la chat con l'utente esiste
-    - salvare a db il messaggio
-     */
+#[instrument(skip(state, msg), fields(user_id, chat_id = msg.chat_id))]
+pub async fn process_message(state: &Arc<AppState>, user_id: i32, msg: MessageDTO) {
+    info!("Processing message from user");
 
-    /*
-    state.user_online.get(event.destinatario) => tx (se online) altrimenti none
-    se online => tx.send(event)
-     */
+    let input_message = match CreateMessageDTO::try_from(msg.clone()) {
+        Ok(msg) => msg,
+        Err(e) => {
+            warn!("Malformed message received: {:?}", e);
+            state.users_online.send_server_message_if_online(
+                &user_id,
+                InternalSignal::Error("Malformed message."),
+            );
+            return;
+        }
+    };
 
-    todo!()
-}
+    if let Err(e) = input_message.validate() {
+        warn!("Message validation failed: {:?}", e);
+        state
+            .users_online
+            .send_server_message_if_online(&user_id, InternalSignal::Error("Malformed message."));
+        return;
+    };
 
-/// Handler per inviti a chat
-/// Operazioni:
-/// 1. Validare l'invito (chat esiste? utente ha permessi di invitare?)
-/// 2. Salvare l'invito nel database
-/// 3. Notificare l'utente invitato se è online
-pub async fn process_invitation(_state: &Arc<AppState>, _user_id: i32, _event: InvitationDTO) {
-    todo!()
+    if input_message.message_type == MessageType::SystemMessage {
+        warn!("User attempted to send system message");
+        state.users_online.send_server_message_if_online(
+            &user_id,
+            InternalSignal::Error("You cannot send system type messages."),
+        );
+        return;
+    }
+
+    // se la chat non esistesse, allora non esisterebbe neanche il metadata, quindi non controllo l'esistenza della chat.
+    let metadata = match state.meta.read(&(user_id, input_message.chat_id)).await {
+        Ok(Some(val)) => val,
+        Ok(None) => {
+            warn!(
+                chat_id = input_message.chat_id,
+                "User does not belong to chat"
+            );
+            state.users_online.send_server_message_if_online(
+                &user_id,
+                InternalSignal::Error("You don't belong to that group."),
+            );
+            return;
+        }
+        Err(e) => {
+            error!("Failed to read user metadata: {:?}", e);
+            state.users_online.send_server_message_if_online(
+                &user_id,
+                InternalSignal::Error("Internal server error."),
+            );
+            return;
+        }
+    };
+
+    // bene, l'utente appartiene alla chat, quindi può inviare il messaggio
+    // invio prima ad utenti online
+    if let Err(e) = state
+        .chats_online
+        .send(&input_message.chat_id, Arc::from(msg))
+    {
+        error!(
+            chat_id = input_message.chat_id,
+            "Failed to broadcast message to online users: {:?}", e
+        );
+        state.users_online.send_server_message_if_online(
+            &user_id,
+            InternalSignal::Error("Internal server error."),
+        );
+    }
+
+    // salvo in db per utenti offline
+    if let Err(e) = state.msg.create(&input_message).await {
+        error!("Failed to persist message to database: {:?}", e);
+        state.users_online.send_server_message_if_online(
+            &user_id,
+            InternalSignal::Error(
+                "Something went wrong and your message was not stored correctly!",
+            ),
+        );
+    } else {
+        info!("Message processed and stored successfully");
+    }
 }
