@@ -4,6 +4,7 @@ use super::{Create, Delete, Read, Update};
 use crate::dtos::{CreateChatDTO, UpdateChatDTO};
 use crate::entities::{Chat, ChatType};
 use sqlx::{Error, MySqlPool};
+use tracing::{debug, info, instrument};
 
 // CHAT REPOSITORY
 pub struct ChatRepository {
@@ -17,11 +18,13 @@ impl ChatRepository {
 
     /// Get private chat between two users (if exists)
     /// Optimized query: uses GROUP BY + HAVING instead of multiple JOINs for better performance
+    #[instrument(skip(self), fields(user1 = %user1_id, user2 = %user2_id))]
     pub async fn get_private_chat_between_users(
         &self,
         user1_id: &i32,
         user2_id: &i32,
     ) -> Result<Option<Chat>, Error> {
+        debug!("Finding private chat between two users");
         let chat = sqlx::query_as!(
             Chat,
             r#"
@@ -43,12 +46,20 @@ impl ChatRepository {
         .fetch_optional(&self.connection_pool)
         .await?;
 
+        if chat.is_some() {
+            info!("Private chat found");
+        } else {
+            debug!("No private chat found");
+        }
+
         Ok(chat)
     }
 }
 
 impl Create<Chat, CreateChatDTO> for ChatRepository {
+    #[instrument(skip(self, data), fields(chat_type = ?data.chat_type))]
     async fn create(&self, data: &CreateChatDTO) -> Result<Chat, Error> {
+        debug!("Creating new chat");
         // Insert chat using MySQL syntax
         let result = sqlx::query!(
             r#"
@@ -65,6 +76,8 @@ impl Create<Chat, CreateChatDTO> for ChatRepository {
         // Get the last inserted ID
         let new_id = result.last_insert_id() as i32;
 
+        info!("Chat created with id {}", new_id);
+
         // Return the created chat with the new ID
         Ok(Chat {
             chat_id: new_id,
@@ -76,7 +89,9 @@ impl Create<Chat, CreateChatDTO> for ChatRepository {
 }
 
 impl Read<Chat, i32> for ChatRepository {
+    #[instrument(skip(self), fields(chat_id = %id))]
     async fn read(&self, id: &i32) -> Result<Option<Chat>, Error> {
+        debug!("Reading chat by id");
         let chat = sqlx::query_as!(
             Chat,
             r#"
@@ -93,12 +108,20 @@ impl Read<Chat, i32> for ChatRepository {
         .fetch_optional(&self.connection_pool)
         .await?;
 
+        if chat.is_some() {
+            debug!("Chat found");
+        } else {
+            debug!("Chat not found");
+        }
+
         Ok(chat)
     }
 }
 
 impl Update<Chat, UpdateChatDTO, i32> for ChatRepository {
+    #[instrument(skip(self, data), fields(chat_id = %id))]
     async fn update(&self, id: &i32, data: &UpdateChatDTO) -> Result<Chat, Error> {
+        debug!("Updating chat");
         // First, get the current chat to ensure it exists
         let current_chat = self
             .read(id)
@@ -107,6 +130,7 @@ impl Update<Chat, UpdateChatDTO, i32> for ChatRepository {
 
         // If no fields to update, return current chat
         if data.title.is_none() && data.description.is_none() {
+            debug!("No fields to update, returning current chat");
             return Ok(current_chat);
         }
 
@@ -128,17 +152,22 @@ impl Update<Chat, UpdateChatDTO, i32> for ChatRepository {
 
         query_builder.build().execute(&self.connection_pool).await?;
 
+        info!("Chat updated successfully");
+
         // Fetch and return the updated chat
         self.read(id).await?.ok_or_else(|| sqlx::Error::RowNotFound)
     }
 }
 
 impl Delete<i32> for ChatRepository {
+    #[instrument(skip(self), fields(chat_id = %id))]
     async fn delete(&self, id: &i32) -> Result<(), Error> {
+        debug!("Deleting chat");
         sqlx::query!("DELETE FROM chats WHERE chat_id = ?", id)
             .execute(&self.connection_pool)
             .await?;
 
+        info!("Chat deleted successfully");
         Ok(())
     }
 }

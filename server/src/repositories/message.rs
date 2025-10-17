@@ -5,6 +5,7 @@ use crate::dtos::{CreateMessageDTO, UpdateMessageDTO};
 use crate::entities::{Message, MessageType};
 use chrono::{DateTime, Utc};
 use sqlx::{Error, MySqlPool};
+use tracing::{debug, info, instrument};
 
 // MESSAGE REPO
 pub struct MessageRepository {
@@ -117,7 +118,9 @@ impl MessageRepository {
 }
 
 impl Create<Message, CreateMessageDTO> for MessageRepository {
+    #[instrument(skip(self, data), fields(chat_id = %data.chat_id, sender_id = %data.sender_id))]
     async fn create(&self, data: &CreateMessageDTO) -> Result<Message, Error> {
+        debug!("Creating new message");
         // Insert message using MySQL syntax
         let result = sqlx::query!(
             r#"
@@ -135,6 +138,8 @@ impl Create<Message, CreateMessageDTO> for MessageRepository {
 
         // Get the last inserted ID
         let new_id = result.last_insert_id() as i32;
+
+        info!("Message created with id {}", new_id);
 
         // Return the created message with the new ID
         Ok(Message {

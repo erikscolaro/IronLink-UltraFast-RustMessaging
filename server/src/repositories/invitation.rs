@@ -4,6 +4,7 @@ use super::{Create, Delete, Read, Update};
 use crate::dtos::{CreateInvitationDTO, UpdateInvitationDTO};
 use crate::entities::{Invitation, InvitationStatus};
 use sqlx::{Error, MySqlPool};
+use tracing::{debug, info, instrument};
 
 //INVITATION REPOSITORY
 pub struct InvitationRepository {
@@ -58,7 +59,9 @@ impl InvitationRepository {
 }
 
 impl Create<Invitation, CreateInvitationDTO> for InvitationRepository {
+    #[instrument(skip(self, data), fields(chat_id = %data.target_chat_id, inviter = %data.invitee_id, invited = %data.invited_id))]
     async fn create(&self, data: &CreateInvitationDTO) -> Result<Invitation, Error> {
+        debug!("Creating new invitation");
         // Insert invitation using MySQL syntax
         // state e created_at vengono gestiti dal database (default: Pending e NOW())
         let now = chrono::Utc::now();
@@ -80,6 +83,8 @@ impl Create<Invitation, CreateInvitationDTO> for InvitationRepository {
 
         // Get the last inserted ID
         let new_id = result.last_insert_id() as i32;
+
+        info!("Invitation created with id {}", new_id);
 
         // Return the created invitation with the new ID
         Ok(Invitation {
