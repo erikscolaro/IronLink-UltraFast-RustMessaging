@@ -55,7 +55,7 @@ pub fn decode_jwt(jwt_token: String, secret: &String) -> Result<TokenData<Claims
         &DecodingKey::from_secret(secret.as_ref()),
         &Validation::default(),
     )
-    .map(|data| {
+    .map(|data: TokenData<Claims>| {
         info!("JWT token decoded successfully for user: {}", data.claims.username);
         data
     })
