@@ -1,24 +1,24 @@
-use axum::{Json, http::StatusCode, response::IntoResponse};
+use axum::{http::StatusCode, response::IntoResponse, Json};
 use serde::Serialize;
 
 #[derive(Serialize)]
 struct ErrorResponse {
-    error: String,
+    error: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     details: Option<String>,
 }
 
 pub struct AppError {
     status: StatusCode,
-    message: String,
+    message: &'static str,
     details: Option<String>,
 }
 
 impl AppError {
-    pub fn new(status: StatusCode, message: impl Into<String>) -> Self {
+    pub fn new(status: StatusCode, message: &'static str) -> Self {
         Self {
             status,
-            message: message.into(),
+            message,
             details: None,
         }
     }
@@ -29,31 +29,31 @@ impl AppError {
     }
 
     // Common error constructors
-    pub fn not_found(message: impl Into<String>) -> Self {
+    pub fn not_found(message: &'static str) -> Self {
         Self::new(StatusCode::NOT_FOUND, message)
     }
 
-    pub fn bad_request(message: impl Into<String>) -> Self {
+    pub fn bad_request(message: &'static str) -> Self {
         Self::new(StatusCode::BAD_REQUEST, message)
     }
 
-    pub fn unauthorized(message: impl Into<String>) -> Self {
+    pub fn unauthorized(message: &'static str) -> Self {
         Self::new(StatusCode::UNAUTHORIZED, message)
     }
 
-    pub fn forbidden(message: impl Into<String>) -> Self {
+    pub fn forbidden(message: &'static str) -> Self {
         Self::new(StatusCode::FORBIDDEN, message)
     }
 
-    pub fn conflict(message: impl Into<String>) -> Self {
+    pub fn conflict(message: &'static str) -> Self {
         Self::new(StatusCode::CONFLICT, message)
     }
 
-    pub fn internal_server_error(message: impl Into<String>) -> Self {
+    pub fn internal_server_error(message: &'static str) -> Self {
         Self::new(StatusCode::INTERNAL_SERVER_ERROR, message)
     }
 
-    pub fn service_unavailable(message: impl Into<String>) -> Self {
+    pub fn service_unavailable(message: &'static str) -> Self {
         Self::new(StatusCode::SERVICE_UNAVAILABLE, message)
     }
 }
