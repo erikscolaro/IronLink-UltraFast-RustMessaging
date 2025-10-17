@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 // ********************* ENUMERAZIONI UTILI **********************//
 
-#[derive(Serialize, Deserialize, Debug, Clone, sqlx::Type)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, sqlx::Type)]
 #[sqlx(type_name = "message_type", rename_all = "UPPERCASE")]
 pub enum MessageType {
     UserMessage,
