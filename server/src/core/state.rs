@@ -8,7 +8,7 @@ use crate::repositories::{
     UserRepository,
 };
 use crate::ws::chatmap::ChatMap;
-use crate::ws::connection::InternalSignal;
+use crate::ws::usermap::UserMap;
 use dashmap::DashMap;
 use sqlx::MySqlPool;
 use tokio::sync::mpsc::UnboundedSender;
@@ -35,7 +35,7 @@ pub struct AppState {
 
     /// Mappa concorrente degli utenti online con i loro canali WebSocket
     /// Key: user_id, Value: Sender per inviare messaggi al WebSocket dell'utente
-    pub users_online: DashMap<i32, UnboundedSender<InternalSignal>>,
+    pub users_online: UserMap,
 
     /// Struttura di gestione delle chat con almeno un utente online
     pub chats_online: ChatMap,
@@ -59,7 +59,7 @@ impl AppState {
             invitation: InvitationRepository::new(pool.clone()),
             meta: UserChatMetadataRepository::new(pool),
             jwt_secret,
-            users_online: DashMap::new(),
+            users_online: UserMap::new(),
             chats_online: ChatMap::new(),
         }
     }
