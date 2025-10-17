@@ -41,9 +41,21 @@ pub struct CreateMessageDTO {
         message = "Message content must be between 1 and 5000 characters"
     ))]
     pub content: String,
-
     pub message_type: MessageType,
     pub created_at: DateTime<Utc>,
+}
+
+impl TryFrom<MessageDTO> for CreateMessageDTO {
+    type Error = &'static str;
+    fn try_from(value: MessageDTO) -> Result<Self, Self::Error> {
+        Ok(Self {
+            chat_id: value.chat_id.ok_or("chat_id missing")?,
+            sender_id: value.sender_id.ok_or("sender_id missing")?,
+            content: value.content.ok_or("content missing")?,
+            message_type: value.message_type.ok_or("message_type missing")?,
+            created_at: value.created_at.unwrap_or_else(Utc::now),
+        })
+    }
 }
 
 /// DTO per aggiornare un messaggio (solo campi modificabili)

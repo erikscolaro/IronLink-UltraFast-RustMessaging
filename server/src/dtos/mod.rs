@@ -9,13 +9,11 @@ pub mod message;
 pub mod query;
 pub mod user;
 pub mod user_chat_metadata;
-pub mod ws_event;
 
 // Re-exports per mantenere la compatibilità con il codice esistente
 pub use chat::{ChatDTO, CreateChatDTO, UpdateChatDTO};
 pub use invitation::{CreateInvitationDTO, InvitationDTO, UpdateInvitationDTO};
 pub use message::{CreateMessageDTO, MessageDTO, UpdateMessageDTO};
-pub use query::SearchQueryDTO;
+pub use query::{MessagesQuery, UserSearchQuery};
 pub use user::{CreateUserDTO, UpdateUserDTO, UserDTO};
 pub use user_chat_metadata::{CreateUserChatMetadataDTO, UpdateUserChatMetadataDTO, UserInChatDTO};
-pub use ws_event::WsEventDTO;
