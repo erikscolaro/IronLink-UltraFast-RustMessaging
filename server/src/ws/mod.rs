@@ -10,6 +10,7 @@
 pub mod chatmap;
 pub mod connection;
 pub mod event_handlers;
+pub mod usermap;
 
 // Re-exports pubblici
 pub use connection::handle_socket;
@@ -21,9 +22,10 @@ use axum::{
     response::Response,
 };
 use std::sync::Arc;
+use tracing::{info, instrument};
 
 // how many messages should the channel contain?
-const BROADCAST_CHANNEL_CAPACITY: usize = 100   ;
+const BROADCAST_CHANNEL_CAPACITY: usize = 100;
 
 /// Intervallo massimo tra invii batch (ms)
 const BATCH_INTERVAL: u64 = 1000;
@@ -42,16 +44,18 @@ const TIMEOUT_DURATION_SECONDS: u64 = 300;
 /// 1. Estrarre user_id dall'autenticazione JWT
 /// 2. Eseguire upgrade HTTP -> WebSocket
 /// 3. Passare la connessione ad handle_socket
+#[instrument(skip(ws, state, current_user), fields(user_id = current_user.user_id))]
 pub async fn ws_handler(
     ws: WebSocketUpgrade,
     State(state): State<Arc<AppState>>,
     Extension(current_user): Extension<User>, // ottenuto dall'autenticazione JWT
 ) -> Response {
     let user_id = current_user.user_id;
+    info!("WebSocket upgrade requested");
 
     // Gestisce automaticamente l'upgrade a WebSocket.
     // Se l'upgrade fallisce, ritorna un errore; altrimenti restituisce la nuova connessione al client.
-    
+
     ws
         // Possibile limitazione dei buffer, default 128 KB
         //.read_buffer_size(4*1024)
