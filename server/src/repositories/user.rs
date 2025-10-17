@@ -4,7 +4,7 @@ use super::{Create, Delete, Read, Update};
 use crate::dtos::{CreateUserDTO, UpdateUserDTO};
 use crate::entities::User;
 use sqlx::{Error, MySqlPool};
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, info, instrument};
 
 // USER REPO
 pub struct UserRepository {

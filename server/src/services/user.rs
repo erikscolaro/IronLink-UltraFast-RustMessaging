@@ -12,7 +12,7 @@ use axum::{
 };
 use futures::future;
 use std::sync::Arc;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, info, instrument, warn};
 
 #[instrument(skip(state), fields(search = %params.search))]
 pub async fn search_user_with_username(

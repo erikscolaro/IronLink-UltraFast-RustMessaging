@@ -37,27 +37,6 @@ pub trait Read<Entity, Id> {
     async fn read(&self, id: &Id) -> Result<Option<Entity>, sqlx::Error>;
 }
 
-/// Trait for reading multiple entities by list of primary keys
-///
-/// # Type Parameters
-/// * `Entity` - Type of the entities to read
-/// * `Id` - Type of the primary key (e.g. `i32`, `String`, `(i32, i32)`)
-pub trait ReadMany<Entity, Id> {
-    /// Reads multiple entities from the database by their primary keys
-    ///
-    /// # Arguments
-    /// * `ids` - Slice of primary keys of the entities to read
-    ///
-    /// # Returns
-    /// * `Ok(Vec<Entity>)` - Vec containing all found entities (can be empty)
-    /// * `Err(sqlx::Error)` - Error during reading
-    ///
-    /// # Note
-    /// Entities are returned in the order they are found in the database,
-    /// which may not match the order of the provided IDs.
-    async fn read_many(&self, ids: &[Id]) -> Result<Vec<Entity>, sqlx::Error>;
-}
-
 /// Trait for updating existing entities
 ///
 /// # Type Parameters

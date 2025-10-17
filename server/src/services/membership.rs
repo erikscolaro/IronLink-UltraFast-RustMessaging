@@ -16,7 +16,7 @@ use axum_macros::debug_handler;
 use chrono::Utc;
 use std::sync::Arc;
 use validator::Validate;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, info, instrument, warn};
 
 #[instrument(skip(state, _metadata), fields(chat_id = %chat_id))]
 pub async fn list_chat_members(

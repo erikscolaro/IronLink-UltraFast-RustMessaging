@@ -17,30 +17,6 @@ impl MessageRepository {
         Self { connection_pool }
     }
 
-    /// Get all messages for a specific chat, ordered by creation time
-    pub async fn find_many_by_chat_id(&self, chat_id: &i32) -> Result<Vec<Message>, Error> {
-        let messages = sqlx::query_as!(
-            Message,
-            r#"
-            SELECT 
-                message_id, 
-                chat_id, 
-                sender_id, 
-                content, 
-                created_at,
-                message_type as "message_type: MessageType"
-            FROM messages 
-            WHERE chat_id = ? 
-            ORDER BY created_at ASC
-            "#,
-            chat_id
-        )
-        .fetch_all(&self.connection_pool)
-        .await?;
-
-        Ok(messages)
-    }
-
     /// Get paginated messages for a chat within a time range
     ///
     /// Retrieves messages visible to a user based on their `messages_visible_from` timestamp

@@ -9,9 +9,7 @@ use crate::repositories::{
 };
 use crate::ws::chatmap::ChatMap;
 use crate::ws::usermap::UserMap;
-use dashmap::DashMap;
 use sqlx::MySqlPool;
-use tokio::sync::mpsc::UnboundedSender;
 
 /// Stato globale dell'applicazione condiviso tra tutte le route e middleware
 pub struct AppState {

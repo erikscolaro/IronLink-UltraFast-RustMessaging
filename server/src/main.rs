@@ -1,10 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused)]
-#![allow(unused_variables)]
-#![allow(unused_imports)]
-#![allow(unused_mut)]
-#![allow(unused_attributes)]
-
 mod core;
 mod dtos;
 mod entities;

@@ -8,12 +8,11 @@ use axum::{
     Extension,
     extract::{Json, Path, Query, State},
 };
-use axum_macros::debug_handler;
 use chrono::Utc;
 use futures_util::future::try_join_all;
 use std::sync::Arc;
 use validator::Validate;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, info, instrument, warn};
 
 /// DTO per creare una chat (estende CreateChatDTO con user_list per chat private)
 #[derive(serde::Deserialize)]
