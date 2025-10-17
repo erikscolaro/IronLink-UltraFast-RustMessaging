@@ -90,9 +90,6 @@ pub async fn create_chat(
     // 1. Convertire la chat creata in ChatDTO (trasformazione in memoria)
     // 2. Ritornare il ChatDTO come risposta JSON
 
-    // ??? Da rivedere se il parametro user_list sia superfluo,
-    //     potrebbe essere un vettore di metadata piuttosto che id?
-
     let chat;
     match body.chat_type {
         ChatType::Private => {

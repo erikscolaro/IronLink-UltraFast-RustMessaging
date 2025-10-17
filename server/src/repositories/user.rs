@@ -6,9 +6,6 @@ use crate::entities::User;
 use sqlx::{Error, MySqlPool};
 use tracing::{debug, info, instrument, warn};
 
-//MOD -> possibile modifica
-// Controllare se in alcuni casi non vogliamo l'oggetto come risultato ma solo un valore, e viceversa
-//Per le crud, non sempre ritorno l'oggetto, quindi servirà poi fare una lettura successiva in services oppure scriverlo nel messaggio ok()
 // USER REPO
 pub struct UserRepository {
     connection_pool: MySqlPool,

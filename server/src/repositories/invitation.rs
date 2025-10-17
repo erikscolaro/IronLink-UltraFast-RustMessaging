@@ -39,7 +39,6 @@ impl InvitationRepository {
         Ok(invitations)
     }
 
-    //MOD: controllo prima di inviare invito
     /// Check if there's already a pending invitation for user to chat
     pub async fn has_pending_invitation(
         &self,
