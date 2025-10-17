@@ -4,14 +4,14 @@ use serde::{Deserialize, Serialize};
 
 // ********************* ENUMERAZIONI UTILI **********************//
 
-#[derive(Serialize, Deserialize, Debug, Clone, sqlx::Type)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, sqlx::Type)]
 #[sqlx(type_name = "message_type", rename_all = "UPPERCASE")]
 pub enum MessageType {
     UserMessage,
     SystemMessage,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, sqlx::Type)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, sqlx::Type)]
 #[sqlx(type_name = "user_role", rename_all = "UPPERCASE")]
 pub enum UserRole {
     Owner,
@@ -19,7 +19,7 @@ pub enum UserRole {
     Member,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, sqlx::Type)]
+#[derive(Serialize, Deserialize, Debug, Clone, sqlx::Type, PartialEq)]
 #[sqlx(type_name = "invitation_status", rename_all = "UPPERCASE")]
 pub enum InvitationStatus {
     Pending,
