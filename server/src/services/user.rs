@@ -20,7 +20,7 @@ pub async fn search_user_with_username(
     // 2. Cercare nel database tutti gli utenti con username che contiene parzialmente la query, cercando solo all'inizio dello username
     // 3. Convertire ogni utente trovato in UserDTO
     // 4. Ritornare la lista di UserDTO come risposta JSON
-    let users = state.user.search_by_username_partial(&params).await?;
+    let users = state.user.search_by_username_partial(&(params.search)).await?;
     let users_dto = users.into_iter().map(UserDTO::from).collect::<Vec<_>>();
     Ok(Json::from(users_dto))
 }

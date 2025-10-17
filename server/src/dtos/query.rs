@@ -5,5 +5,5 @@ use serde::{Deserialize, Serialize};
 /// DTO per ricerche con query string
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SearchQueryDTO {
-    pub search: Option<String>,
+    pub search: String,
 }
