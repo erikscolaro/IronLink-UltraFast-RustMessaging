@@ -1,3 +1,10 @@
+#![allow(dead_code)]
+#![allow(unused)]
+#![allow(unused_variables)]
+#![allow(unused_imports)]
+#![allow(unused_mut)]
+#![allow(unused_attributes)]
+
 mod core;
 mod dtos;
 mod entities;
@@ -15,6 +22,7 @@ use axum::{
 use sqlx::mysql::MySqlPoolOptions;
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 use tokio::net::TcpListener;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 /// Configura le routes di autenticazione (login, register)
 fn configure_auth_routes() -> Router<Arc<AppState>> {
@@ -59,6 +67,15 @@ fn configure_chat_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
 async fn main() {
     // Carica la configurazione dalle variabili d'ambiente
     let config = Config::from_env().expect("Failed to load configuration. Check your .env file.");
+
+    // Inizializza il tracing subscriber con il log level dalla configurazione
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| format!("server={},tower_http=debug", config.log_level).into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
 
     // Stampa info sulla configurazione
     config.print_info();
