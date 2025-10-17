@@ -176,10 +176,18 @@ impl Create<UserChatMetadata, CreateUserChatMetadataDTO> for UserChatMetadataRep
     }
 }
 
-impl Read<UserChatMetadata, i32> for UserChatMetadataRepository {
-    async fn read(&self, id: &i32) -> Result<Option<UserChatMetadata>, Error> {
-        // For UserChatMetadata, we'll interpret the ID as user_id for simplicity
-        // In real scenarios, you might want a composite key approach
+/// Alias per chiarezza: tipo usato come 'ID' composto per le operazioni
+/// su `UserChatMetadata`.
+/// Convenzione:
+/// - `UserChatKey.0` => `user_id`
+/// - `UserChatKey.1` => `chat_id`
+///
+/// Usare questo alias nelle firme di `read`, `update`, `delete` aiuta
+/// l'IDE a mostrare la documentazione quando si richiama quelle funzioni.
+pub type UserChatKey = (i32, i32);
+
+impl Read<UserChatMetadata, UserChatKey> for UserChatMetadataRepository {
+    async fn read(&self, id: &UserChatKey) -> Result<Option<UserChatMetadata>, Error> {
         let metadata = sqlx::query_as!(
             UserChatMetadata,
             r#"
@@ -191,10 +199,11 @@ impl Read<UserChatMetadata, i32> for UserChatMetadataRepository {
                 messages_visible_from,
                 messages_received_until
             FROM userchatmetadata 
-            WHERE user_id = ?
-            LIMIT 1
+            WHERE user_id = ? 
+            AND chat_id = ?
             "#,
-            id
+            id.0,
+            id.1
         )
         .fetch_optional(&self.connection_pool)
         .await?;
@@ -203,10 +212,12 @@ impl Read<UserChatMetadata, i32> for UserChatMetadataRepository {
     }
 }
 
-impl Update<UserChatMetadata, UpdateUserChatMetadataDTO, i32> for UserChatMetadataRepository {
+impl Update<UserChatMetadata, UpdateUserChatMetadataDTO, UserChatKey>
+    for UserChatMetadataRepository
+{
     async fn update(
         &self,
-        id: &i32,
+        id: &UserChatKey,
         data: &UpdateUserChatMetadataDTO,
     ) -> Result<UserChatMetadata, Error> {
         // First, get the current metadata to ensure it exists
@@ -241,7 +252,10 @@ impl Update<UserChatMetadata, UpdateUserChatMetadataDTO, i32> for UserChatMetada
         }
 
         query_builder.push(" WHERE user_id = ");
-        query_builder.push_bind(id);
+        query_builder.push_bind(id.0);
+
+        query_builder.push(" AND chat_id = ");
+        query_builder.push_bind(id.1);
 
         query_builder.build().execute(&self.connection_pool).await?;
 
@@ -250,12 +264,15 @@ impl Update<UserChatMetadata, UpdateUserChatMetadataDTO, i32> for UserChatMetada
     }
 }
 
-impl Delete<i32> for UserChatMetadataRepository {
-    async fn delete(&self, id: &i32) -> Result<(), Error> {
-        // Delete all metadata for a user (interpretation of the ID parameter)
-        sqlx::query!("DELETE FROM userchatmetadata WHERE user_id = ?", id)
-            .execute(&self.connection_pool)
-            .await?;
+impl Delete<UserChatKey> for UserChatMetadataRepository {
+    async fn delete(&self, id: &UserChatKey) -> Result<(), Error> {
+        sqlx::query!(
+            "DELETE FROM userchatmetadata WHERE user_id = ? AND chat_id=?",
+            id.0,
+            id.1
+        )
+        .execute(&self.connection_pool)
+        .await?;
 
         Ok(())
     }

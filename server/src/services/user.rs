@@ -10,6 +10,7 @@ use axum::{
     http::{HeaderMap, HeaderValue, StatusCode},
     response::IntoResponse,
 };
+use futures::future;
 use std::sync::Arc;
 
 pub async fn search_user_with_username(
@@ -96,7 +97,18 @@ pub async fn delete_my_account(
 
     // 4. Cancellare tutti i metadata (UserChatMetadata) associati all'utente
     // (solo per le chat non eliminate al punto 3 - quelle erano già cancellate da CASCADE)
-    state.meta.delete(&current_user.user_id).await?;
+    // Raccogliere le chiavi per la cancellazione
+
+    let meta_ids: Vec<(i32, i32)> = state
+        .meta
+        .find_many_by_user_id(&current_user.user_id)
+        .await?
+        .into_iter()
+        .map(|m| (m.user_id, m.chat_id))
+        .collect();
+
+    // Cancellazione effettiva
+    future::join_all(meta_ids.iter().map(|k| state.meta.delete(&k))).await;
 
     // 5-6. Rinominare lo username dell'utente con "Deleted User" e sostituire la password con stringa vuota
     state.user.delete(&current_user.user_id).await?;
