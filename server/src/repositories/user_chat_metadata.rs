@@ -193,6 +193,44 @@ impl UserChatMetadataRepository {
 
         Ok(())
     }
+
+    pub async fn update_user_role(
+        &self,
+        user_id: &i32,
+        chat_id: &i32,
+        new_role: &UserRole,
+    ) -> Result<UserChatMetadata, Error> {
+        // Mappo l'enum sul valore testuale usato in DB
+        let role_str = match new_role {
+            UserRole::Owner  => "OWNER",
+            UserRole::Admin  => "ADMIN",
+            UserRole::Member => "MEMBER",
+        };
+
+        // UPDATE mirato su chiave composta (user_id, chat_id)
+        let result = sqlx::query!(
+            r#"
+            UPDATE userchatmetadata
+            SET user_role = ?
+            WHERE user_id = ? AND chat_id = ?
+            "#,
+            role_str,
+            user_id,
+            chat_id
+        )
+        .execute(&self.connection_pool)
+        .await?;
+
+        // Se nessuna riga è stata toccata, la coppia (user_id, chat_id) non esiste
+        if result.rows_affected() == 0 {
+            return Err(sqlx::Error::RowNotFound);
+        }
+
+        // Ritorno il record aggiornato
+        self.find_by_user_and_chat_id(user_id, chat_id)
+            .await?
+            .ok_or_else(|| sqlx::Error::RowNotFound)
+    }
 }
 
 impl Create<UserChatMetadata, CreateUserChatMetadataDTO> for UserChatMetadataRepository {

@@ -425,7 +425,7 @@ pub async fn remove_member(
 #[debug_handler]
 pub async fn update_member_role(
     State(state): State<Arc<AppState>>,
-    Path(user_id): Path<i32>,
+    Path((user_id, chat_id)): Path<(i32, i32)>,
     Extension(current_user): Extension<User>, // ottenuto dall'autenticazione tramite token jwt
     Json(body): Json<UserRole>,
 ) -> Result<(), AppError> {
@@ -442,7 +442,122 @@ pub async fn update_member_role(
     // 11. Salvare il messaggio nel database
     // 12. Inviare il messaggio tramite WebSocket a tutti i membri online (operazione non bloccante)
     // 13. Ritornare StatusCode::OK
-    todo!()
+
+    let current_meta_opt = state
+        .meta
+        .find_by_user_and_chat_id(&current_user.user_id, &chat_id) // chat_id mancante, da aggiungere alla signature
+        .await?;
+
+    let current_meta = match current_meta_opt {
+        Some(m) => m,
+        None => {
+            return Err(AppError::forbidden(
+                "You are not a member of this chat".to_string(),
+                ));
+            }
+    };
+
+    match current_meta.user_role {
+        Some(UserRole::Member) => {
+            return Err(AppError::forbidden(
+                "You do not have permission to change member roles in this chat".to_string(),
+            ));
+        },
+        _ => {}
+    }
+
+    let target_meta_opt = state
+        .meta
+        .find_by_user_and_chat_id(&user_id, &chat_id)
+        .await?;
+
+    let target_meta = match target_meta_opt {
+        Some(m) => m,
+        None => {
+            return Err(AppError::not_found(
+                "The user whose role is to be changed is not a member of this chat".to_string(),
+                ));
+            }
+    };
+
+   match current_meta.user_role {
+        Some(UserRole::Admin) => {
+            // Admin può modificare solo Member
+            match target_meta.user_role {
+                Some(UserRole::Member) => { /* ok */ }
+                _ => {
+                    return Err(AppError::forbidden(
+                        "Admin can modify only members".to_string(),
+                    ));
+                }
+            }
+
+            // Admin non può assegnare Owner
+            match body {
+                UserRole::Owner => {
+                    return Err(AppError::forbidden(
+                        "Only Owner can assign ownership".to_string(),
+                    ));
+                }
+                _ => { /* ok */ }
+            }
+        }
+        _ => { /* current user non-admin: altre regole già gestite sopra */ }
+    }
+
+    let members = state
+        .meta
+        .find_many_by_chat_id(&chat_id)
+        .await?;
+
+    state
+        .meta
+        .update_user_role(&user_id, &chat_id, &body)
+        .await?;
+
+    let target_user_opt = state
+        .user
+        .read(&user_id)
+        .await?;
+
+    let target_username = target_user_opt
+        .as_ref()
+        .map(|u| u.username.clone())
+        .unwrap_or_else(|| "Unknown User".to_string());
+
+    let create_message_dto = CreateMessageDTO {
+        chat_id: chat_id,
+        sender_id: current_user.user_id,
+        content: format!("User {} has changed {}'s role to {:?}", current_user.username, target_username, body),
+        message_type: MessageType::SystemMessage,
+        created_at: Utc::now(),
+    };
+
+    let saved_message = state
+        .msg
+        .create(&create_message_dto)
+        .await?;
+
+    let message_dto = MessageDTO {
+        message_id: Some(saved_message.message_id),
+        chat_id: Some(saved_message.chat_id),
+        sender_id: Some(saved_message.sender_id),
+        content: Some(saved_message.content.clone()),
+        message_type: Some(saved_message.message_type.clone()),
+        created_at: Some(saved_message.created_at),
+    };
+
+    for member in members {
+        if let Some(sender_ref) = state.users_online.get(&member.user_id) {
+            let sender = sender_ref.clone();
+            let ws_event = WsEventDTO::Message(message_dto.clone());
+            tokio::spawn(async move {
+                let _ = sender.send(ws_event).await;
+            });   
+        }
+    }
+
+    Ok(())
 }
 
 pub async fn transfer_ownership(
