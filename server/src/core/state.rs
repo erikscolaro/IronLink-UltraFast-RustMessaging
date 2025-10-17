@@ -3,14 +3,15 @@
 //! Contiene tutti i repository, configurazioni e stato condiviso
 //! necessario per gestire l'applicazione.
 
-use crate::dtos::WsEventDTO;
 use crate::repositories::{
     ChatRepository, InvitationRepository, MessageRepository, UserChatMetadataRepository,
     UserRepository,
 };
+use crate::ws::chatmap::ChatMap;
+use crate::ws::usermap::UserMap;
 use dashmap::DashMap;
 use sqlx::MySqlPool;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::UnboundedSender;
 
 /// Stato globale dell'applicazione condiviso tra tutte le route e middleware
 pub struct AppState {
@@ -34,7 +35,10 @@ pub struct AppState {
 
     /// Mappa concorrente degli utenti online con i loro canali WebSocket
     /// Key: user_id, Value: Sender per inviare messaggi al WebSocket dell'utente
-    pub users_online: DashMap<i32, Sender<WsEventDTO>>,
+    pub users_online: UserMap,
+
+    /// Struttura di gestione delle chat con almeno un utente online
+    pub chats_online: ChatMap,
 }
 
 impl AppState {
@@ -55,7 +59,8 @@ impl AppState {
             invitation: InvitationRepository::new(pool.clone()),
             meta: UserChatMetadataRepository::new(pool),
             jwt_secret,
-            users_online: DashMap::new(),
+            users_online: UserMap::new(),
+            chats_online: ChatMap::new(),
         }
     }
 }
