@@ -1,9 +1,0 @@
-[package]
-name = "client"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-reqwest = "0.12.23"
-tokio = "1.47.1"
-tokio-tungstenite = "0.27.0"
