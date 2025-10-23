@@ -1916,6 +1916,407 @@ mod tests {
         Ok(())
     }
 
+    /*------------------------------*/
+    /* Unit tests: update_user_role */
+    /*------------------------------*/
+
+    /// Test: aggiornamento ruolo da MEMBER a ADMIN
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_user_role_member_to_admin(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        // Bob (user_id=2) è MEMBER nella General Chat (chat_id=1)
+        let before = repo.read(&(2, 1)).await?.unwrap();
+        assert_eq!(before.user_role, Some(UserRole::Member));
+        
+        // Promuovi Bob ad ADMIN
+        let result = repo.update_user_role(&2, &1, &UserRole::Admin).await?;
+        
+        assert_eq!(result.user_id, 2);
+        assert_eq!(result.chat_id, 1);
+        assert_eq!(result.user_role, Some(UserRole::Admin));
+        
+        // Verifica nel database
+        let after = repo.read(&(2, 1)).await?.unwrap();
+        assert_eq!(after.user_role, Some(UserRole::Admin));
+        
+        Ok(())
+    }
+
+    /// Test: aggiornamento ruolo da ADMIN a OWNER
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_user_role_admin_to_owner(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        // Charlie (user_id=3) è ADMIN nel Dev Team (chat_id=3)
+        let before = repo.read(&(3, 3)).await?.unwrap();
+        assert_eq!(before.user_role, Some(UserRole::Admin));
+        
+        // Promuovi Charlie a OWNER
+        let result = repo.update_user_role(&3, &3, &UserRole::Owner).await?;
+        
+        assert_eq!(result.user_role, Some(UserRole::Owner));
+        
+        Ok(())
+    }
+
+    /// Test: aggiornamento ruolo da OWNER a MEMBER (demozione)
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_user_role_owner_to_member(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        // Alice (user_id=1) è OWNER nella General Chat (chat_id=1)
+        let before = repo.read(&(1, 1)).await?.unwrap();
+        assert_eq!(before.user_role, Some(UserRole::Owner));
+        
+        // Degrada Alice a MEMBER
+        let result = repo.update_user_role(&1, &1, &UserRole::Member).await?;
+        
+        assert_eq!(result.user_role, Some(UserRole::Member));
+        
+        // Verifica persistenza
+        let after = repo.read(&(1, 1)).await?.unwrap();
+        assert_eq!(after.user_role, Some(UserRole::Member));
+        
+        Ok(())
+    }
+
+    /// Test: errore quando user_id non esiste
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_user_role_user_not_found(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        // Tentativo di aggiornare utente inesistente
+        let result = repo.update_user_role(&999, &1, &UserRole::Admin).await;
+        
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), sqlx::Error::RowNotFound));
+        
+        Ok(())
+    }
+
+    /// Test: errore quando chat_id non esiste
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_user_role_chat_not_found(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        // Tentativo di aggiornare in una chat inesistente
+        let result = repo.update_user_role(&1, &999, &UserRole::Admin).await;
+        
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), sqlx::Error::RowNotFound));
+        
+        Ok(())
+    }
+
+    /// Test: errore quando la combinazione (user_id, chat_id) non esiste
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_user_role_metadata_not_found(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        // Bob (user_id=2) non è nel Dev Team (chat_id=3)
+        let result = repo.update_user_role(&2, &3, &UserRole::Admin).await;
+        
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), sqlx::Error::RowNotFound));
+        
+        Ok(())
+    }
+
+    /// Test: verifica che solo user_role cambi, altri campi rimangono invariati
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_user_role_preserves_other_fields(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        // Salva i valori originali
+        let before = repo.read(&(2, 1)).await?.unwrap();
+        let original_member_since = before.member_since;
+        let original_visible_from = before.messages_visible_from;
+        let original_received_until = before.messages_received_until;
+        
+        // Aggiorna solo il ruolo
+        repo.update_user_role(&2, &1, &UserRole::Admin).await?;
+        
+        // Verifica che gli altri campi siano invariati
+        let after = repo.read(&(2, 1)).await?.unwrap();
+        assert_eq!(after.member_since, original_member_since);
+        assert_eq!(after.messages_visible_from, original_visible_from);
+        assert_eq!(after.messages_received_until, original_received_until);
+        assert_eq!(after.user_role, Some(UserRole::Admin)); // Solo questo cambia
+        
+        Ok(())
+    }
+
+    /// Test: aggiornamento ruolo allo stesso valore (idempotenza)
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_user_role_same_value(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        // Alice è già OWNER
+        let before = repo.read(&(1, 1)).await?.unwrap();
+        assert_eq!(before.user_role, Some(UserRole::Owner));
+        
+        // "Aggiorna" a OWNER (stesso valore)
+        let result = repo.update_user_role(&1, &1, &UserRole::Owner).await?;
+        
+        assert_eq!(result.user_role, Some(UserRole::Owner));
+        
+        // Verifica che funzioni senza problemi
+        let after = repo.read(&(1, 1)).await?.unwrap();
+        assert_eq!(after.user_role, Some(UserRole::Owner));
+        
+        Ok(())
+    }
+
+    /// Test: aggiornamenti multipli sequenziali
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_user_role_multiple_sequential(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        // Sequenza: MEMBER -> ADMIN -> OWNER -> MEMBER
+        let metadata = repo.read(&(2, 1)).await?.unwrap();
+        assert_eq!(metadata.user_role, Some(UserRole::Member));
+        
+        // MEMBER -> ADMIN
+        let result1 = repo.update_user_role(&2, &1, &UserRole::Admin).await?;
+        assert_eq!(result1.user_role, Some(UserRole::Admin));
+        
+        // ADMIN -> OWNER
+        let result2 = repo.update_user_role(&2, &1, &UserRole::Owner).await?;
+        assert_eq!(result2.user_role, Some(UserRole::Owner));
+        
+        // OWNER -> MEMBER
+        let result3 = repo.update_user_role(&2, &1, &UserRole::Member).await?;
+        assert_eq!(result3.user_role, Some(UserRole::Member));
+        
+        // Verifica finale
+        let final_state = repo.read(&(2, 1)).await?.unwrap();
+        assert_eq!(final_state.user_role, Some(UserRole::Member));
+        
+        Ok(())
+    }
+
+    /// Test: aggiornamento in chat privata
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_user_role_private_chat(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        // Private Alice-Bob (chat_id=2): Bob è MEMBER
+        let before = repo.read(&(2, 2)).await?.unwrap();
+        assert_eq!(before.user_role, Some(UserRole::Member));
+        
+        // Promuovi Bob a OWNER nella chat privata
+        let result = repo.update_user_role(&2, &2, &UserRole::Owner).await?;
+        
+        assert_eq!(result.user_role, Some(UserRole::Owner));
+        
+        Ok(())
+    }
+
+    /// Test CASCADE: aggiornamento ruolo e poi eliminazione utente
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_user_role_cascade_delete_user(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Promuovi Bob ad ADMIN
+        repo.update_user_role(&2, &1, &UserRole::Admin).await?;
+        
+        // Verifica l'aggiornamento
+        let after_update = repo.read(&(2, 1)).await?.unwrap();
+        assert_eq!(after_update.user_role, Some(UserRole::Admin));
+        
+        // Elimina Bob - CASCADE dovrebbe eliminare tutti i suoi metadata
+        sqlx::query!("DELETE FROM users WHERE user_id = ?", 2)
+            .execute(&pool)
+            .await?;
+        
+        // Il metadata non dovrebbe più esistere
+        let after_delete = repo.read(&(2, 1)).await?;
+        assert!(after_delete.is_none(), "Il metadata dovrebbe essere eliminato (CASCADE)");
+        
+        Ok(())
+    }
+
+    /// Test CASCADE: aggiornamento ruolo e poi eliminazione chat
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_user_role_cascade_delete_chat(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Promuovi Bob ad ADMIN nella General Chat
+        repo.update_user_role(&2, &1, &UserRole::Admin).await?;
+        
+        // Verifica l'aggiornamento
+        let after_update = repo.read(&(2, 1)).await?.unwrap();
+        assert_eq!(after_update.user_role, Some(UserRole::Admin));
+        
+        // Elimina la chat - CASCADE dovrebbe eliminare tutti i metadata
+        sqlx::query!("DELETE FROM chats WHERE chat_id = ?", 1)
+            .execute(&pool)
+            .await?;
+        
+        // Nessun metadata dovrebbe esistere per questa chat
+        let members = repo.find_many_by_chat_id(&1).await?;
+        assert_eq!(members.len(), 0, "Tutti i metadata dovrebbero essere eliminati (CASCADE)");
+        
+        Ok(())
+    }
+
+    /// Test: aggiornamenti concorrenti su utenti diversi nella stessa chat
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_user_role_multiple_users_same_chat(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        // General Chat (chat_id=1): aggiorna ruoli di più utenti
+        repo.update_user_role(&2, &1, &UserRole::Admin).await?;
+        repo.update_user_role(&3, &1, &UserRole::Admin).await?;
+        
+        // Verifica che entrambi siano stati aggiornati
+        let bob = repo.read(&(2, 1)).await?.unwrap();
+        let charlie = repo.read(&(3, 1)).await?.unwrap();
+        
+        assert_eq!(bob.user_role, Some(UserRole::Admin));
+        assert_eq!(charlie.user_role, Some(UserRole::Admin));
+        
+        // Alice dovrebbe essere ancora OWNER (non modificata)
+        let alice = repo.read(&(1, 1)).await?.unwrap();
+        assert_eq!(alice.user_role, Some(UserRole::Owner));
+        
+        Ok(())
+    }
+
+    /// Test: aggiornamento ruolo dopo transfer_ownership
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_user_role_after_transfer_ownership(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        // Trasferisci ownership da Alice a Bob
+        repo.transfer_ownership(&1, &2, &1).await?;
+        
+        // Alice dovrebbe essere ADMIN ora
+        let alice = repo.read(&(1, 1)).await?.unwrap();
+        assert_eq!(alice.user_role, Some(UserRole::Admin));
+        
+        // Degrada Alice a MEMBER
+        repo.update_user_role(&1, &1, &UserRole::Member).await?;
+        
+        let alice_after = repo.read(&(1, 1)).await?.unwrap();
+        assert_eq!(alice_after.user_role, Some(UserRole::Member));
+        
+        // Bob dovrebbe essere ancora OWNER
+        let bob = repo.read(&(2, 1)).await?.unwrap();
+        assert_eq!(bob.user_role, Some(UserRole::Owner));
+        
+        Ok(())
+    }
+
+    /// Test: verifica che update_user_role funzioni con tutti e tre i ruoli
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_user_role_all_roles(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Crea una nuova chat con 3 membri
+        let new_chat_id = sqlx::query!(
+            "INSERT INTO chats (title, description, chat_type) VALUES (?, ?, ?)",
+            "Test Chat",
+            None::<String>,
+            "GROUP"
+        )
+        .execute(&pool)
+        .await?
+        .last_insert_id() as i32;
+        
+        let now = chrono::Utc::now();
+        let metadata_list = vec![
+            CreateUserChatMetadataDTO {
+                user_id: 1,
+                chat_id: new_chat_id,
+                user_role: Some(UserRole::Member),
+                member_since: now,
+                messages_visible_from: now,
+                messages_received_until: now,
+            },
+            CreateUserChatMetadataDTO {
+                user_id: 2,
+                chat_id: new_chat_id,
+                user_role: Some(UserRole::Member),
+                member_since: now,
+                messages_visible_from: now,
+                messages_received_until: now,
+            },
+            CreateUserChatMetadataDTO {
+                user_id: 3,
+                chat_id: new_chat_id,
+                user_role: Some(UserRole::Member),
+                member_since: now,
+                messages_visible_from: now,
+                messages_received_until: now,
+            },
+        ];
+        
+        repo.create_many(&metadata_list).await?;
+        
+        // Aggiorna a ruoli diversi
+        repo.update_user_role(&1, &new_chat_id, &UserRole::Owner).await?;
+        repo.update_user_role(&2, &new_chat_id, &UserRole::Admin).await?;
+        repo.update_user_role(&3, &new_chat_id, &UserRole::Member).await?; // Rimane MEMBER
+        
+        // Verifica
+        let user1 = repo.read(&(1, new_chat_id)).await?.unwrap();
+        let user2 = repo.read(&(2, new_chat_id)).await?.unwrap();
+        let user3 = repo.read(&(3, new_chat_id)).await?.unwrap();
+        
+        assert_eq!(user1.user_role, Some(UserRole::Owner));
+        assert_eq!(user2.user_role, Some(UserRole::Admin));
+        assert_eq!(user3.user_role, Some(UserRole::Member));
+        
+        Ok(())
+    }
+
+    /// Test CASCADE: aggiornamento di più utenti e poi eliminazione della chat
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_user_role_cascade_multiple_updates_then_delete(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Aggiorna più ruoli nella General Chat
+        repo.update_user_role(&2, &1, &UserRole::Admin).await?;
+        repo.update_user_role(&3, &1, &UserRole::Admin).await?;
+        
+        // Verifica gli aggiornamenti
+        let members_before = repo.find_many_by_chat_id(&1).await?;
+        assert_eq!(members_before.len(), 3);
+        
+        // Conta gli admin
+        let admin_count = members_before.iter().filter(|m| m.user_role == Some(UserRole::Admin)).count();
+        assert_eq!(admin_count, 2);
+        
+        // Elimina la chat
+        sqlx::query!("DELETE FROM chats WHERE chat_id = ?", 1)
+            .execute(&pool)
+            .await?;
+        
+        // Tutti i metadata dovrebbero essere eliminati
+        let members_after = repo.find_many_by_chat_id(&1).await?;
+        assert_eq!(members_after.len(), 0);
+        
+        Ok(())
+    }
+
+    /// Test: verifica che rows_affected sia corretto
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_user_role_rows_affected(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        // Aggiornamento valido
+        let result = repo.update_user_role(&2, &1, &UserRole::Admin).await;
+        assert!(result.is_ok(), "L'aggiornamento dovrebbe avere successo");
+        
+        // Aggiornamento invalido (metadata inesistente)
+        let result_invalid = repo.update_user_role(&999, &999, &UserRole::Admin).await;
+        assert!(result_invalid.is_err(), "Dovrebbe fallire con RowNotFound");
+        
+        Ok(())
+    }
+
     /// Test generico - esempio di utilizzo di #[sqlx::test]
     #[sqlx::test]
     async fn test_example(_pool: MySqlPool) -> sqlx::Result<()> {
