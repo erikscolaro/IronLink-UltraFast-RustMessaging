@@ -626,6 +626,314 @@ mod tests {
         Ok(())
     }
 
+    /*--------------------------------*/
+    /* Unit tests: transfer_ownership */
+    /*--------------------------------*/
+
+    /// Test: trasferimento di ownership da un utente ad un altro
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_transfer_ownership_success(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Alice (user_id=1) è OWNER della General Chat (chat_id=1)
+        // Bob (user_id=2) è MEMBER della General Chat
+        let alice_before = repo.read(&(1, 1)).await?.unwrap();
+        let bob_before = repo.read(&(2, 1)).await?.unwrap();
+        
+        assert_eq!(alice_before.user_role, Some(UserRole::Owner));
+        assert_eq!(bob_before.user_role, Some(UserRole::Member));
+        
+        // Trasferisci ownership da Alice a Bob
+        repo.transfer_ownership(&1, &2, &1).await?;
+        
+        // Dopo il trasferimento:
+        // Alice dovrebbe essere ADMIN
+        // Bob dovrebbe essere OWNER
+        let alice_after = repo.read(&(1, 1)).await?.unwrap();
+        let bob_after = repo.read(&(2, 1)).await?.unwrap();
+        
+        assert_eq!(alice_after.user_role, Some(UserRole::Admin));
+        assert_eq!(bob_after.user_role, Some(UserRole::Owner));
+        
+        Ok(())
+    }
+
+    /// Test: trasferimento ownership da OWNER ad ADMIN
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_transfer_ownership_owner_to_admin(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Dev Team (chat_id=3): alice=OWNER, charlie=ADMIN
+        let alice_before = repo.read(&(1, 3)).await?.unwrap();
+        let charlie_before = repo.read(&(3, 3)).await?.unwrap();
+        
+        assert_eq!(alice_before.user_role, Some(UserRole::Owner));
+        assert_eq!(charlie_before.user_role, Some(UserRole::Admin));
+        
+        // Trasferisci ownership da Alice a Charlie
+        repo.transfer_ownership(&1, &3, &3).await?;
+        
+        // Alice dovrebbe diventare ADMIN
+        // Charlie dovrebbe diventare OWNER
+        let alice_after = repo.read(&(1, 3)).await?.unwrap();
+        let charlie_after = repo.read(&(3, 3)).await?.unwrap();
+        
+        assert_eq!(alice_after.user_role, Some(UserRole::Admin));
+        assert_eq!(charlie_after.user_role, Some(UserRole::Owner));
+        
+        Ok(())
+    }
+
+    /// Test: trasferimento ownership in chat privata
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_transfer_ownership_private_chat(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Private Alice-Bob (chat_id=2): alice=OWNER, bob=MEMBER
+        repo.transfer_ownership(&1, &2, &2).await?;
+        
+        let alice = repo.read(&(1, 2)).await?.unwrap();
+        let bob = repo.read(&(2, 2)).await?.unwrap();
+        
+        assert_eq!(alice.user_role, Some(UserRole::Admin));
+        assert_eq!(bob.user_role, Some(UserRole::Owner));
+        
+        Ok(())
+    }
+
+    /// Test: atomicità della transazione - entrambe le operazioni devono avere successo
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_transfer_ownership_atomicity(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Verifica stato iniziale
+        let alice_before = repo.read(&(1, 1)).await?.unwrap();
+        assert_eq!(alice_before.user_role, Some(UserRole::Owner));
+        
+        // Trasferimento valido
+        repo.transfer_ownership(&1, &2, &1).await?;
+        
+        // Verifica che entrambe le modifiche siano state applicate
+        let alice_after = repo.read(&(1, 1)).await?.unwrap();
+        let bob_after = repo.read(&(2, 1)).await?.unwrap();
+        
+        assert_eq!(alice_after.user_role, Some(UserRole::Admin));
+        assert_eq!(bob_after.user_role, Some(UserRole::Owner));
+        
+        Ok(())
+    }
+
+    /// Test: trasferimento con utente non esistente nel database
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_transfer_ownership_nonexistent_target(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Stato prima del tentativo
+        let alice_before = repo.read(&(1, 1)).await?.unwrap();
+        assert_eq!(alice_before.user_role, Some(UserRole::Owner));
+        
+        // Tentativo di trasferire ownership a un utente inesistente (999)
+        // Il database non dovrebbe avere un utente con id 999 in questa chat
+        let result = repo.transfer_ownership(&1, &999, &1).await;
+        
+        // L'operazione dovrebbe completarsi senza errori anche se l'utente target non esiste
+        // perché MySQL UPDATE su righe inesistenti non genera errore
+        assert!(result.is_ok());
+        
+        // Alice dovrebbe essere diventata ADMIN (prima parte dell'operazione)
+        let alice_after = repo.read(&(1, 1)).await?.unwrap();
+        assert_eq!(alice_after.user_role, Some(UserRole::Admin));
+        
+        Ok(())
+    }
+
+    /// Test CASCADE: eliminazione del vecchio owner dopo trasferimento
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_transfer_ownership_cascade_delete_old_owner(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Trasferisci ownership da Alice a Bob nella General Chat
+        repo.transfer_ownership(&1, &2, &1).await?;
+        
+        // Verifica il trasferimento
+        let bob = repo.read(&(2, 1)).await?.unwrap();
+        assert_eq!(bob.user_role, Some(UserRole::Owner));
+        
+        // Elimina Alice (ex-owner, ora admin)
+        // CASCADE eliminerà i suoi metadata
+        sqlx::query!("DELETE FROM users WHERE user_id = ?", 1)
+            .execute(&pool)
+            .await?;
+        
+        // Alice non dovrebbe più esistere nei metadata
+        let alice = repo.read(&(1, 1)).await?;
+        assert!(alice.is_none());
+        
+        // Bob dovrebbe essere ancora owner
+        let bob_after = repo.read(&(2, 1)).await?.unwrap();
+        assert_eq!(bob_after.user_role, Some(UserRole::Owner));
+        
+        // La chat dovrebbe avere 2 membri invece di 3
+        let members = repo.find_many_by_chat_id(&1).await?;
+        assert_eq!(members.len(), 2);
+        
+        Ok(())
+    }
+
+    /// Test CASCADE: eliminazione del nuovo owner dopo trasferimento
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_transfer_ownership_cascade_delete_new_owner(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Trasferisci ownership da Alice a Bob
+        repo.transfer_ownership(&1, &2, &1).await?;
+        
+        // Verifica
+        let bob = repo.read(&(2, 1)).await?.unwrap();
+        assert_eq!(bob.user_role, Some(UserRole::Owner));
+        
+        // Elimina Bob (nuovo owner)
+        sqlx::query!("DELETE FROM users WHERE user_id = ?", 2)
+            .execute(&pool)
+            .await?;
+        
+        // Bob non dovrebbe più esistere
+        let bob_after = repo.read(&(2, 1)).await?;
+        assert!(bob_after.is_none());
+        
+        // Alice (ora admin) dovrebbe essere ancora presente
+        let alice = repo.read(&(1, 1)).await?.unwrap();
+        assert_eq!(alice.user_role, Some(UserRole::Admin));
+        
+        Ok(())
+    }
+
+    /// Test CASCADE: eliminazione della chat dopo trasferimento ownership
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_transfer_ownership_cascade_delete_chat(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Trasferisci ownership
+        repo.transfer_ownership(&1, &2, &1).await?;
+        
+        // Verifica il trasferimento
+        let alice = repo.read(&(1, 1)).await?.unwrap();
+        let bob = repo.read(&(2, 1)).await?.unwrap();
+        assert_eq!(alice.user_role, Some(UserRole::Admin));
+        assert_eq!(bob.user_role, Some(UserRole::Owner));
+        
+        // Elimina la chat
+        // CASCADE eliminerà tutti i metadata associati
+        sqlx::query!("DELETE FROM chats WHERE chat_id = ?", 1)
+            .execute(&pool)
+            .await?;
+        
+        // Nessun metadata dovrebbe esistere per questa chat
+        let alice_after = repo.read(&(1, 1)).await?;
+        let bob_after = repo.read(&(2, 1)).await?;
+        
+        assert!(alice_after.is_none());
+        assert!(bob_after.is_none());
+        
+        // Verifica che la chat non abbia membri
+        let members = repo.find_many_by_chat_id(&1).await?;
+        assert_eq!(members.len(), 0);
+        
+        Ok(())
+    }
+
+    /// Test: doppio trasferimento di ownership (A->B->C)
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_transfer_ownership_chain(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Stato iniziale: alice=OWNER, bob=MEMBER, charlie=MEMBER
+        // Primo trasferimento: Alice -> Bob
+        repo.transfer_ownership(&1, &2, &1).await?;
+        
+        let alice_after_first = repo.read(&(1, 1)).await?.unwrap();
+        let bob_after_first = repo.read(&(2, 1)).await?.unwrap();
+        
+        assert_eq!(alice_after_first.user_role, Some(UserRole::Admin));
+        assert_eq!(bob_after_first.user_role, Some(UserRole::Owner));
+        
+        // Secondo trasferimento: Bob -> Charlie
+        repo.transfer_ownership(&2, &3, &1).await?;
+        
+        let bob_after_second = repo.read(&(2, 1)).await?.unwrap();
+        let charlie_after_second = repo.read(&(3, 1)).await?.unwrap();
+        
+        assert_eq!(bob_after_second.user_role, Some(UserRole::Admin));
+        assert_eq!(charlie_after_second.user_role, Some(UserRole::Owner));
+        
+        // Alice dovrebbe essere ancora admin (non modificata nel secondo trasferimento)
+        let alice_final = repo.read(&(1, 1)).await?.unwrap();
+        assert_eq!(alice_final.user_role, Some(UserRole::Admin));
+        
+        Ok(())
+    }
+
+    /// Test: trasferimento ownership e poi rollback manuale
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_transfer_ownership_and_rollback(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Trasferisci ownership da Alice a Bob
+        repo.transfer_ownership(&1, &2, &1).await?;
+        
+        // Verifica il trasferimento
+        let alice = repo.read(&(1, 1)).await?.unwrap();
+        let bob = repo.read(&(2, 1)).await?.unwrap();
+        assert_eq!(alice.user_role, Some(UserRole::Admin));
+        assert_eq!(bob.user_role, Some(UserRole::Owner));
+        
+        // "Rollback" manuale: ritrasferisci ownership da Bob ad Alice
+        repo.transfer_ownership(&2, &1, &1).await?;
+        
+        // Verifica che siamo tornati allo stato originale (quasi)
+        let alice_final = repo.read(&(1, 1)).await?.unwrap();
+        let bob_final = repo.read(&(2, 1)).await?.unwrap();
+        
+        assert_eq!(alice_final.user_role, Some(UserRole::Owner));
+        assert_eq!(bob_final.user_role, Some(UserRole::Admin)); // Bob era MEMBER, ora è ADMIN
+        
+        Ok(())
+    }
+
+    /// Test: verifica che il trasferimento non modifichi altri campi
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_transfer_ownership_preserves_other_fields(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Salva i valori iniziali
+        let alice_before = repo.read(&(1, 1)).await?.unwrap();
+        let bob_before = repo.read(&(2, 1)).await?.unwrap();
+        
+        let alice_member_since = alice_before.member_since;
+        let alice_visible_from = alice_before.messages_visible_from;
+        let bob_member_since = bob_before.member_since;
+        let bob_visible_from = bob_before.messages_visible_from;
+        
+        // Trasferisci ownership
+        repo.transfer_ownership(&1, &2, &1).await?;
+        
+        // Verifica che solo user_role sia cambiato
+        let alice_after = repo.read(&(1, 1)).await?.unwrap();
+        let bob_after = repo.read(&(2, 1)).await?.unwrap();
+        
+        // Verifica che i timestamp non siano cambiati
+        assert_eq!(alice_after.member_since, alice_member_since);
+        assert_eq!(alice_after.messages_visible_from, alice_visible_from);
+        assert_eq!(bob_after.member_since, bob_member_since);
+        assert_eq!(bob_after.messages_visible_from, bob_visible_from);
+        
+        // Solo i ruoli dovrebbero essere cambiati
+        assert_eq!(alice_after.user_role, Some(UserRole::Admin));
+        assert_eq!(bob_after.user_role, Some(UserRole::Owner));
+        
+        Ok(())
+    }
+
     /// Test generico - esempio di utilizzo di #[sqlx::test]
     #[sqlx::test]
     async fn test_example(_pool: MySqlPool) -> sqlx::Result<()> {
