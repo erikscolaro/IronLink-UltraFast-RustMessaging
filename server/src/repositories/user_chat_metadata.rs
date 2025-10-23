@@ -325,14 +325,313 @@ impl Delete<UserChatKey> for UserChatMetadataRepository {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::entities::UserRole;
     use sqlx::MySqlPool;
 
-    /// Test generico - esempio di utilizzo di #[sqlx::test]
+    /*----------------------------------*/
+    /* Unit tests: find_many_by_chat_id */
+    /*----------------------------------*/
+
+    /// Test: trova tutti i membri di una chat esistente
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_find_many_by_chat_id_success(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        // La "General Chat" (chat_id=1) ha 3 membri: alice, bob, charlie
+        let result = repo.find_many_by_chat_id(&1).await?;
+        
+        assert_eq!(result.len(), 3);
+        
+        // Verifica che tutti gli user_id siano presenti
+        let user_ids: Vec<i32> = result.iter().map(|m| m.user_id).collect();
+        assert!(user_ids.contains(&1)); // alice
+        assert!(user_ids.contains(&2)); // bob
+        assert!(user_ids.contains(&3)); // charlie
+        
+        Ok(())
+    }
+
+    /// Test: trova i membri di una chat privata
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_find_many_by_chat_id_private_chat(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        // La chat privata Alice-Bob (chat_id=2) ha 2 membri
+        let result = repo.find_many_by_chat_id(&2).await?;
+        
+        assert_eq!(result.len(), 2);
+        
+        let user_ids: Vec<i32> = result.iter().map(|m| m.user_id).collect();
+        assert!(user_ids.contains(&1)); // alice
+        assert!(user_ids.contains(&2)); // bob
+        
+        Ok(())
+    }
+
+    /// Test: restituisce lista vuota per chat inesistente
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_find_many_by_chat_id_not_found(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        // Chat inesistente
+        let result = repo.find_many_by_chat_id(&999).await?;
+        
+        assert_eq!(result.len(), 0);
+        assert!(result.is_empty());
+        
+        Ok(())
+    }
+
+    /// Test: verifica che i ruoli siano caricati correttamente
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_find_many_by_chat_id_with_roles(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        // General Chat (chat_id=1): alice=OWNER, bob=MEMBER, charlie=MEMBER
+        let result = repo.find_many_by_chat_id(&1).await?;
+        
+        // Trova alice (user_id=1)
+        let alice_metadata = result.iter().find(|m| m.user_id == 1).unwrap();
+        assert_eq!(alice_metadata.user_role, Some(UserRole::Owner));
+        
+        // Trova bob (user_id=2)
+        let bob_metadata = result.iter().find(|m| m.user_id == 2).unwrap();
+        assert_eq!(bob_metadata.user_role, Some(UserRole::Member));
+        
+        // Trova charlie (user_id=3)
+        let charlie_metadata = result.iter().find(|m| m.user_id == 3).unwrap();
+        assert_eq!(charlie_metadata.user_role, Some(UserRole::Member));
+        
+        Ok(())
+    }
+
+    /// Test: verifica i diversi ruoli in una chat (OWNER, ADMIN, MEMBER)
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_find_many_by_chat_id_different_roles(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        // Dev Team (chat_id=3): alice=OWNER, charlie=ADMIN
+        let result = repo.find_many_by_chat_id(&3).await?;
+        
+        assert_eq!(result.len(), 2);
+        
+        let alice = result.iter().find(|m| m.user_id == 1).unwrap();
+        assert_eq!(alice.user_role, Some(UserRole::Owner));
+        
+        let charlie = result.iter().find(|m| m.user_id == 3).unwrap();
+        assert_eq!(charlie.user_role, Some(UserRole::Admin));
+        
+        Ok(())
+    }
+
+    /// Test CASCADE: eliminazione di un utente elimina i suoi metadata
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_find_many_by_chat_id_cascade_delete_user(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Prima: General Chat ha 3 membri
+        let result_before = repo.find_many_by_chat_id(&1).await?;
+        assert_eq!(result_before.len(), 3);
+        
+        // Elimina Bob (user_id=2)
+        // CASCADE DELETE eliminerà i suoi metadata in tutte le chat
+        sqlx::query!("DELETE FROM users WHERE user_id = ?", 2)
+            .execute(&pool)
+            .await?;
+        
+        // Dopo: General Chat dovrebbe avere solo 2 membri
+        let result_after = repo.find_many_by_chat_id(&1).await?;
+        assert_eq!(result_after.len(), 2);
+        
+        // Verifica che Bob non sia più presente
+        let user_ids: Vec<i32> = result_after.iter().map(|m| m.user_id).collect();
+        assert!(!user_ids.contains(&2)); // bob non c'è più
+        assert!(user_ids.contains(&1)); // alice c'è ancora
+        assert!(user_ids.contains(&3)); // charlie c'è ancora
+        
+        Ok(())
+    }
+
+    /// Test CASCADE: eliminazione di una chat elimina tutti i metadata associati
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_find_many_by_chat_id_cascade_delete_chat(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Prima: General Chat (chat_id=1) ha 3 membri
+        let result_before = repo.find_many_by_chat_id(&1).await?;
+        assert_eq!(result_before.len(), 3);
+        
+        // Elimina la chat
+        // CASCADE DELETE eliminerà tutti i metadata associati
+        sqlx::query!("DELETE FROM chats WHERE chat_id = ?", 1)
+            .execute(&pool)
+            .await?;
+        
+        // Dopo: nessun metadata dovrebbe esistere per quella chat
+        let result_after = repo.find_many_by_chat_id(&1).await?;
+        assert_eq!(result_after.len(), 0);
+        assert!(result_after.is_empty());
+        
+        // Verifica nel database che i metadata siano stati eliminati
+        let count = sqlx::query!(
+            "SELECT COUNT(*) as count FROM userchatmetadata WHERE chat_id = ?",
+            1
+        )
+        .fetch_one(&pool)
+        .await?;
+        assert_eq!(count.count, 0, "Tutti i metadata dovrebbero essere eliminati (CASCADE)");
+        
+        Ok(())
+    }
+
+    /// Test CASCADE: eliminazione di utente che è OWNER in più chat
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_find_many_by_chat_id_cascade_delete_owner(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Alice (user_id=1) è OWNER in chat 1, 2 e 3
+        // Verifica stato iniziale
+        let chat1_before = repo.find_many_by_chat_id(&1).await?;
+        let chat2_before = repo.find_many_by_chat_id(&2).await?;
+        let chat3_before = repo.find_many_by_chat_id(&3).await?;
+        
+        assert_eq!(chat1_before.len(), 3); // General Chat
+        assert_eq!(chat2_before.len(), 2); // Private Alice-Bob
+        assert_eq!(chat3_before.len(), 2); // Dev Team
+        
+        // Elimina Alice
+        // CASCADE eliminerà i suoi metadata da tutte le chat
+        sqlx::query!("DELETE FROM users WHERE user_id = ?", 1)
+            .execute(&pool)
+            .await?;
+        
+        // Verifica che Alice sia stata rimossa da tutte le chat
+        let chat1_after = repo.find_many_by_chat_id(&1).await?;
+        let chat2_after = repo.find_many_by_chat_id(&2).await?;
+        let chat3_after = repo.find_many_by_chat_id(&3).await?;
+        
+        assert_eq!(chat1_after.len(), 2); // bob e charlie rimangono
+        assert_eq!(chat2_after.len(), 1); // solo bob rimane
+        assert_eq!(chat3_after.len(), 1); // solo charlie rimane
+        
+        // Verifica che Alice non sia in nessuna chat
+        assert!(!chat1_after.iter().any(|m| m.user_id == 1));
+        assert!(!chat2_after.iter().any(|m| m.user_id == 1));
+        assert!(!chat3_after.iter().any(|m| m.user_id == 1));
+        
+        Ok(())
+    }
+
+    /// Test: aggiunta di un nuovo membro e verifica che sia trovato
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_find_many_by_chat_id_after_adding_member(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Dev Team (chat_id=3) inizialmente ha 2 membri: alice e charlie
+        let result_before = repo.find_many_by_chat_id(&3).await?;
+        assert_eq!(result_before.len(), 2);
+        
+        // Aggiungi Bob al Dev Team
+        sqlx::query!(
+            r#"
+            INSERT INTO userchatmetadata (user_id, chat_id, user_role, member_since, messages_visible_from, messages_received_until)
+            VALUES (?, ?, 'MEMBER', NOW(), NOW(), NOW())
+            "#,
+            2, 3
+        )
+        .execute(&pool)
+        .await?;
+        
+        // Ora dovrebbe avere 3 membri
+        let result_after = repo.find_many_by_chat_id(&3).await?;
+        assert_eq!(result_after.len(), 3);
+        
+        // Verifica che Bob sia presente
+        let bob = result_after.iter().find(|m| m.user_id == 2);
+        assert!(bob.is_some());
+        assert_eq!(bob.unwrap().user_role, Some(UserRole::Member));
+        
+        Ok(())
+    }
+
+    /// Test: rimozione di un membro specifico
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_find_many_by_chat_id_after_removing_member(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // General Chat (chat_id=1) ha 3 membri
+        let result_before = repo.find_many_by_chat_id(&1).await?;
+        assert_eq!(result_before.len(), 3);
+        
+        // Rimuovi Charlie dalla General Chat
+        sqlx::query!(
+            "DELETE FROM userchatmetadata WHERE user_id = ? AND chat_id = ?",
+            3, 1
+        )
+        .execute(&pool)
+        .await?;
+        
+        // Ora dovrebbe avere 2 membri
+        let result_after = repo.find_many_by_chat_id(&1).await?;
+        assert_eq!(result_after.len(), 2);
+        
+        // Verifica che Charlie non ci sia più
+        assert!(!result_after.iter().any(|m| m.user_id == 3));
+        
+        // Ma alice e bob dovrebbero essere ancora presenti
+        assert!(result_after.iter().any(|m| m.user_id == 1));
+        assert!(result_after.iter().any(|m| m.user_id == 2));
+        
+        Ok(())
+    }
+
+    /// Test: verifica che i timestamp siano caricati correttamente
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_find_many_by_chat_id_with_timestamps(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        let result = repo.find_many_by_chat_id(&1).await?;
+        
+        // Verifica che tutti i membri abbiano timestamp validi
+        for metadata in result {
+            assert!(metadata.member_since > chrono::DateTime::<chrono::Utc>::default());
+            assert!(metadata.messages_visible_from > chrono::DateTime::<chrono::Utc>::default());
+            assert!(metadata.messages_received_until > chrono::DateTime::<chrono::Utc>::default());
+        }
+        
+        Ok(())
+    }
+
+    /// Test CASCADE: eliminazione di più utenti contemporaneamente
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_find_many_by_chat_id_cascade_delete_multiple_users(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // General Chat (chat_id=1) ha 3 membri
+        let result_before = repo.find_many_by_chat_id(&1).await?;
+        assert_eq!(result_before.len(), 3);
+        
+        // Elimina Bob e Charlie
+        sqlx::query!("DELETE FROM users WHERE user_id IN (?, ?)", 2, 3)
+            .execute(&pool)
+            .await?;
+        
+        // Dovrebbe rimanere solo Alice
+        let result_after = repo.find_many_by_chat_id(&1).await?;
+        assert_eq!(result_after.len(), 1);
+        assert_eq!(result_after[0].user_id, 1);
+        assert_eq!(result_after[0].user_role, Some(UserRole::Owner));
+        
+        Ok(())
+    }
+
+    /// Test generico - esempio di utilizzo di #[sqlx::test]
+    #[sqlx::test]
     async fn test_example(_pool: MySqlPool) -> sqlx::Result<()> {
         // Il database è stato creato automaticamente con migrations applicate
-        // I fixtures sono stati caricati in ordine: users, chats (con userchatmetadata)
-        // Implementa qui i tuoi test per UserChatMetadataRepository
+        // I fixtures sono stati caricati in ordine: users, chats, messages
+        // Implementa qui i tuoi test per MessageRepository
         Ok(())
     }
 }

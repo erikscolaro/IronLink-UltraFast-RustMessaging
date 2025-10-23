@@ -413,7 +413,7 @@ mod tests {
     }
 
     /// Test generico - esempio di utilizzo di #[sqlx::test]
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    #[sqlx::test]
     async fn test_example(_pool: MySqlPool) -> sqlx::Result<()> {
         // Il database è stato creato automaticamente con migrations applicate
         // I fixtures sono stati caricati in ordine: users, chats
