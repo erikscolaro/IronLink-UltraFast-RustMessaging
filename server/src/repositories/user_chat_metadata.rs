@@ -2855,4 +2855,446 @@ mod tests {
         Ok(())
     }
 
+    /*----------------------------------*/
+    /* Unit tests: read (casi negativi) */
+    /*----------------------------------*/
+
+    /// Test NEGATIVO: read di metadata inesistente (user_id valido ma non in quella chat)
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_read_not_exists_valid_user(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Bob (user_id=2) non è nella Dev Team chat (chat_id=3)
+        let result = repo.read(&(2, 3)).await?;
+        
+        assert!(result.is_none(), "Il metadata non dovrebbe esistere");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: read di metadata inesistente (chat_id valido ma utente non membro)
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_read_not_exists_valid_chat(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Charlie (user_id=3) non è nella chat privata Alice-Bob (chat_id=2)
+        let result = repo.read(&(3, 2)).await?;
+        
+        assert!(result.is_none(), "Il metadata non dovrebbe esistere");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: read con user_id completamente inesistente
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_read_invalid_user_id(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        let result = repo.read(&(999, 1)).await?;
+        
+        assert!(result.is_none(), "Nessun metadata dovrebbe esistere per user_id inesistente");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: read con chat_id completamente inesistente
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_read_invalid_chat_id(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        let result = repo.read(&(1, 999)).await?;
+        
+        assert!(result.is_none(), "Nessun metadata dovrebbe esistere per chat_id inesistente");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: read con entrambi user_id e chat_id inesistenti
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_read_both_invalid(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        let result = repo.read(&(888, 999)).await?;
+        
+        assert!(result.is_none(), "Nessun metadata dovrebbe esistere");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: read con ID negativi
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_read_negative_ids(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        let result = repo.read(&(-1, -1)).await?;
+        
+        assert!(result.is_none(), "Nessun metadata dovrebbe esistere per ID negativi");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: read con ID zero
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_read_zero_ids(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        let result = repo.read(&(0, 0)).await?;
+        
+        assert!(result.is_none(), "Nessun metadata dovrebbe esistere per ID zero");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO CASCADE: read dopo delete dell'utente (CASCADE DELETE)
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_read_after_cascade_delete_user(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Bob (user_id=2) è nella General Chat (chat_id=1)
+        let before = repo.read(&(2, 1)).await?;
+        assert!(before.is_some(), "Bob dovrebbe essere nella General Chat");
+        
+        // Elimina Bob - CASCADE dovrebbe eliminare il metadata
+        sqlx::query!("DELETE FROM users WHERE user_id = ?", 2)
+            .execute(&pool)
+            .await?;
+        
+        // Read dovrebbe restituire None
+        let after = repo.read(&(2, 1)).await?;
+        assert!(after.is_none(), "Il metadata dovrebbe essere eliminato (CASCADE DELETE su user_id)");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO CASCADE: read dopo delete della chat (CASCADE DELETE)
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_read_after_cascade_delete_chat(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Alice (user_id=1) è nella General Chat (chat_id=1)
+        let before = repo.read(&(1, 1)).await?;
+        assert!(before.is_some(), "Alice dovrebbe essere nella General Chat");
+        
+        // Elimina la General Chat - CASCADE dovrebbe eliminare tutti i metadata
+        sqlx::query!("DELETE FROM chats WHERE chat_id = ?", 1)
+            .execute(&pool)
+            .await?;
+        
+        // Read dovrebbe restituire None
+        let after = repo.read(&(1, 1)).await?;
+        assert!(after.is_none(), "Il metadata dovrebbe essere eliminato (CASCADE DELETE su chat_id)");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO CASCADE: read multipli dopo delete dell'utente
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_read_multiple_after_cascade_delete_user(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Alice è in 3 chat (fixtures)
+        let chats_before = repo.find_many_by_user_id(&1).await?;
+        let alice_chat_ids: Vec<i32> = chats_before.iter().map(|m| m.chat_id).collect();
+        
+        // Verifica che Alice sia in tutte quelle chat
+        for &chat_id in &alice_chat_ids {
+            let metadata = repo.read(&(1, chat_id)).await?;
+            assert!(metadata.is_some(), "Alice dovrebbe essere nella chat {}", chat_id);
+        }
+        
+        // Elimina Alice
+        sqlx::query!("DELETE FROM users WHERE user_id = ?", 1)
+            .execute(&pool)
+            .await?;
+        
+        // Tutte le read dovrebbero restituire None
+        for &chat_id in &alice_chat_ids {
+            let metadata = repo.read(&(1, chat_id)).await?;
+            assert!(metadata.is_none(), "Il metadata di Alice nella chat {} dovrebbe essere eliminato", chat_id);
+        }
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO CASCADE: read multipli dopo delete della chat
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_read_multiple_after_cascade_delete_chat(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // General Chat ha 3 membri
+        let members_before = repo.find_many_by_chat_id(&1).await?;
+        let user_ids: Vec<i32> = members_before.iter().map(|m| m.user_id).collect();
+        
+        assert_eq!(user_ids.len(), 3, "La General Chat dovrebbe avere 3 membri");
+        
+        // Verifica che tutti i membri siano nella chat
+        for &user_id in &user_ids {
+            let metadata = repo.read(&(user_id, 1)).await?;
+            assert!(metadata.is_some(), "L'utente {} dovrebbe essere nella General Chat", user_id);
+        }
+        
+        // Elimina la General Chat
+        sqlx::query!("DELETE FROM chats WHERE chat_id = ?", 1)
+            .execute(&pool)
+            .await?;
+        
+        // Tutte le read dovrebbero restituire None
+        for &user_id in &user_ids {
+            let metadata = repo.read(&(user_id, 1)).await?;
+            assert!(metadata.is_none(), "Il metadata dell'utente {} dovrebbe essere eliminato", user_id);
+        }
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: read dopo delete manuale (non CASCADE)
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_read_after_manual_delete(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Crea un nuovo metadata
+        let new_chat_id = sqlx::query!(
+            "INSERT INTO chats (title, description, chat_type) VALUES (?, ?, ?)",
+            "Test Chat",
+            None::<String>,
+            "GROUP"
+        )
+        .execute(&pool)
+        .await?
+        .last_insert_id() as i32;
+        
+        let now = chrono::Utc::now();
+        let dto = CreateUserChatMetadataDTO {
+            user_id: 1,
+            chat_id: new_chat_id,
+            user_role: Some(UserRole::Owner),
+            member_since: now,
+            messages_visible_from: now,
+            messages_received_until: now,
+        };
+        
+        repo.create(&dto).await?;
+        
+        // Verifica che esista
+        let before = repo.read(&(1, new_chat_id)).await?;
+        assert!(before.is_some(), "Il metadata dovrebbe esistere");
+        
+        // Delete manuale
+        repo.delete(&(1, new_chat_id)).await?;
+        
+        // Read dovrebbe restituire None
+        let after = repo.read(&(1, new_chat_id)).await?;
+        assert!(after.is_none(), "Il metadata non dovrebbe più esistere dopo delete");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO CASCADE: read dopo creazione e immediata eliminazione CASCADE
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_read_after_create_and_immediate_cascade_delete(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Crea un nuovo utente
+        let new_user_id = sqlx::query!(
+            "INSERT INTO users (username, password) VALUES (?, ?)",
+            "tempuser",
+            "password"
+        )
+        .execute(&pool)
+        .await?
+        .last_insert_id() as i32;
+        
+        // Crea metadata
+        let now = chrono::Utc::now();
+        let dto = CreateUserChatMetadataDTO {
+            user_id: new_user_id,
+            chat_id: 1,
+            user_role: Some(UserRole::Member),
+            member_since: now,
+            messages_visible_from: now,
+            messages_received_until: now,
+        };
+        
+        repo.create(&dto).await?;
+        
+        // Verifica che esista
+        let before = repo.read(&(new_user_id, 1)).await?;
+        assert!(before.is_some(), "Il metadata dovrebbe esistere");
+        
+        // Elimina l'utente immediatamente
+        sqlx::query!("DELETE FROM users WHERE user_id = ?", new_user_id)
+            .execute(&pool)
+            .await?;
+        
+        // Read dovrebbe restituire None
+        let after = repo.read(&(new_user_id, 1)).await?;
+        assert!(after.is_none(), "Il metadata dovrebbe essere eliminato immediatamente (CASCADE)");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: read con combinazioni di ID validi e invalidi
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_read_mixed_valid_invalid_ids(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        // User valido, chat invalida
+        let result1 = repo.read(&(1, 999)).await?;
+        assert!(result1.is_none());
+        
+        // User invalido, chat valida
+        let result2 = repo.read(&(999, 1)).await?;
+        assert!(result2.is_none());
+        
+        // User negativo, chat valida
+        let result3 = repo.read(&(-5, 1)).await?;
+        assert!(result3.is_none());
+        
+        // User valido, chat negativa
+        let result4 = repo.read(&(1, -5)).await?;
+        assert!(result4.is_none());
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO CASCADE: scenario complesso - read dopo eliminazioni multiple
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_read_cascade_complex_scenario(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Crea una matrice di test: 2 utenti, 2 chat
+        let user1_id = sqlx::query!(
+            "INSERT INTO users (username, password) VALUES (?, ?)",
+            "user1",
+            "password"
+        )
+        .execute(&pool)
+        .await?
+        .last_insert_id() as i32;
+        
+        let user2_id = sqlx::query!(
+            "INSERT INTO users (username, password) VALUES (?, ?)",
+            "user2",
+            "password"
+        )
+        .execute(&pool)
+        .await?
+        .last_insert_id() as i32;
+        
+        let chat1_id = sqlx::query!(
+            "INSERT INTO chats (title, description, chat_type) VALUES (?, ?, ?)",
+            "Chat 1",
+            None::<String>,
+            "GROUP"
+        )
+        .execute(&pool)
+        .await?
+        .last_insert_id() as i32;
+        
+        let chat2_id = sqlx::query!(
+            "INSERT INTO chats (title, description, chat_type) VALUES (?, ?, ?)",
+            "Chat 2",
+            None::<String>,
+            "GROUP"
+        )
+        .execute(&pool)
+        .await?
+        .last_insert_id() as i32;
+        
+        let now = chrono::Utc::now();
+        
+        // Crea 4 metadata (user1 in chat1, user1 in chat2, user2 in chat1, user2 in chat2)
+        for &user_id in &[user1_id, user2_id] {
+            for &chat_id in &[chat1_id, chat2_id] {
+                let dto = CreateUserChatMetadataDTO {
+                    user_id,
+                    chat_id,
+                    user_role: Some(UserRole::Member),
+                    member_since: now,
+                    messages_visible_from: now,
+                    messages_received_until: now,
+                };
+                repo.create(&dto).await?;
+            }
+        }
+        
+        // Verifica che tutti esistano
+        assert!(repo.read(&(user1_id, chat1_id)).await?.is_some());
+        assert!(repo.read(&(user1_id, chat2_id)).await?.is_some());
+        assert!(repo.read(&(user2_id, chat1_id)).await?.is_some());
+        assert!(repo.read(&(user2_id, chat2_id)).await?.is_some());
+        
+        // Elimina user1 - dovrebbe eliminare 2 metadata
+        sqlx::query!("DELETE FROM users WHERE user_id = ?", user1_id)
+            .execute(&pool)
+            .await?;
+        
+        assert!(repo.read(&(user1_id, chat1_id)).await?.is_none(), "user1-chat1 dovrebbe essere eliminato");
+        assert!(repo.read(&(user1_id, chat2_id)).await?.is_none(), "user1-chat2 dovrebbe essere eliminato");
+        assert!(repo.read(&(user2_id, chat1_id)).await?.is_some(), "user2-chat1 dovrebbe esistere");
+        assert!(repo.read(&(user2_id, chat2_id)).await?.is_some(), "user2-chat2 dovrebbe esistere");
+        
+        // Elimina chat1 - dovrebbe eliminare 1 metadata rimanente
+        sqlx::query!("DELETE FROM chats WHERE chat_id = ?", chat1_id)
+            .execute(&pool)
+            .await?;
+        
+        assert!(repo.read(&(user2_id, chat1_id)).await?.is_none(), "user2-chat1 dovrebbe essere eliminato");
+        assert!(repo.read(&(user2_id, chat2_id)).await?.is_some(), "user2-chat2 dovrebbe ancora esistere");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: read dopo update fallito non dovrebbe influenzare il risultato
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_read_after_failed_operations(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Tenta di creare con FK invalida (dovrebbe fallire)
+        let now = chrono::Utc::now();
+        let invalid_dto = CreateUserChatMetadataDTO {
+            user_id: 999,
+            chat_id: 1,
+            user_role: Some(UserRole::Member),
+            member_since: now,
+            messages_visible_from: now,
+            messages_received_until: now,
+        };
+        
+        let create_result = repo.create(&invalid_dto).await;
+        assert!(create_result.is_err(), "La creazione dovrebbe fallire");
+        
+        // Read dovrebbe confermare che non esiste
+        let after_failed_create = repo.read(&(999, 1)).await?;
+        assert!(after_failed_create.is_none(), "Non dovrebbe esistere dopo creazione fallita");
+        
+        // Tenta di leggere un metadata esistente per confermare che il database è ancora consistente
+        let existing = repo.read(&(1, 1)).await?;
+        assert!(existing.is_some(), "I metadata esistenti dovrebbero essere ancora accessibili");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: read ripetuti dopo CASCADE DELETE confermano persistenza dell'eliminazione
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_read_multiple_times_after_cascade(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Bob è nella General Chat
+        assert!(repo.read(&(2, 1)).await?.is_some());
+        
+        // Elimina Bob
+        sqlx::query!("DELETE FROM users WHERE user_id = ?", 2)
+            .execute(&pool)
+            .await?;
+        
+        // Leggi multiple volte - dovrebbe sempre restituire None
+        for _ in 0..5 {
+            let result = repo.read(&(2, 1)).await?;
+            assert!(result.is_none(), "Dovrebbe sempre restituire None dopo CASCADE DELETE");
+        }
+        
+        Ok(())
+    }
+
 }
