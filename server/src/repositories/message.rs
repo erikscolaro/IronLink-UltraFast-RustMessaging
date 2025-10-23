@@ -193,10 +193,10 @@ impl Delete<i32> for MessageRepository {
 #[cfg(test)]
 mod tests {
 
-    use sqlx::MySqlPool;
+    use sqlx::{MySqlPool};
 
     /// Test generico - esempio di utilizzo di #[sqlx::test]
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats", "messages")))]
+    #[sqlx::test]
     async fn test_example(_pool: MySqlPool) -> sqlx::Result<()> {
         // Il database è stato creato automaticamente con migrations applicate
         // I fixtures sono stati caricati in ordine: users, chats, messages

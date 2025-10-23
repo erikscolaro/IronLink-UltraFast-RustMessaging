@@ -15,27 +15,23 @@
 -- ============================================================================
 
 -- Creazione database
--- CREATE DATABASE IF NOT EXISTS `rugginedb` 
---     DEFAULT CHARACTER SET utf8mb4 
---     COLLATE utf8mb4_unicode_ci;
--- 
+CREATE DATABASE IF NOT EXISTS `rugginedb` 
+    DEFAULT CHARACTER SET utf8mb4 
+    COLLATE utf8mb4_unicode_ci;
+
 -- Creazione utente dedicato per l'applicazione
 -- Creiamo l'utente per localhost, 127.0.0.1 e % (accesso remoto)
--- CREATE USER IF NOT EXISTS 'ruggine'@'localhost' IDENTIFIED BY 'ferro';
--- CREATE USER IF NOT EXISTS 'ruggine'@'127.0.0.1' IDENTIFIED BY 'ferro';
--- CREATE USER IF NOT EXISTS 'ruggine'@'%' IDENTIFIED BY 'ferro';
+CREATE USER IF NOT EXISTS 'ruggine'@'localhost' IDENTIFIED BY 'ferro';
 
 -- Assegnazione privilegi: solo quelli necessari (principio del minimo privilegio)
 -- SELECT, INSERT, UPDATE, DELETE per operazioni CRUD
--- CREATE, INDEX, ALTER per gestione schema (migrazioni future)
--- GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, INDEX, ALTER ON rugginedb.* TO 'ruggine'@'localhost';
--- GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, INDEX, ALTER ON rugginedb.* TO 'ruggine'@'127.0.0.1';
--- GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, INDEX, ALTER ON rugginedb.* TO 'ruggine'@'%';
--- 
--- -- Applica i privilegi
--- FLUSH PRIVILEGES;
+CREATE, INDEX, ALTER per gestione schema (migrazioni future)
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, INDEX, ALTER ON rugginedb.* TO 'ruggine'@'localhost';
 
--- USE `rugginedb`;
+-- -- Applica i privilegi
+FLUSH PRIVILEGES;
+
+USE `rugginedb`;
 -- MySQL dump 10.13  Distrib 8.0.43, for Win64 (x86_64)
 --
 -- Host: localhost    Database: rugginedb
