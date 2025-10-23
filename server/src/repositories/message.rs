@@ -834,7 +834,7 @@ mod tests {
 
 
     //------------------------------
-    //TESTS FOR behavior on cascade deletions
+    //TESTS FOR cascade deletions behavior
     //------------------------------
     #[sqlx::test]
     async fn test_crud_cascade_behavior_on_chat_deletion(pool: MySqlPool) -> sqlx::Result<()> {

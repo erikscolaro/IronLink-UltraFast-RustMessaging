@@ -419,4 +419,487 @@ mod tests {
         // Implementa qui i tuoi test per ChatRepository
         Ok(())
     }
+
+
+    /*------------------------------------------- */
+    /* Unit tests: create                         */
+    /*------------------------------------------- */
+    #[sqlx::test]
+    async fn test_create_group_chat_success(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = ChatRepository::new(pool);
+        
+        // Crea DTO per una chat di gruppo
+        let create_dto = CreateChatDTO {
+            title: Some("Test Group Chat".to_string()),
+            description: Some("A test group chat for testing".to_string()),
+            chat_type: ChatType::Group,
+        };
+        
+        // Testa la creazione
+        let created_chat = repo.create(&create_dto).await?;
+        
+        // Verifica che la chat sia stata creata correttamente
+        assert!(created_chat.chat_id > 0);
+        assert_eq!(created_chat.title, Some("Test Group Chat".to_string()));
+        assert_eq!(created_chat.description, Some("A test group chat for testing".to_string()));
+        assert_eq!(created_chat.chat_type, ChatType::Group);
+        
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_create_private_chat_success(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = ChatRepository::new(pool);
+        
+        // Crea DTO per una chat privata (senza title/description)
+        let create_dto = CreateChatDTO {
+            title: None,
+            description: None,
+            chat_type: ChatType::Private,
+        };
+        
+        let created_chat = repo.create(&create_dto).await?;
+        
+        assert!(created_chat.chat_id > 0);
+        assert_eq!(created_chat.title, None);
+        assert_eq!(created_chat.description, None);
+        assert_eq!(created_chat.chat_type, ChatType::Private);
+        
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_create_chat_with_minimal_data(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = ChatRepository::new(pool);
+        
+        // Crea chat con solo il campo obbligatorio
+        let create_dto = CreateChatDTO {
+            title: None,
+            description: None,
+            chat_type: ChatType::Group,
+        };
+        
+        let created_chat = repo.create(&create_dto).await?;
+        
+        assert!(created_chat.chat_id > 0);
+        assert_eq!(created_chat.title, None);
+        assert_eq!(created_chat.description, None);
+        assert_eq!(created_chat.chat_type, ChatType::Group);
+        
+        Ok(())
+    }
+
+
+    /*------------------------------------------- */
+    /* Unit tests: read                           */
+    /*------------------------------------------- */
+    #[sqlx::test]
+    async fn test_read_existing_chat(pool: MySqlPool) -> sqlx::Result<()> {
+        // Setup: Crea una chat direttamente nel database
+        sqlx::query!("INSERT INTO chats (chat_id, title, description, chat_type) VALUES (1, 'Test Chat', 'Test Description', 'GROUP')")
+            .execute(&pool)
+            .await?;
+        
+        let repo = ChatRepository::new(pool);
+        
+        // Testa la lettura
+        let chat = repo.read(&1).await?;
+        
+        assert!(chat.is_some());
+        let chat = chat.unwrap();
+        assert_eq!(chat.chat_id, 1);
+        assert_eq!(chat.title, Some("Test Chat".to_string()));
+        assert_eq!(chat.description, Some("Test Description".to_string()));
+        assert_eq!(chat.chat_type, ChatType::Group);
+        
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_read_nonexistent_chat(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = ChatRepository::new(pool);
+        
+        // Testa la lettura di una chat inesistente
+        let chat = repo.read(&999).await?;
+        
+        assert!(chat.is_none());
+        
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_read_private_chat(pool: MySqlPool) -> sqlx::Result<()> {
+        // Setup: Crea una chat privata
+        sqlx::query!("INSERT INTO chats (chat_id, title, description, chat_type) VALUES (1, NULL, NULL, 'PRIVATE')")
+            .execute(&pool)
+            .await?;
+        
+        let repo = ChatRepository::new(pool);
+        
+        let chat = repo.read(&1).await?;
+        
+        assert!(chat.is_some());
+        let chat = chat.unwrap();
+        assert_eq!(chat.chat_id, 1);
+        assert_eq!(chat.title, None);
+        assert_eq!(chat.description, None);
+        assert_eq!(chat.chat_type, ChatType::Private);
+        
+        Ok(())
+    }
+
+/*------------------------------------------- */
+/* Unit tests: update                         */
+/*------------------------------------------- */
+    #[sqlx::test]
+    async fn test_update_chat_title_and_description(pool: MySqlPool) -> sqlx::Result<()> {
+        // Setup: Crea una chat
+        sqlx::query!("INSERT INTO chats (chat_id, title, description, chat_type) VALUES (1, 'Original Title', 'Original Description', 'GROUP')")
+            .execute(&pool)
+            .await?;
+        
+        let repo = ChatRepository::new(pool);
+        
+        // Crea DTO per l'aggiornamento
+        let update_dto = UpdateChatDTO {
+            title: Some("Updated Title".to_string()),        
+            description: Some("Updated Description".to_string()), 
+        };
+        
+        // Testa l'aggiornamento
+        let updated_chat = repo.update(&1, &update_dto).await?;
+        
+        assert_eq!(updated_chat.chat_id, 1);
+        assert_eq!(updated_chat.title, Some("Updated Title".to_string()));
+        assert_eq!(updated_chat.description, Some("Updated Description".to_string()));
+        assert_eq!(updated_chat.chat_type, ChatType::Group);
+        
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_update_chat_only_title(pool: MySqlPool) -> sqlx::Result<()> {
+        // Setup
+        sqlx::query!("INSERT INTO chats (chat_id, title, description, chat_type) VALUES (1, 'Original Title', 'Original Description', 'GROUP')")
+            .execute(&pool)
+            .await?;
+        
+        let repo = ChatRepository::new(pool);
+        
+        // Aggiorna solo il titolo
+        let update_dto = UpdateChatDTO {
+            title: Some("New Title Only".to_string()),  
+            description: None, // Non aggiornare la description
+        };
+        
+        let updated_chat = repo.update(&1, &update_dto).await?;
+        
+        assert_eq!(updated_chat.title, Some("New Title Only".to_string()));
+        assert_eq!(updated_chat.description, Some("Original Description".to_string())); // Rimasta invariata
+        
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_update_chat_with_no_changes(pool: MySqlPool) -> sqlx::Result<()> {
+        // Setup
+        sqlx::query!("INSERT INTO chats (chat_id, title, description, chat_type) VALUES (1, 'Original Title', 'Original Description', 'GROUP')")
+            .execute(&pool)
+            .await?;
+        
+        let repo = ChatRepository::new(pool);
+        
+        // DTO senza cambiamenti (tutti i campi None)
+        let update_dto = UpdateChatDTO {
+            title: None,
+            description: None,
+        };
+        
+        // Dovrebbe restituire la chat invariata
+        let updated_chat = repo.update(&1, &update_dto).await?;
+        
+        assert_eq!(updated_chat.title, Some("Original Title".to_string()));
+        assert_eq!(updated_chat.description, Some("Original Description".to_string()));
+        
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_update_nonexistent_chat(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = ChatRepository::new(pool);
+        
+        let update_dto = UpdateChatDTO {
+            title: Some("New Title".to_string()),  
+            description: None,
+        };
+        
+        // Testa l'aggiornamento di una chat inesistente
+        let result = repo.update(&999, &update_dto).await;
+        
+        assert!(result.is_err());
+        match result {
+            Err(sqlx::Error::RowNotFound) => {}, // Comportamento atteso
+            _ => panic!("Expected RowNotFound error"),
+        }
+        
+        Ok(())
+    }
+    /*------------------------------------------- */
+    /* Unit tests: delete                         */
+    /*------------------------------------------- */
+    #[sqlx::test]
+    async fn test_delete_existing_chat(pool: MySqlPool) -> sqlx::Result<()> {
+        // Setup
+        sqlx::query!("INSERT INTO chats (chat_id, title, description, chat_type) VALUES (1, 'Chat to Delete', 'Will be deleted', 'GROUP')")
+            .execute(&pool)
+            .await?;
+        
+        let repo = ChatRepository::new(pool.clone());
+        
+        // Verifica che la chat esista prima della cancellazione
+        let chat_before = repo.read(&1).await?;
+        assert!(chat_before.is_some());
+        
+        // Testa la cancellazione
+        let result = repo.delete(&1).await;
+        assert!(result.is_ok());
+        
+        // Verifica che la chat sia stata eliminata
+        let chat_after = repo.read(&1).await?;
+        assert!(chat_after.is_none());
+        
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_delete_nonexistent_chat(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = ChatRepository::new(pool);
+        
+        // Testa la cancellazione di una chat inesistente
+        // Dovrebbe completarsi senza errori (operazione idempotente)
+        let result = repo.delete(&999).await;
+        assert!(result.is_ok());
+        
+        Ok(())
+    }
+
+    /*------------------------------------------- */
+    /* Unit tests:  cascade deletions behavior    */
+    /*------------------------------------------- */
+    #[sqlx::test]
+    async fn test_crud_cascade_delete_chat_removes_metadata(pool: MySqlPool) -> sqlx::Result<()> {
+        // Setup: Crea utenti e chat
+        sqlx::query!("INSERT INTO users (user_id, username, password) VALUES (1, 'alice', 'password'), (2, 'bob', 'password')")
+            .execute(&pool)
+            .await?;
+        
+        let repo = ChatRepository::new(pool.clone());
+        
+        // Crea una chat tramite CRUD
+        let create_dto = CreateChatDTO {
+            title: Some("Test Chat".to_string()),
+            description: Some("Test Description".to_string()),
+            chat_type: ChatType::Group,
+        };
+        
+        let created_chat = repo.create(&create_dto).await?;
+        let chat_id = created_chat.chat_id;
+        
+        // Aggiungi metadata utenti alla chat
+        sqlx::query!("INSERT INTO userchatmetadata (user_id, chat_id, messages_visible_from, messages_received_until, user_role, member_since) VALUES (1, ?, NOW(), NOW(), 'OWNER', NOW()), (2, ?, NOW(), NOW(), 'MEMBER', NOW())", chat_id, chat_id)
+            .execute(&pool)
+            .await?;
+        
+        // Verifica che i metadata esistano
+        let metadata_count_before = sqlx::query!(
+            "SELECT COUNT(*) as count FROM userchatmetadata WHERE chat_id = ?",
+            chat_id
+        )
+        .fetch_one(&pool)
+        .await?;
+        assert_eq!(metadata_count_before.count, 2);
+        
+        // Elimina la chat (dovrebbe attivare CASCADE DELETE sui metadata)
+        let result = repo.delete(&chat_id).await;
+        assert!(result.is_ok());
+        
+        // Verifica che i metadata siano stati eliminati automaticamente
+        let metadata_count_after = sqlx::query!(
+            "SELECT COUNT(*) as count FROM userchatmetadata WHERE chat_id = ?",
+            chat_id
+        )
+        .fetch_one(&pool)
+        .await?;
+        assert_eq!(metadata_count_after.count, 0);
+        
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_crud_cascade_delete_chat_removes_messages(pool: MySqlPool) -> sqlx::Result<()> {
+        // Setup
+        sqlx::query!("INSERT INTO users (user_id, username, password) VALUES (1, 'alice', 'password')")
+            .execute(&pool)
+            .await?;
+        
+        let repo = ChatRepository::new(pool.clone());
+        
+        // Crea una chat
+        let create_dto = CreateChatDTO {
+            title: Some("Chat with Messages".to_string()),
+            description: None,
+            chat_type: ChatType::Group,
+        };
+        
+        let created_chat = repo.create(&create_dto).await?;
+        let chat_id = created_chat.chat_id;
+        
+        // Aggiungi metadata utente
+        sqlx::query!("INSERT INTO userchatmetadata (user_id, chat_id, messages_visible_from, messages_received_until, user_role, member_since) VALUES (1, ?, NOW(), NOW(), 'OWNER', NOW())", chat_id)
+            .execute(&pool)
+            .await?;
+        
+        // Aggiungi messaggi alla chat
+        sqlx::query!("INSERT INTO messages (chat_id, sender_id, content, created_at) VALUES (?, 1, 'Message 1', NOW()), (?, 1, 'Message 2', NOW())", chat_id, chat_id)
+            .execute(&pool)
+            .await?;
+        
+        // Verifica che i messaggi esistano
+        let message_count_before = sqlx::query!(
+            "SELECT COUNT(*) as count FROM messages WHERE chat_id = ?",
+            chat_id
+        )
+        .fetch_one(&pool)
+        .await?;
+        assert_eq!(message_count_before.count, 2);
+        
+        // Elimina la chat (dovrebbe attivare CASCADE DELETE sui messaggi)
+        let result = repo.delete(&chat_id).await;
+        assert!(result.is_ok());
+        
+        // Verifica che i messaggi siano stati eliminati automaticamente
+        let message_count_after = sqlx::query!(
+            "SELECT COUNT(*) as count FROM messages WHERE chat_id = ?",
+            chat_id
+        )
+        .fetch_one(&pool)
+        .await?;
+        assert_eq!(message_count_after.count, 0);
+        
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_crud_cascade_delete_chat_removes_invitations(pool: MySqlPool) -> sqlx::Result<()> {
+        // Setup
+        sqlx::query!("INSERT INTO users (user_id, username, password) VALUES (1, 'alice', 'password'), (2, 'bob', 'password')")
+            .execute(&pool)
+            .await?;
+        
+        let repo = ChatRepository::new(pool.clone());
+        
+        // Crea una chat
+        let create_dto = CreateChatDTO {
+            title: Some("Chat with Invitations".to_string()),
+            description: None,
+            chat_type: ChatType::Group,
+        };
+        
+        let created_chat = repo.create(&create_dto).await?;
+        let chat_id = created_chat.chat_id;
+        
+        // Aggiungi inviti per la chat
+        sqlx::query!("INSERT INTO invitations (target_chat_id, invited_id, invitee_id, state, created_at) VALUES (?, 2, 1, 'PENDING', NOW())", chat_id)
+            .execute(&pool)
+            .await?;
+        
+        // Verifica che gli inviti esistano
+        let invitation_count_before = sqlx::query!(
+            "SELECT COUNT(*) as count FROM invitations WHERE target_chat_id = ?",
+            chat_id
+        )
+        .fetch_one(&pool)
+        .await?;
+        assert_eq!(invitation_count_before.count, 1);
+        
+        // Elimina la chat (dovrebbe attivare CASCADE DELETE sugli inviti)
+        let result = repo.delete(&chat_id).await;
+        assert!(result.is_ok());
+        
+        // Verifica che gli inviti siano stati eliminati automaticamente
+        let invitation_count_after = sqlx::query!(
+            "SELECT COUNT(*) as count FROM invitations WHERE target_chat_id = ?",
+            chat_id
+        )
+        .fetch_one(&pool)
+        .await?;
+        assert_eq!(invitation_count_after.count, 0);
+        
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_crud_cascade_complete_chat_lifecycle(pool: MySqlPool) -> sqlx::Result<()> {
+        // Test completo del ciclo di vita di una chat con tutti gli elementi collegati
+        
+        // Setup
+        sqlx::query!("INSERT INTO users (user_id, username, password) VALUES (1, 'alice', 'password'), (2, 'bob', 'password'), (3, 'charlie', 'password')")
+            .execute(&pool)
+            .await?;
+        
+        let repo = ChatRepository::new(pool.clone());
+        
+        // Crea una chat
+        let create_dto = CreateChatDTO {
+            title: Some("Complete Lifecycle Chat".to_string()),
+            description: Some("Testing complete CASCADE behavior".to_string()),
+            chat_type: ChatType::Group,
+        };
+        
+        let created_chat = repo.create(&create_dto).await?;
+        let chat_id = created_chat.chat_id;
+        
+        // Aggiungi membri
+        sqlx::query!("INSERT INTO userchatmetadata (user_id, chat_id, messages_visible_from, messages_received_until, user_role, member_since) VALUES (1, ?, NOW(), NOW(), 'OWNER', NOW()), (2, ?, NOW(), NOW(), 'MEMBER', NOW())", chat_id, chat_id)
+            .execute(&pool)
+            .await?;
+        
+        // Aggiungi messaggi
+        sqlx::query!("INSERT INTO messages (chat_id, sender_id, content, created_at) VALUES (?, 1, 'Hello!', NOW()), (?, 2, 'Hi there!', NOW())", chat_id, chat_id)
+            .execute(&pool)
+            .await?;
+        
+        // Aggiungi inviti
+        sqlx::query!("INSERT INTO invitations (target_chat_id, invited_id, invitee_id, state, created_at) VALUES (?, 3, 1, 'PENDING', NOW())", chat_id)
+            .execute(&pool)
+            .await?;
+        
+        // Verifica che tutto esista
+        let metadata_count = sqlx::query!("SELECT COUNT(*) as count FROM userchatmetadata WHERE chat_id = ?", chat_id).fetch_one(&pool).await?.count;
+        let message_count = sqlx::query!("SELECT COUNT(*) as count FROM messages WHERE chat_id = ?", chat_id).fetch_one(&pool).await?.count;
+        let invitation_count = sqlx::query!("SELECT COUNT(*) as count FROM invitations WHERE target_chat_id = ?", chat_id).fetch_one(&pool).await?.count;
+        
+        assert_eq!(metadata_count, 2);
+        assert_eq!(message_count, 2);
+        assert_eq!(invitation_count, 1);
+        
+        // Elimina la chat
+        let result = repo.delete(&chat_id).await;
+        assert!(result.is_ok());
+        
+        // Verifica che tutto sia stato eliminato (CASCADE)
+        let metadata_after = sqlx::query!("SELECT COUNT(*) as count FROM userchatmetadata WHERE chat_id = ?", chat_id).fetch_one(&pool).await?.count;
+        let message_after = sqlx::query!("SELECT COUNT(*) as count FROM messages WHERE chat_id = ?", chat_id).fetch_one(&pool).await?.count;
+        let invitation_after = sqlx::query!("SELECT COUNT(*) as count FROM invitations WHERE target_chat_id = ?", chat_id).fetch_one(&pool).await?.count;
+        
+        assert_eq!(metadata_after, 0);
+        assert_eq!(message_after, 0);
+        assert_eq!(invitation_after, 0);
+        
+        // Verifica che gli utenti esistano ancora
+        let user_count = sqlx::query!("SELECT COUNT(*) as count FROM users").fetch_one(&pool).await?.count;
+        assert_eq!(user_count, 3, "Gli utenti non dovrebbero essere eliminati");
+        
+        Ok(())
+    }
 }
