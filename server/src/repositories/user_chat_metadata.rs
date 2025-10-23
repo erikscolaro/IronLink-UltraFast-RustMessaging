@@ -3297,4 +3297,575 @@ mod tests {
         Ok(())
     }
 
+    /*------------------------------------*/
+    /* Unit tests: update (casi negativi) */
+    /*------------------------------------*/
+
+    /// Test NEGATIVO: update di metadata inesistente (user_id e chat_id non associati)
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_not_exists(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        // Bob (user_id=2) non è nella Dev Team (chat_id=3)
+        let update_dto = UpdateUserChatMetadataDTO {
+            user_role: Some(UserRole::Admin),
+            messages_visible_from: None,
+            messages_received_until: None,
+        };
+        
+        let result = repo.update(&(2, 3), &update_dto).await;
+        
+        assert!(result.is_err(), "L'update dovrebbe fallire per metadata inesistente");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: update con user_id completamente inesistente
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_invalid_user_id(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        let update_dto = UpdateUserChatMetadataDTO {
+            user_role: Some(UserRole::Member),
+            messages_visible_from: None,
+            messages_received_until: None,
+        };
+        
+        let result = repo.update(&(999, 1), &update_dto).await;
+        
+        assert!(result.is_err(), "L'update dovrebbe fallire per user_id inesistente");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: update con chat_id completamente inesistente
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_invalid_chat_id(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        let update_dto = UpdateUserChatMetadataDTO {
+            user_role: Some(UserRole::Owner),
+            messages_visible_from: None,
+            messages_received_until: None,
+        };
+        
+        let result = repo.update(&(1, 999), &update_dto).await;
+        
+        assert!(result.is_err(), "L'update dovrebbe fallire per chat_id inesistente");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: update con entrambi user_id e chat_id inesistenti
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_both_invalid(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        let update_dto = UpdateUserChatMetadataDTO {
+            user_role: Some(UserRole::Admin),
+            messages_visible_from: None,
+            messages_received_until: None,
+        };
+        
+        let result = repo.update(&(888, 999), &update_dto).await;
+        
+        assert!(result.is_err(), "L'update dovrebbe fallire per entrambi gli ID inesistenti");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: update con ID negativi
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_negative_ids(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        let update_dto = UpdateUserChatMetadataDTO {
+            user_role: Some(UserRole::Member),
+            messages_visible_from: None,
+            messages_received_until: None,
+        };
+        
+        let result = repo.update(&(-1, -1), &update_dto).await;
+        
+        assert!(result.is_err(), "L'update dovrebbe fallire per ID negativi");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: update con ID zero
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_zero_ids(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        let update_dto = UpdateUserChatMetadataDTO {
+            user_role: Some(UserRole::Owner),
+            messages_visible_from: None,
+            messages_received_until: None,
+        };
+        
+        let result = repo.update(&(0, 0), &update_dto).await;
+        
+        assert!(result.is_err(), "L'update dovrebbe fallire per ID zero");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO CASCADE: update e poi eliminazione dell'utente
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_then_cascade_delete_user(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Crea un nuovo utente e metadata
+        let new_user_id = sqlx::query!(
+            "INSERT INTO users (username, password) VALUES (?, ?)",
+            "testuser",
+            "password"
+        )
+        .execute(&pool)
+        .await?
+        .last_insert_id() as i32;
+        
+        let now = chrono::Utc::now();
+        let dto = CreateUserChatMetadataDTO {
+            user_id: new_user_id,
+            chat_id: 1,
+            user_role: Some(UserRole::Member),
+            member_since: now,
+            messages_visible_from: now,
+            messages_received_until: now,
+        };
+        
+        repo.create(&dto).await?;
+        
+        // Update del metadata
+        let update_dto = UpdateUserChatMetadataDTO {
+            user_role: Some(UserRole::Admin),
+            messages_visible_from: None,
+            messages_received_until: None,
+        };
+        
+        let updated = repo.update(&(new_user_id, 1), &update_dto).await?;
+        assert_eq!(updated.user_role, Some(UserRole::Admin));
+        
+        // Elimina l'utente - CASCADE dovrebbe eliminare il metadata
+        sqlx::query!("DELETE FROM users WHERE user_id = ?", new_user_id)
+            .execute(&pool)
+            .await?;
+        
+        // Verifica che il metadata sia stato eliminato
+        let after_delete = repo.read(&(new_user_id, 1)).await?;
+        assert!(after_delete.is_none(), "Il metadata dovrebbe essere eliminato (CASCADE DELETE)");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO CASCADE: update e poi eliminazione della chat
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_then_cascade_delete_chat(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Crea una nuova chat
+        let new_chat_id = sqlx::query!(
+            "INSERT INTO chats (title, description, chat_type) VALUES (?, ?, ?)",
+            "Test Chat",
+            None::<String>,
+            "GROUP"
+        )
+        .execute(&pool)
+        .await?
+        .last_insert_id() as i32;
+        
+        // Crea metadata
+        let now = chrono::Utc::now();
+        let dto = CreateUserChatMetadataDTO {
+            user_id: 1,
+            chat_id: new_chat_id,
+            user_role: Some(UserRole::Owner),
+            member_since: now,
+            messages_visible_from: now,
+            messages_received_until: now,
+        };
+        
+        repo.create(&dto).await?;
+        
+        // Update del metadata
+        let future = chrono::Utc::now() + chrono::Duration::days(30);
+        let update_dto = UpdateUserChatMetadataDTO {
+            user_role: None,
+            messages_visible_from: None,
+            messages_received_until: Some(future),
+        };
+        
+        let updated = repo.update(&(1, new_chat_id), &update_dto).await?;
+        // Verifica che l'update sia avvenuto (il timestamp dovrebbe essere vicino a 'future')
+        assert!(updated.messages_received_until > now, "Il timestamp dovrebbe essere stato aggiornato");
+        
+        // Elimina la chat - CASCADE dovrebbe eliminare il metadata
+        sqlx::query!("DELETE FROM chats WHERE chat_id = ?", new_chat_id)
+            .execute(&pool)
+            .await?;
+        
+        // Verifica che il metadata sia stato eliminato
+        let after_delete = repo.read(&(1, new_chat_id)).await?;
+        assert!(after_delete.is_none(), "Il metadata dovrebbe essere eliminato (CASCADE DELETE)");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO CASCADE: update multipli e poi eliminazione CASCADE
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_multiple_then_cascade_delete(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Update più utenti nella General Chat
+        let update_dto = UpdateUserChatMetadataDTO {
+            user_role: Some(UserRole::Admin),
+            messages_visible_from: None,
+            messages_received_until: None,
+        };
+        
+        repo.update(&(2, 1), &update_dto).await?;
+        repo.update(&(3, 1), &update_dto).await?;
+        
+        // Verifica gli update
+        let bob = repo.read(&(2, 1)).await?.unwrap();
+        let charlie = repo.read(&(3, 1)).await?.unwrap();
+        assert_eq!(bob.user_role, Some(UserRole::Admin));
+        assert_eq!(charlie.user_role, Some(UserRole::Admin));
+        
+        // Elimina la chat
+        sqlx::query!("DELETE FROM chats WHERE chat_id = ?", 1)
+            .execute(&pool)
+            .await?;
+        
+        // Tutti i metadata dovrebbero essere eliminati
+        assert!(repo.read(&(1, 1)).await?.is_none());
+        assert!(repo.read(&(2, 1)).await?.is_none());
+        assert!(repo.read(&(3, 1)).await?.is_none());
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: tentativo di update dopo delete dell'utente
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_after_user_deleted(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Bob è nella General Chat
+        let before = repo.read(&(2, 1)).await?;
+        assert!(before.is_some());
+        
+        // Elimina Bob - CASCADE elimina il metadata
+        sqlx::query!("DELETE FROM users WHERE user_id = ?", 2)
+            .execute(&pool)
+            .await?;
+        
+        // Tentativo di update dovrebbe fallire
+        let update_dto = UpdateUserChatMetadataDTO {
+            user_role: Some(UserRole::Admin),
+            messages_visible_from: None,
+            messages_received_until: None,
+        };
+        
+        let result = repo.update(&(2, 1), &update_dto).await;
+        
+        assert!(result.is_err(), "L'update dovrebbe fallire perché il metadata è stato eliminato (CASCADE)");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: tentativo di update dopo delete della chat
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_after_chat_deleted(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Alice è nella General Chat
+        let before = repo.read(&(1, 1)).await?;
+        assert!(before.is_some());
+        
+        // Elimina la General Chat - CASCADE elimina tutti i metadata
+        sqlx::query!("DELETE FROM chats WHERE chat_id = ?", 1)
+            .execute(&pool)
+            .await?;
+        
+        // Tentativo di update dovrebbe fallire
+        let update_dto = UpdateUserChatMetadataDTO {
+            user_role: Some(UserRole::Admin),
+            messages_visible_from: None,
+            messages_received_until: None,
+        };
+        
+        let result = repo.update(&(1, 1), &update_dto).await;
+        
+        assert!(result.is_err(), "L'update dovrebbe fallire perché il metadata è stato eliminato (CASCADE)");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: update dopo delete manuale del metadata
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_after_manual_delete(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Crea un metadata
+        let new_chat_id = sqlx::query!(
+            "INSERT INTO chats (title, description, chat_type) VALUES (?, ?, ?)",
+            "Test Chat",
+            None::<String>,
+            "GROUP"
+        )
+        .execute(&pool)
+        .await?
+        .last_insert_id() as i32;
+        
+        let now = chrono::Utc::now();
+        let dto = CreateUserChatMetadataDTO {
+            user_id: 1,
+            chat_id: new_chat_id,
+            user_role: Some(UserRole::Owner),
+            member_since: now,
+            messages_visible_from: now,
+            messages_received_until: now,
+        };
+        
+        repo.create(&dto).await?;
+        
+        // Delete manuale
+        repo.delete(&(1, new_chat_id)).await?;
+        
+        // Tentativo di update dovrebbe fallire
+        let update_dto = UpdateUserChatMetadataDTO {
+            user_role: Some(UserRole::Admin),
+            messages_visible_from: None,
+            messages_received_until: None,
+        };
+        
+        let result = repo.update(&(1, new_chat_id), &update_dto).await;
+        
+        assert!(result.is_err(), "L'update dovrebbe fallire perché il metadata è stato eliminato");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: update con DTO vuoto (nessun campo da aggiornare) su metadata inesistente
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_empty_dto_not_exists(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        // DTO vuoto
+        let update_dto = UpdateUserChatMetadataDTO {
+            user_role: None,
+            messages_visible_from: None,
+            messages_received_until: None,
+        };
+        
+        // Anche se il DTO è vuoto, dovrebbe fallire perché il metadata non esiste
+        let result = repo.update(&(999, 999), &update_dto).await;
+        
+        assert!(result.is_err(), "L'update dovrebbe fallire per metadata inesistente, anche con DTO vuoto");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO CASCADE: scenario complesso con update e eliminazioni multiple
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_cascade_complex_scenario(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Crea 2 utenti e 2 chat
+        let user1_id = sqlx::query!(
+            "INSERT INTO users (username, password) VALUES (?, ?)",
+            "user1",
+            "password"
+        )
+        .execute(&pool)
+        .await?
+        .last_insert_id() as i32;
+        
+        let user2_id = sqlx::query!(
+            "INSERT INTO users (username, password) VALUES (?, ?)",
+            "user2",
+            "password"
+        )
+        .execute(&pool)
+        .await?
+        .last_insert_id() as i32;
+        
+        let chat1_id = sqlx::query!(
+            "INSERT INTO chats (title, description, chat_type) VALUES (?, ?, ?)",
+            "Chat 1",
+            None::<String>,
+            "GROUP"
+        )
+        .execute(&pool)
+        .await?
+        .last_insert_id() as i32;
+        
+        let chat2_id = sqlx::query!(
+            "INSERT INTO chats (title, description, chat_type) VALUES (?, ?, ?)",
+            "Chat 2",
+            None::<String>,
+            "GROUP"
+        )
+        .execute(&pool)
+        .await?
+        .last_insert_id() as i32;
+        
+        let now = chrono::Utc::now();
+        
+        // Crea 4 metadata
+        for &user_id in &[user1_id, user2_id] {
+            for &chat_id in &[chat1_id, chat2_id] {
+                let dto = CreateUserChatMetadataDTO {
+                    user_id,
+                    chat_id,
+                    user_role: Some(UserRole::Member),
+                    member_since: now,
+                    messages_visible_from: now,
+                    messages_received_until: now,
+                };
+                repo.create(&dto).await?;
+            }
+        }
+        
+        // Update tutti a Admin
+        let update_dto = UpdateUserChatMetadataDTO {
+            user_role: Some(UserRole::Admin),
+            messages_visible_from: None,
+            messages_received_until: None,
+        };
+        
+        for &user_id in &[user1_id, user2_id] {
+            for &chat_id in &[chat1_id, chat2_id] {
+                repo.update(&(user_id, chat_id), &update_dto).await?;
+            }
+        }
+        
+        // Verifica che tutti siano Admin
+        for &user_id in &[user1_id, user2_id] {
+            for &chat_id in &[chat1_id, chat2_id] {
+                let metadata = repo.read(&(user_id, chat_id)).await?.unwrap();
+                assert_eq!(metadata.user_role, Some(UserRole::Admin));
+            }
+        }
+        
+        // Elimina user1
+        sqlx::query!("DELETE FROM users WHERE user_id = ?", user1_id)
+            .execute(&pool)
+            .await?;
+        
+        // user1 non dovrebbe più avere metadata
+        assert!(repo.read(&(user1_id, chat1_id)).await?.is_none());
+        assert!(repo.read(&(user1_id, chat2_id)).await?.is_none());
+        
+        // user2 dovrebbe ancora avere i suoi metadata
+        assert!(repo.read(&(user2_id, chat1_id)).await?.is_some());
+        assert!(repo.read(&(user2_id, chat2_id)).await?.is_some());
+        
+        // Elimina chat1
+        sqlx::query!("DELETE FROM chats WHERE chat_id = ?", chat1_id)
+            .execute(&pool)
+            .await?;
+        
+        // Nessuno dovrebbe avere metadata per chat1
+        assert!(repo.read(&(user2_id, chat1_id)).await?.is_none());
+        
+        // user2 in chat2 dovrebbe ancora esistere
+        let remaining = repo.read(&(user2_id, chat2_id)).await?;
+        assert!(remaining.is_some());
+        assert_eq!(remaining.unwrap().user_role, Some(UserRole::Admin));
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: update con combinazioni di ID validi e invalidi
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_mixed_valid_invalid_ids(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        let update_dto = UpdateUserChatMetadataDTO {
+            user_role: Some(UserRole::Admin),
+            messages_visible_from: None,
+            messages_received_until: None,
+        };
+        
+        // User valido, chat invalida
+        let result1 = repo.update(&(1, 999), &update_dto).await;
+        assert!(result1.is_err());
+        
+        // User invalido, chat valida
+        let result2 = repo.update(&(999, 1), &update_dto).await;
+        assert!(result2.is_err());
+        
+        // User negativo, chat valida
+        let result3 = repo.update(&(-5, 1), &update_dto).await;
+        assert!(result3.is_err());
+        
+        // User valido, chat negativa
+        let result4 = repo.update(&(1, -5), &update_dto).await;
+        assert!(result4.is_err());
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: update ripetuti dopo CASCADE DELETE falliscono
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_multiple_times_after_cascade(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Bob è nella General Chat
+        assert!(repo.read(&(2, 1)).await?.is_some());
+        
+        // Elimina Bob
+        sqlx::query!("DELETE FROM users WHERE user_id = ?", 2)
+            .execute(&pool)
+            .await?;
+        
+        let update_dto = UpdateUserChatMetadataDTO {
+            user_role: Some(UserRole::Admin),
+            messages_visible_from: None,
+            messages_received_until: None,
+        };
+        
+        // Tenta update multiple volte - dovrebbero tutti fallire
+        for _ in 0..3 {
+            let result = repo.update(&(2, 1), &update_dto).await;
+            assert!(result.is_err(), "L'update dovrebbe sempre fallire dopo CASCADE DELETE");
+        }
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: update dopo operazione fallita non influenza metadata esistenti
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_update_isolation_after_failed_update(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Tenta update su metadata inesistente
+        let invalid_update = UpdateUserChatMetadataDTO {
+            user_role: Some(UserRole::Admin),
+            messages_visible_from: None,
+            messages_received_until: None,
+        };
+        
+        let result = repo.update(&(999, 1), &invalid_update).await;
+        assert!(result.is_err(), "L'update dovrebbe fallire");
+        
+        // Verifica che i metadata esistenti siano ancora accessibili e aggiornabili
+        let valid_update = UpdateUserChatMetadataDTO {
+            user_role: Some(UserRole::Admin),
+            messages_visible_from: None,
+            messages_received_until: None,
+        };
+        
+        let result2 = repo.update(&(1, 1), &valid_update).await;
+        assert!(result2.is_ok(), "L'update valido dovrebbe avere successo");
+        
+        let updated = result2.unwrap();
+        assert_eq!(updated.user_role, Some(UserRole::Admin));
+        
+        Ok(())
+    }
+
 }
+
