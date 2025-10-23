@@ -87,9 +87,10 @@ CREATE TABLE `invitations` (
   UNIQUE KEY `uq_Invitations_group_user_status` (`target_chat_id`,`invited_id`,`state`),
   KEY `idx_Invitations_group` (`target_chat_id`),
   KEY `idx_Invitations_invited_user` (`invited_id`),
-  KEY `invitations_ibfk_3` (`invitee_id`),
+  KEY `idx_Invitations_invitee_user` (`invitee_id`),
   CONSTRAINT `invitations_ibfk_1` FOREIGN KEY (`target_chat_id`) REFERENCES `chats` (`chat_id`) ON DELETE CASCADE,
-  CONSTRAINT `invitations_ibfk_2` FOREIGN KEY (`invited_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+  CONSTRAINT `invitations_ibfk_2` FOREIGN KEY (`invited_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  CONSTRAINT `invitations_ibfk_3` FOREIGN KEY (`invitee_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
