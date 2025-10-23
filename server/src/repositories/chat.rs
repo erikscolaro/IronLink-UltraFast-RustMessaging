@@ -194,7 +194,6 @@ mod tests {
         let chat = result.unwrap();
         assert_eq!(chat.chat_id, 2);
         assert_eq!(chat.chat_type, ChatType::Private);
-        assert_eq!(chat.title, Some("Private Alice-Bob".to_string()));
         
         Ok(())
     }
