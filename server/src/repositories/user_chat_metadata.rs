@@ -3867,5 +3867,589 @@ mod tests {
         Ok(())
     }
 
+    /*------------------------------------*/
+    /* Unit tests: delete (casi negativi) */
+    /*------------------------------------*/
+
+    /// Test NEGATIVO: delete di metadata inesistente (non genera errore ma non elimina nulla)
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_delete_not_exists(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Bob (user_id=2) non è nella Dev Team (chat_id=3)
+        let result = repo.delete(&(2, 3)).await;
+        
+        // Delete non genera errore anche se il record non esiste
+        assert!(result.is_ok(), "Delete dovrebbe avere successo anche se il record non esiste");
+        
+        // Verifica che i metadata esistenti non siano stati toccati
+        let existing = repo.read(&(2, 1)).await?;
+        assert!(existing.is_some(), "I metadata esistenti non dovrebbero essere toccati");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: delete con user_id inesistente
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_delete_invalid_user_id(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        let result = repo.delete(&(999, 1)).await;
+        
+        assert!(result.is_ok(), "Delete non genera errore per user_id inesistente");
+        
+        // Verifica che i metadata della chat siano intatti
+        let members = repo.find_many_by_chat_id(&1).await?;
+        assert_eq!(members.len(), 3, "I membri della General Chat dovrebbero essere intatti");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: delete con chat_id inesistente
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_delete_invalid_chat_id(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        let result = repo.delete(&(1, 999)).await;
+        
+        assert!(result.is_ok(), "Delete non genera errore per chat_id inesistente");
+        
+        // Verifica che i metadata di Alice siano intatti
+        let alice_chats = repo.find_many_by_user_id(&1).await?;
+        assert_eq!(alice_chats.len(), 3, "Le chat di Alice dovrebbero essere intatte");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: delete con entrambi user_id e chat_id inesistenti
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_delete_both_invalid(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        let result = repo.delete(&(888, 999)).await;
+        
+        assert!(result.is_ok(), "Delete non genera errore anche per entrambi gli ID inesistenti");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: delete con ID negativi
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_delete_negative_ids(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        let result = repo.delete(&(-1, -1)).await;
+        
+        assert!(result.is_ok(), "Delete non genera errore per ID negativi");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: delete con ID zero
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_delete_zero_ids(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        let result = repo.delete(&(0, 0)).await;
+        
+        assert!(result.is_ok(), "Delete non genera errore per ID zero");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: delete dopo che l'utente è già stato eliminato (CASCADE)
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_delete_after_user_cascade_deleted(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Bob è nella General Chat
+        let before = repo.read(&(2, 1)).await?;
+        assert!(before.is_some());
+        
+        // Elimina Bob - CASCADE elimina automaticamente il metadata
+        sqlx::query!("DELETE FROM users WHERE user_id = ?", 2)
+            .execute(&pool)
+            .await?;
+        
+        // Verifica che sia stato eliminato
+        assert!(repo.read(&(2, 1)).await?.is_none());
+        
+        // Tentativo di delete non genera errore (record già inesistente)
+        let result = repo.delete(&(2, 1)).await;
+        assert!(result.is_ok(), "Delete dovrebbe avere successo anche se già eliminato da CASCADE");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: delete dopo che la chat è già stata eliminata (CASCADE)
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_delete_after_chat_cascade_deleted(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Alice è nella General Chat
+        let before = repo.read(&(1, 1)).await?;
+        assert!(before.is_some());
+        
+        // Elimina la General Chat - CASCADE elimina tutti i metadata
+        sqlx::query!("DELETE FROM chats WHERE chat_id = ?", 1)
+            .execute(&pool)
+            .await?;
+        
+        // Verifica che sia stato eliminato
+        assert!(repo.read(&(1, 1)).await?.is_none());
+        
+        // Tentativo di delete non genera errore
+        let result = repo.delete(&(1, 1)).await;
+        assert!(result.is_ok(), "Delete dovrebbe avere successo anche se già eliminato da CASCADE");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: delete doppio dello stesso metadata
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_delete_twice_same_metadata(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Crea un metadata
+        let new_chat_id = sqlx::query!(
+            "INSERT INTO chats (title, description, chat_type) VALUES (?, ?, ?)",
+            "Test Chat",
+            None::<String>,
+            "GROUP"
+        )
+        .execute(&pool)
+        .await?
+        .last_insert_id() as i32;
+        
+        let now = chrono::Utc::now();
+        let dto = CreateUserChatMetadataDTO {
+            user_id: 1,
+            chat_id: new_chat_id,
+            user_role: Some(UserRole::Owner),
+            member_since: now,
+            messages_visible_from: now,
+            messages_received_until: now,
+        };
+        
+        repo.create(&dto).await?;
+        
+        // Verifica che esista
+        assert!(repo.read(&(1, new_chat_id)).await?.is_some());
+        
+        // Prima delete
+        let result1 = repo.delete(&(1, new_chat_id)).await;
+        assert!(result1.is_ok());
+        
+        // Verifica che sia stato eliminato
+        assert!(repo.read(&(1, new_chat_id)).await?.is_none());
+        
+        // Seconda delete sullo stesso metadata (già inesistente)
+        let result2 = repo.delete(&(1, new_chat_id)).await;
+        assert!(result2.is_ok(), "Delete dovrebbe avere successo anche la seconda volta");
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO CASCADE: verifica che dopo delete dell'utente, i metadata siano eliminati
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_delete_verify_cascade_on_user(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Crea un nuovo utente con metadata in più chat
+        let new_user_id = sqlx::query!(
+            "INSERT INTO users (username, password) VALUES (?, ?)",
+            "testuser",
+            "password"
+        )
+        .execute(&pool)
+        .await?
+        .last_insert_id() as i32;
+        
+        let now = chrono::Utc::now();
+        
+        // Aggiungi l'utente a 2 chat
+        for &chat_id in &[1, 2] {
+            let dto = CreateUserChatMetadataDTO {
+                user_id: new_user_id,
+                chat_id,
+                user_role: Some(UserRole::Member),
+                member_since: now,
+                messages_visible_from: now,
+                messages_received_until: now,
+            };
+            repo.create(&dto).await?;
+        }
+        
+        // Verifica che l'utente sia in 2 chat
+        let user_chats = repo.find_many_by_user_id(&new_user_id).await?;
+        assert_eq!(user_chats.len(), 2);
+        
+        // Elimina l'utente - CASCADE dovrebbe eliminare automaticamente tutti i metadata
+        sqlx::query!("DELETE FROM users WHERE user_id = ?", new_user_id)
+            .execute(&pool)
+            .await?;
+        
+        // Verifica che tutti i metadata siano stati eliminati da CASCADE
+        let user_chats_after = repo.find_many_by_user_id(&new_user_id).await?;
+        assert_eq!(user_chats_after.len(), 0, "Tutti i metadata dovrebbero essere eliminati da CASCADE");
+        
+        // Tentativo di delete manuale non genera errori
+        let result1 = repo.delete(&(new_user_id, 1)).await;
+        let result2 = repo.delete(&(new_user_id, 2)).await;
+        assert!(result1.is_ok());
+        assert!(result2.is_ok());
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO CASCADE: verifica che dopo delete della chat, tutti i membri siano eliminati
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_delete_verify_cascade_on_chat(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Crea una nuova chat con 3 membri
+        let new_chat_id = sqlx::query!(
+            "INSERT INTO chats (title, description, chat_type) VALUES (?, ?, ?)",
+            "Test Group",
+            None::<String>,
+            "GROUP"
+        )
+        .execute(&pool)
+        .await?
+        .last_insert_id() as i32;
+        
+        let now = chrono::Utc::now();
+        
+        for &user_id in &[1, 2, 3] {
+            let dto = CreateUserChatMetadataDTO {
+                user_id,
+                chat_id: new_chat_id,
+                user_role: Some(UserRole::Member),
+                member_since: now,
+                messages_visible_from: now,
+                messages_received_until: now,
+            };
+            repo.create(&dto).await?;
+        }
+        
+        // Verifica che ci siano 3 membri
+        let members = repo.find_many_by_chat_id(&new_chat_id).await?;
+        assert_eq!(members.len(), 3);
+        
+        // Elimina la chat - CASCADE dovrebbe eliminare tutti i metadata
+        sqlx::query!("DELETE FROM chats WHERE chat_id = ?", new_chat_id)
+            .execute(&pool)
+            .await?;
+        
+        // Verifica che tutti i metadata siano stati eliminati da CASCADE
+        let members_after = repo.find_many_by_chat_id(&new_chat_id).await?;
+        assert_eq!(members_after.len(), 0, "Tutti i membri dovrebbero essere eliminati da CASCADE");
+        
+        // Tentativo di delete manuale non genera errori
+        for &user_id in &[1, 2, 3] {
+            let result = repo.delete(&(user_id, new_chat_id)).await;
+            assert!(result.is_ok());
+        }
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: delete in ordine diverso non causa problemi
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_delete_various_orders(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Crea 3 nuovi metadata
+        let new_chat_id = sqlx::query!(
+            "INSERT INTO chats (title, description, chat_type) VALUES (?, ?, ?)",
+            "Test Chat",
+            None::<String>,
+            "GROUP"
+        )
+        .execute(&pool)
+        .await?
+        .last_insert_id() as i32;
+        
+        let now = chrono::Utc::now();
+        
+        for &user_id in &[1, 2, 3] {
+            let dto = CreateUserChatMetadataDTO {
+                user_id,
+                chat_id: new_chat_id,
+                user_role: Some(UserRole::Member),
+                member_since: now,
+                messages_visible_from: now,
+                messages_received_until: now,
+            };
+            repo.create(&dto).await?;
+        }
+        
+        // Delete in ordine sparso
+        repo.delete(&(2, new_chat_id)).await?;
+        repo.delete(&(1, new_chat_id)).await?;
+        repo.delete(&(3, new_chat_id)).await?;
+        
+        // Verifica che tutti siano stati eliminati
+        let members = repo.find_many_by_chat_id(&new_chat_id).await?;
+        assert_eq!(members.len(), 0);
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: delete non influenza altre chat dello stesso utente
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_delete_does_not_affect_other_chats(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Alice è in 3 chat
+        let initial_count = repo.find_many_by_user_id(&1).await?.len();
+        assert_eq!(initial_count, 3);
+        
+        // Delete Alice dalla General Chat
+        repo.delete(&(1, 1)).await?;
+        
+        // Alice dovrebbe essere ancora in 2 chat
+        let after_delete = repo.find_many_by_user_id(&1).await?;
+        assert_eq!(after_delete.len(), 2);
+        
+        // Verifica che sia stata eliminata solo dalla General Chat
+        assert!(repo.read(&(1, 1)).await?.is_none());
+        assert!(repo.read(&(1, 2)).await?.is_some());
+        assert!(repo.read(&(1, 3)).await?.is_some());
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: delete non influenza altri utenti nella stessa chat
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_delete_does_not_affect_other_users(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // General Chat ha 3 membri
+        let initial_members = repo.find_many_by_chat_id(&1).await?;
+        assert_eq!(initial_members.len(), 3);
+        
+        // Delete Bob dalla General Chat
+        repo.delete(&(2, 1)).await?;
+        
+        // Dovrebbero rimanere 2 membri
+        let after_delete = repo.find_many_by_chat_id(&1).await?;
+        assert_eq!(after_delete.len(), 2);
+        
+        // Verifica che solo Bob sia stato eliminato
+        assert!(repo.read(&(1, 1)).await?.is_some());
+        assert!(repo.read(&(2, 1)).await?.is_none());
+        assert!(repo.read(&(3, 1)).await?.is_some());
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO CASCADE: scenario complesso con delete manuali e CASCADE
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_delete_cascade_complex_scenario(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Crea 2 utenti e 2 chat con matrice completa
+        let user1_id = sqlx::query!(
+            "INSERT INTO users (username, password) VALUES (?, ?)",
+            "user1",
+            "password"
+        )
+        .execute(&pool)
+        .await?
+        .last_insert_id() as i32;
+        
+        let user2_id = sqlx::query!(
+            "INSERT INTO users (username, password) VALUES (?, ?)",
+            "user2",
+            "password"
+        )
+        .execute(&pool)
+        .await?
+        .last_insert_id() as i32;
+        
+        let chat1_id = sqlx::query!(
+            "INSERT INTO chats (title, description, chat_type) VALUES (?, ?, ?)",
+            "Chat 1",
+            None::<String>,
+            "GROUP"
+        )
+        .execute(&pool)
+        .await?
+        .last_insert_id() as i32;
+        
+        let chat2_id = sqlx::query!(
+            "INSERT INTO chats (title, description, chat_type) VALUES (?, ?, ?)",
+            "Chat 2",
+            None::<String>,
+            "GROUP"
+        )
+        .execute(&pool)
+        .await?
+        .last_insert_id() as i32;
+        
+        let now = chrono::Utc::now();
+        
+        // Crea 4 metadata
+        for &user_id in &[user1_id, user2_id] {
+            for &chat_id in &[chat1_id, chat2_id] {
+                let dto = CreateUserChatMetadataDTO {
+                    user_id,
+                    chat_id,
+                    user_role: Some(UserRole::Member),
+                    member_since: now,
+                    messages_visible_from: now,
+                    messages_received_until: now,
+                };
+                repo.create(&dto).await?;
+            }
+        }
+        
+        // Verifica: 4 metadata esistono
+        assert!(repo.read(&(user1_id, chat1_id)).await?.is_some());
+        assert!(repo.read(&(user1_id, chat2_id)).await?.is_some());
+        assert!(repo.read(&(user2_id, chat1_id)).await?.is_some());
+        assert!(repo.read(&(user2_id, chat2_id)).await?.is_some());
+        
+        // Delete manuale di user1 da chat1
+        repo.delete(&(user1_id, chat1_id)).await?;
+        assert!(repo.read(&(user1_id, chat1_id)).await?.is_none());
+        
+        // Elimina user1 - CASCADE elimina user1-chat2
+        sqlx::query!("DELETE FROM users WHERE user_id = ?", user1_id)
+            .execute(&pool)
+            .await?;
+        
+        assert!(repo.read(&(user1_id, chat2_id)).await?.is_none());
+        
+        // user2 dovrebbe avere ancora entrambi i metadata
+        assert!(repo.read(&(user2_id, chat1_id)).await?.is_some());
+        assert!(repo.read(&(user2_id, chat2_id)).await?.is_some());
+        
+        // Elimina chat1 - CASCADE elimina user2-chat1
+        sqlx::query!("DELETE FROM chats WHERE chat_id = ?", chat1_id)
+            .execute(&pool)
+            .await?;
+        
+        assert!(repo.read(&(user2_id, chat1_id)).await?.is_none());
+        
+        // Solo user2-chat2 dovrebbe rimanere
+        assert!(repo.read(&(user2_id, chat2_id)).await?.is_some());
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: delete con combinazioni di ID validi e invalidi
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_delete_mixed_valid_invalid_ids(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool);
+        
+        // Tutte queste delete non dovrebbero generare errori
+        assert!(repo.delete(&(1, 999)).await.is_ok());
+        assert!(repo.delete(&(999, 1)).await.is_ok());
+        assert!(repo.delete(&(-5, 1)).await.is_ok());
+        assert!(repo.delete(&(1, -5)).await.is_ok());
+        assert!(repo.delete(&(0, 0)).await.is_ok());
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: delete ripetute non causano errori
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_delete_multiple_times_no_error(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Crea un metadata
+        let new_chat_id = sqlx::query!(
+            "INSERT INTO chats (title, description, chat_type) VALUES (?, ?, ?)",
+            "Test Chat",
+            None::<String>,
+            "GROUP"
+        )
+        .execute(&pool)
+        .await?
+        .last_insert_id() as i32;
+        
+        let now = chrono::Utc::now();
+        let dto = CreateUserChatMetadataDTO {
+            user_id: 1,
+            chat_id: new_chat_id,
+            user_role: Some(UserRole::Owner),
+            member_since: now,
+            messages_visible_from: now,
+            messages_received_until: now,
+        };
+        
+        repo.create(&dto).await?;
+        
+        // Delete multiple volte
+        for _ in 0..5 {
+            let result = repo.delete(&(1, new_chat_id)).await;
+            assert!(result.is_ok(), "Delete dovrebbe sempre avere successo");
+        }
+        
+        // Verifica che sia stato eliminato
+        assert!(repo.read(&(1, new_chat_id)).await?.is_none());
+        
+        Ok(())
+    }
+
+    /// Test NEGATIVO: delete dopo operazioni fallite non causa problemi
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
+    async fn test_delete_after_failed_operations(pool: MySqlPool) -> sqlx::Result<()> {
+        let repo = UserChatMetadataRepository::new(pool.clone());
+        
+        // Tenta create con FK invalida (fallisce)
+        let now = chrono::Utc::now();
+        let invalid_dto = CreateUserChatMetadataDTO {
+            user_id: 999,
+            chat_id: 1,
+            user_role: Some(UserRole::Member),
+            member_since: now,
+            messages_visible_from: now,
+            messages_received_until: now,
+        };
+        
+        let create_result = repo.create(&invalid_dto).await;
+        assert!(create_result.is_err());
+        
+        // Delete non dovrebbe generare errori
+        let delete_result = repo.delete(&(999, 1)).await;
+        assert!(delete_result.is_ok());
+        
+        // Verifica che i metadata esistenti siano ancora validi
+        let existing = repo.read(&(1, 1)).await?;
+        assert!(existing.is_some());
+        
+        // Delete valido dovrebbe funzionare
+        let new_chat_id = sqlx::query!(
+            "INSERT INTO chats (title, description, chat_type) VALUES (?, ?, ?)",
+            "Test",
+            None::<String>,
+            "GROUP"
+        )
+        .execute(&pool)
+        .await?
+        .last_insert_id() as i32;
+        
+        let valid_dto = CreateUserChatMetadataDTO {
+            user_id: 1,
+            chat_id: new_chat_id,
+            user_role: Some(UserRole::Owner),
+            member_since: now,
+            messages_visible_from: now,
+            messages_received_until: now,
+        };
+        
+        repo.create(&valid_dto).await?;
+        
+        let delete_valid = repo.delete(&(1, new_chat_id)).await;
+        assert!(delete_valid.is_ok());
+        assert!(repo.read(&(1, new_chat_id)).await?.is_none());
+        
+        Ok(())
+    }
+
 }
+
 
