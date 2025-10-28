@@ -1,28 +1,41 @@
 //! Integration tests per gli endpoints delle chat
-//!
-//! Test per:
-//! - GET /chats
-//! - POST /chats
-//! - GET /chats/{chat_id}/messages
-//! - GET /chats/{chat_id}/members
-//! - POST /chats/{chat_id}/invite/{user_id}
-//! - PATCH /chats/{chat_id}/members/{user_id}/role
-//! - PATCH /chats/{chat_id}/transfer_ownership
-//! - DELETE /chats/{chat_id}/members/{user_id}
-//! - POST /chats/{chat_id}/leave
 
 mod common;
 
 #[cfg(test)]
 mod chat_tests {
+    use super::common::create_test_jwt;
+    use axum_test::TestServer;
+    use axum_test::http::HeaderName;
     use sqlx::MySqlPool;
+    use std::sync::Arc;
 
-    /// Test generico - esempio di utilizzo di #[sqlx::test]
-    #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats", "messages")))]
-    async fn test_example(_pool: MySqlPool) -> sqlx::Result<()> {
-        // Il database è stato creato automaticamente con migrations applicate
-        // I fixtures sono stati caricati in ordine: users, chats, messages
-        // Implementa qui i tuoi test per gli endpoint delle chat
+    #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
+    async fn test_get_chats_success(pool: MySqlPool) -> sqlx::Result<()> {
+        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
+        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
+        let app = server::create_router(state);
+        let server = TestServer::new(app).expect("Failed to create test server");
+        let token = create_test_jwt(1, jwt_secret);
+
+        let response = server
+            .get("/chats")
+            .add_header(
+                HeaderName::from_static("authorization"),
+                format!("Bearer {}", token)
+            )
+            .await;
+
+        response.assert_status_ok();
+        let chats: Vec<serde_json::Value> = response.json();
+        assert!(!chats.is_empty(), "L'utente dovrebbe avere almeno una chat");
+
+        for chat in &chats {
+            assert!(chat.get("chat_id").is_some(), "Ogni chat deve avere un chat_id");
+            assert!(chat.get("title").is_some(), "Ogni chat deve avere un title");
+            assert!(chat.get("chat_type").is_some(), "Ogni chat deve avere un chat_type");
+        }
+
         Ok(())
     }
 }
