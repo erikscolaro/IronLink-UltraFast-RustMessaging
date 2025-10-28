@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 /// Crea il router principale dell'applicazione
 pub fn create_router(state: Arc<AppState>) -> Router {
-    use core::{authentication_middleware, chat_membership_middleware};
+    use core::authentication_middleware;
     use services::*;
     use ws::ws_handler;
 
@@ -81,7 +81,7 @@ fn configure_chat_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/{chat_id}/members/{user_id}/role",
             patch(update_member_role),
         )
-        .route("/{chat_id}/transfer_ownership", patch(transfer_ownership))
+        .route("/{chat_id}/transfer_ownership/{new_owner_id}", patch(transfer_ownership))
         .route("/{chat_id}/members/{user_id}", delete(remove_member))
         .route("/{chat_id}/leave", post(leave_chat))
         .layer(middleware::from_fn_with_state(

@@ -414,7 +414,7 @@ pub async fn remove_member(
 #[instrument(skip(state, current_user, current_metadata, body), fields(chat_id = %chat_id, updating_user = %current_user.user_id, target_user = %user_id, new_role = ?body))]
 pub async fn update_member_role(
     State(state): State<Arc<AppState>>,
-    Path((user_id, chat_id)): Path<(i32, i32)>,
+    Path((chat_id, user_id)): Path<(i32, i32)>,
     Extension(current_user): Extension<User>,
     Extension(current_metadata): Extension<UserChatMetadata>, // ottenuto dal chat_membership_middleware
     Json(body): Json<UserRole>,
@@ -441,6 +441,13 @@ pub async fn update_member_role(
         )
     })?;
 
+    // Nessuno può assegnare il ruolo Owner tramite questo endpoint
+    // Per trasferire ownership, usare l'endpoint dedicato transfer_ownership
+    if body == UserRole::Owner {
+        warn!("Attempted to assign owner role via update_member_role");
+        return Err(AppError::forbidden("Cannot assign Owner role. Use transfer_ownership endpoint instead"));
+    }
+
     match current_metadata.user_role {
         Some(UserRole::Admin) => {
             // Admin può modificare solo Member
@@ -451,17 +458,8 @@ pub async fn update_member_role(
                     return Err(AppError::forbidden("Admin can modify only members"));
                 }
             }
-
-            // Admin non può assegnare Owner
-            match body {
-                UserRole::Owner => {
-                    warn!("Admin attempted to assign owner role");
-                    return Err(AppError::forbidden("Only Owner can assign ownership"));
-                }
-                _ => { /* ok */ }
-            }
         }
-        _ => { /* current user non-admin: altre regole già gestite sopra */ }
+        _ => { /* current user è Owner: può modificare tutti tranne assegnare Owner (già verificato sopra) */ }
     }
 
     state
@@ -554,6 +552,13 @@ pub async fn transfer_ownership(
             return Err(AppError::not_found("New owner user not found"));
         }
     };
+
+    // Verifica che il nuovo owner sia membro della chat
+    let new_owner_meta = state.meta.read(&(new_owner_id, chat_id)).await?;
+    if new_owner_meta.is_none() {
+        warn!("User {} is not a member of chat {}", new_owner_id, chat_id);
+        return Err(AppError::not_found("New owner must be a member of the chat"));
+    }
 
     debug!("Performing ownership transfer");
     // Trasferisce la proprietà dal current_user al nuovo owner

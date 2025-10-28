@@ -17,29 +17,35 @@
 ///
 /// # Arguments
 /// * `user_id` - ID dell'utente per cui generare il token
+/// * `username` - Username dell'utente
 /// * `jwt_secret` - Secret key per firmare il token
 ///
 /// # Returns
 /// Token JWT valido per 24 ore
-pub fn create_test_jwt(user_id: i32, jwt_secret: &str) -> String {
+pub fn create_test_jwt(user_id: i32, username: &str, jwt_secret: &str) -> String {
     use chrono::{Duration, Utc};
     use jsonwebtoken::{EncodingKey, Header, encode};
     use serde::{Deserialize, Serialize};
 
     #[derive(Debug, Serialize, Deserialize)]
     struct Claims {
-        sub: String,
-        exp: i64,
+        id: i32,
+        username: String,
+        exp: usize,
+        iat: usize,
     }
 
-    let expiration = Utc::now()
+    let now = Utc::now();
+    let expiration = now
         .checked_add_signed(Duration::hours(24))
         .expect("valid timestamp")
-        .timestamp();
+        .timestamp() as usize;
 
     let claims = Claims {
-        sub: user_id.to_string(),
+        id: user_id,
+        username: username.to_string(),
         exp: expiration,
+        iat: now.timestamp() as usize,
     };
 
     encode(
