@@ -15,7 +15,7 @@ impl From<User> for UserDTO {
     fn from(value: User) -> Self {
         Self {
             id: Some(value.user_id),
-            username: Some(value.username)
+            username: Some(value.username),
         }
     }
 }

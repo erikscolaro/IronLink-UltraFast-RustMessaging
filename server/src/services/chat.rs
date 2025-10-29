@@ -11,8 +11,8 @@ use axum::{
 use chrono::Utc;
 use futures_util::future::try_join_all;
 use std::sync::Arc;
-use validator::Validate;
 use tracing::{debug, info, instrument, warn};
+use validator::Validate;
 
 /// DTO per creare una chat (estende CreateChatDTO con user_list per chat private)
 #[derive(serde::Deserialize)]
@@ -93,16 +93,16 @@ pub async fn create_chat(
     match body.chat_type {
         ChatType::Private => {
             debug!("Creating private chat");
-            let user_list = body
-                .user_list
-                .as_ref()
-                .ok_or_else(|| {
-                    warn!("Private chat creation attempted without user list");
-                    AppError::bad_request("Private chat should specify user list.")
-                })?;
+            let user_list = body.user_list.as_ref().ok_or_else(|| {
+                warn!("Private chat creation attempted without user list");
+                AppError::bad_request("Private chat should specify user list.")
+            })?;
 
             if user_list.len() != 2 {
-                warn!("Private chat creation attempted with {} users instead of 2", user_list.len());
+                warn!(
+                    "Private chat creation attempted with {} users instead of 2",
+                    user_list.len()
+                );
                 return Err(AppError::bad_request(
                     "Private chat should specify exactly two users.",
                 ));
@@ -121,7 +121,10 @@ pub async fn create_chat(
                 .get_private_chat_between_users(&current_user.user_id, second_user_id)
                 .await?;
             if existing_chat.is_some() {
-                warn!("Private chat already exists between users {} and {}", current_user.user_id, second_user_id);
+                warn!(
+                    "Private chat already exists between users {} and {}",
+                    current_user.user_id, second_user_id
+                );
                 return Err(AppError::conflict(
                     "A private chat between these users already exists.",
                 ));
@@ -159,8 +162,11 @@ pub async fn create_chat(
                 .meta
                 .create_many(&[metadata_current_user, metadata_second_user])
                 .await?;
-            
-            info!("Private chat created successfully between users {} and {}", current_user.user_id, second_user_id);
+
+            info!(
+                "Private chat created successfully between users {} and {}",
+                current_user.user_id, second_user_id
+            );
         }
 
         ChatType::Group => {
@@ -189,8 +195,12 @@ pub async fn create_chat(
             };
 
             state.meta.create(&metadata_owner).await?;
-            
-            info!("Group chat '{}' created successfully by user {}", chat.title.as_ref().unwrap_or(&String::from("Unnamed")), current_user.user_id);
+
+            info!(
+                "Group chat '{}' created successfully by user {}",
+                chat.title.as_ref().unwrap_or(&String::from("Unnamed")),
+                current_user.user_id
+            );
         }
     }
 

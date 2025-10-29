@@ -13,9 +13,9 @@ mod user_tests {
     use axum_test::TestServer;
     use axum_test::http::HeaderName;
     use serde_json::json;
+    use server::repositories::Read;
     use sqlx::MySqlPool;
-    use std::sync::Arc;
-    use server::repositories::Read; // Per usare i metodi read() dei repository
+    use std::sync::Arc; // Per usare i metodi read() dei repository
 
     // ============================================================
     // Test per GET /users?search=username - search_user_with_username
@@ -33,16 +33,19 @@ mod user_tests {
             .get("/users?search=al")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .await;
 
         response.assert_status_ok();
         let users: Vec<serde_json::Value> = response.json();
-        
+
         // Dovrebbe trovare "alice" che inizia con "al"
         assert!(!users.is_empty(), "Should find at least one user");
-        assert!(users.iter().any(|u| u["username"] == "alice"), "Should find alice");
+        assert!(
+            users.iter().any(|u| u["username"] == "alice"),
+            "Should find alice"
+        );
 
         Ok(())
     }
@@ -59,15 +62,18 @@ mod user_tests {
             .get("/users?search=cha")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .await;
 
         response.assert_status_ok();
         let users: Vec<serde_json::Value> = response.json();
-        
+
         // Dovrebbe trovare "charlie"
-        assert!(users.iter().any(|u| u["username"] == "charlie"), "Should find charlie");
+        assert!(
+            users.iter().any(|u| u["username"] == "charlie"),
+            "Should find charlie"
+        );
 
         Ok(())
     }
@@ -84,13 +90,13 @@ mod user_tests {
             .get("/users?search=nonexistent")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .await;
 
         response.assert_status_ok();
         let users: Vec<serde_json::Value> = response.json();
-        
+
         assert!(users.is_empty(), "Should return empty array for no matches");
 
         Ok(())
@@ -108,16 +114,19 @@ mod user_tests {
             .get("/users?search=")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .await;
 
         response.assert_status_ok();
         let users: Vec<serde_json::Value> = response.json();
-        
+
         // Con query vuota dovrebbe restituire tutti gli utenti o nessuno
         // (dipende dall'implementazione)
-        assert!(users.is_empty() || users.len() >= 3, "Should handle empty query");
+        assert!(
+            users.is_empty() || users.len() >= 3,
+            "Should handle empty query"
+        );
 
         Ok(())
     }
@@ -129,9 +138,7 @@ mod user_tests {
         let app = server::create_router(state);
         let server = TestServer::new(app).expect("Failed to create test server");
 
-        let response = server
-            .get("/users?search=alice")
-            .await;
+        let response = server.get("/users?search=alice").await;
 
         response.assert_status_forbidden();
         Ok(())
@@ -148,7 +155,7 @@ mod user_tests {
             .get("/users?search=alice")
             .add_header(
                 HeaderName::from_static("authorization"),
-                "Bearer invalid_token"
+                "Bearer invalid_token",
             )
             .await;
 
@@ -172,13 +179,13 @@ mod user_tests {
             .get("/users/2")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .await;
 
         response.assert_status_ok();
         let user: serde_json::Value = response.json();
-        
+
         assert_eq!(user["id"], 2, "User ID should match");
         assert_eq!(user["username"], "bob", "Username should be bob");
 
@@ -197,13 +204,13 @@ mod user_tests {
             .get("/users/999")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .await;
 
         response.assert_status_ok();
         let user: serde_json::Value = response.json();
-        
+
         // Dovrebbe restituire null per utente non trovato
         assert!(user.is_null(), "Should return null for non-existent user");
 
@@ -222,13 +229,13 @@ mod user_tests {
             .get("/users/1")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .await;
 
         response.assert_status_ok();
         let user: serde_json::Value = response.json();
-        
+
         assert_eq!(user["id"], 1, "User ID should match");
         assert_eq!(user["username"], "alice", "Username should be alice");
 
@@ -242,9 +249,7 @@ mod user_tests {
         let app = server::create_router(state);
         let server = TestServer::new(app).expect("Failed to create test server");
 
-        let response = server
-            .get("/users/1")
-            .await;
+        let response = server.get("/users/1").await;
 
         response.assert_status_forbidden();
         Ok(())
@@ -261,7 +266,7 @@ mod user_tests {
             .get("/users/1")
             .add_header(
                 HeaderName::from_static("authorization"),
-                "Bearer invalid_token"
+                "Bearer invalid_token",
             )
             .await;
 
@@ -286,18 +291,24 @@ mod user_tests {
             .delete("/users/me")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .await;
 
         response.assert_status_ok();
-        
+
         // Verifica che ci sia il cookie di logout
         let headers = response.headers();
-        assert!(headers.get("set-cookie").is_some(), "Should have Set-Cookie header");
-        
+        assert!(
+            headers.get("set-cookie").is_some(),
+            "Should have Set-Cookie header"
+        );
+
         let cookie = headers.get("set-cookie").unwrap().to_str().unwrap();
-        assert!(cookie.contains("Max-Age=0"), "Cookie should expire immediately");
+        assert!(
+            cookie.contains("Max-Age=0"),
+            "Cookie should expire immediately"
+        );
 
         Ok(())
     }
@@ -313,26 +324,33 @@ mod user_tests {
         // Alice è OWNER della chat 1 (General Chat) con bob e charlie come membri
         // Alice è OWNER della chat 2 (Private Alice-Bob) con bob
         // Alice è OWNER della chat 3 (Dev Team) con charlie come ADMIN
-        
+
         let response = server
             .delete("/users/me")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .await;
 
         response.assert_status_ok();
-        
+
         // Verifica 1: Alice è stata soft-deleted
         let alice_user = state.user.read(&1).await?;
-        assert!(alice_user.is_some(), "Alice's user record should still exist");
-        assert_eq!(alice_user.unwrap().username, "Deleted User", "Alice should be soft-deleted");
-        
+        assert!(
+            alice_user.is_some(),
+            "Alice's user record should still exist"
+        );
+        assert_eq!(
+            alice_user.unwrap().username,
+            "Deleted User",
+            "Alice should be soft-deleted"
+        );
+
         // Verifica 2: La chat 3 (Dev Team) dovrebbe ancora esistere
         let chat3 = state.chat.read(&3).await?;
         assert!(chat3.is_some(), "Chat 3 should still exist");
-        
+
         // Verifica 3: Charlie dovrebbe essere diventato OWNER della chat 3
         let charlie_meta = state.meta.read(&(3, 3)).await?;
         assert!(charlie_meta.is_some(), "Charlie should still be in chat 3");
@@ -342,11 +360,14 @@ mod user_tests {
             Some(server::entities::enums::UserRole::Owner),
             "Charlie should now be OWNER of chat 3"
         );
-        
+
         // Verifica 4: Alice non dovrebbe più essere nei metadata delle chat
         let alice_meta_chat3 = state.meta.read(&(1, 3)).await?;
-        assert!(alice_meta_chat3.is_none(), "Alice should be removed from chat 3 metadata");
-        
+        assert!(
+            alice_meta_chat3.is_none(),
+            "Alice should be removed from chat 3 metadata"
+        );
+
         Ok(())
     }
 
@@ -356,17 +377,14 @@ mod user_tests {
         let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
         let app = server::create_router(state);
         let server = TestServer::new(app).expect("Failed to create test server");
-        
+
         // Crea un nuovo utente senza chat
         let register_body = json!({
             "username": "newuser",
             "password": "Password123"
         });
 
-        let register_response = server
-            .post("/auth/register")
-            .json(&register_body)
-            .await;
+        let register_response = server.post("/auth/register").json(&register_body).await;
 
         register_response.assert_status_ok();
 
@@ -376,10 +394,7 @@ mod user_tests {
             "password": "Password123"
         });
 
-        let login_response = server
-            .post("/auth/login")
-            .json(&login_body)
-            .await;
+        let login_response = server.post("/auth/login").json(&login_body).await;
 
         login_response.assert_status_ok();
         let headers = login_response.headers();
@@ -391,7 +406,7 @@ mod user_tests {
             .delete("/users/me")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .await;
 
@@ -407,9 +422,7 @@ mod user_tests {
         let app = server::create_router(state);
         let server = TestServer::new(app).expect("Failed to create test server");
 
-        let response = server
-            .delete("/users/me")
-            .await;
+        let response = server.delete("/users/me").await;
 
         response.assert_status_forbidden();
         Ok(())
@@ -426,7 +439,7 @@ mod user_tests {
             .delete("/users/me")
             .add_header(
                 HeaderName::from_static("authorization"),
-                "Bearer invalid_token"
+                "Bearer invalid_token",
             )
             .await;
 
@@ -447,7 +460,7 @@ mod user_tests {
             .delete("/users/me")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token_bob)
+                format!("Bearer {}", token_bob),
             )
             .await;
 
@@ -455,19 +468,22 @@ mod user_tests {
 
         // Verifica che l'utente sia stato rinominato "Deleted User"
         let token_alice = create_test_jwt(1, "alice", jwt_secret);
-        
+
         let get_response = server
             .get("/users/2")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token_alice)
+                format!("Bearer {}", token_alice),
             )
             .await;
 
         get_response.assert_status_ok();
         let user: serde_json::Value = get_response.json();
-        
-        assert_eq!(user["username"], "Deleted User", "Username should be 'Deleted User'");
+
+        assert_eq!(
+            user["username"], "Deleted User",
+            "Username should be 'Deleted User'"
+        );
 
         Ok(())
     }
@@ -478,14 +494,18 @@ mod user_tests {
         let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
         let app = server::create_router(state);
         let server = TestServer::new(app).expect("Failed to create test server");
-        
+
         // Crea e logga un nuovo utente
         let register_body = json!({
             "username": "tempuser",
             "password": "TempPass123"
         });
 
-        server.post("/auth/register").json(&register_body).await.assert_status_ok();
+        server
+            .post("/auth/register")
+            .json(&register_body)
+            .await
+            .assert_status_ok();
 
         let login_body = json!({
             "username": "tempuser",
@@ -494,7 +514,7 @@ mod user_tests {
 
         let login_response = server.post("/auth/login").json(&login_body).await;
         login_response.assert_status_ok();
-        
+
         let headers = login_response.headers();
         let auth_header = headers.get("authorization").unwrap().to_str().unwrap();
         let token = auth_header.strip_prefix("Bearer ").unwrap();
@@ -504,16 +524,13 @@ mod user_tests {
             .delete("/users/me")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .await
             .assert_status_ok();
 
         // Prova a fare login con le vecchie credenziali
-        let login_after_delete = server
-            .post("/auth/login")
-            .json(&login_body)
-            .await;
+        let login_after_delete = server.post("/auth/login").json(&login_body).await;
 
         // Dovrebbe fallire perché l'utente è stato cancellato
         login_after_delete.assert_status_unauthorized();

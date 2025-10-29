@@ -36,10 +36,7 @@ mod auth_tests {
             "password": "TestLogin123"
         });
 
-        let register_response = server
-            .post("/auth/register")
-            .json(&register_body)
-            .await;
+        let register_response = server.post("/auth/register").json(&register_body).await;
 
         register_response.assert_status_ok();
 
@@ -49,22 +46,28 @@ mod auth_tests {
             "password": "TestLogin123"
         });
 
-        let response = server
-            .post("/auth/login")
-            .json(&login_body)
-            .await;
+        let response = server.post("/auth/login").json(&login_body).await;
 
         response.assert_status_ok();
-        
+
         // Verifica che ci sia il cookie Set-Cookie
         let headers = response.headers();
-        assert!(headers.get("set-cookie").is_some(), "Set-Cookie header should be present");
-        
+        assert!(
+            headers.get("set-cookie").is_some(),
+            "Set-Cookie header should be present"
+        );
+
         // Verifica che ci sia l'header Authorization
-        assert!(headers.get("authorization").is_some(), "Authorization header should be present");
-        
+        assert!(
+            headers.get("authorization").is_some(),
+            "Authorization header should be present"
+        );
+
         let auth_header = headers.get("authorization").unwrap().to_str().unwrap();
-        assert!(auth_header.starts_with("Bearer "), "Authorization should start with 'Bearer '");
+        assert!(
+            auth_header.starts_with("Bearer "),
+            "Authorization should start with 'Bearer '"
+        );
 
         Ok(())
     }
@@ -81,10 +84,7 @@ mod auth_tests {
             "password": "wrongpassword"
         });
 
-        let response = server
-            .post("/auth/login")
-            .json(&body)
-            .await;
+        let response = server.post("/auth/login").json(&body).await;
 
         response.assert_status_unauthorized();
         Ok(())
@@ -102,10 +102,7 @@ mod auth_tests {
             "password": "password123"
         });
 
-        let response = server
-            .post("/auth/login")
-            .json(&body)
-            .await;
+        let response = server.post("/auth/login").json(&body).await;
 
         response.assert_status_unauthorized();
         Ok(())
@@ -123,10 +120,7 @@ mod auth_tests {
             "password": "password123"
         });
 
-        let response = server
-            .post("/auth/login")
-            .json(&body)
-            .await;
+        let response = server.post("/auth/login").json(&body).await;
 
         response.assert_status_unauthorized();
         Ok(())
@@ -143,10 +137,7 @@ mod auth_tests {
             "username": "alice"
         });
 
-        let response = server
-            .post("/auth/login")
-            .json(&body)
-            .await;
+        let response = server.post("/auth/login").json(&body).await;
 
         // 422 Unprocessable Entity quando manca un campo obbligatorio
         response.assert_status_unprocessable_entity();
@@ -164,10 +155,7 @@ mod auth_tests {
             "password": "password123"
         });
 
-        let response = server
-            .post("/auth/login")
-            .json(&body)
-            .await;
+        let response = server.post("/auth/login").json(&body).await;
 
         // 422 Unprocessable Entity quando manca un campo obbligatorio
         response.assert_status_unprocessable_entity();
@@ -183,10 +171,7 @@ mod auth_tests {
 
         let body = json!({});
 
-        let response = server
-            .post("/auth/login")
-            .json(&body)
-            .await;
+        let response = server.post("/auth/login").json(&body).await;
 
         // 422 Unprocessable Entity quando manca un campo obbligatorio
         response.assert_status_unprocessable_entity();
@@ -209,14 +194,11 @@ mod auth_tests {
             "password": "Password123"
         });
 
-        let response = server
-            .post("/auth/register")
-            .json(&body)
-            .await;
+        let response = server.post("/auth/register").json(&body).await;
 
         response.assert_status_ok();
         let user: serde_json::Value = response.json();
-        
+
         assert!(user.get("id").is_some(), "User should have an id");
         assert_eq!(user["username"], "newuser", "Username should match");
 
@@ -235,10 +217,7 @@ mod auth_tests {
             "password": "Password123"
         });
 
-        let response = server
-            .post("/auth/register")
-            .json(&body)
-            .await;
+        let response = server.post("/auth/register").json(&body).await;
 
         response.assert_status_conflict();
         Ok(())
@@ -256,10 +235,7 @@ mod auth_tests {
             "password": "Password123"
         });
 
-        let response = server
-            .post("/auth/register")
-            .json(&body)
-            .await;
+        let response = server.post("/auth/register").json(&body).await;
 
         response.assert_status_bad_request();
         Ok(())
@@ -277,10 +253,7 @@ mod auth_tests {
             "password": "Password123"
         });
 
-        let response = server
-            .post("/auth/register")
-            .json(&body)
-            .await;
+        let response = server.post("/auth/register").json(&body).await;
 
         response.assert_status_bad_request();
         Ok(())
@@ -298,10 +271,7 @@ mod auth_tests {
             "password": "Password123"
         });
 
-        let response = server
-            .post("/auth/register")
-            .json(&body)
-            .await;
+        let response = server.post("/auth/register").json(&body).await;
 
         response.assert_status_bad_request();
         Ok(())
@@ -319,10 +289,7 @@ mod auth_tests {
             "password": "Password123"
         });
 
-        let response = server
-            .post("/auth/register")
-            .json(&body)
-            .await;
+        let response = server.post("/auth/register").json(&body).await;
 
         response.assert_status_bad_request();
         Ok(())
@@ -340,10 +307,7 @@ mod auth_tests {
             "password": "Pass1"
         });
 
-        let response = server
-            .post("/auth/register")
-            .json(&body)
-            .await;
+        let response = server.post("/auth/register").json(&body).await;
 
         response.assert_status_bad_request();
         Ok(())
@@ -361,10 +325,7 @@ mod auth_tests {
             "password": "password123"
         });
 
-        let response = server
-            .post("/auth/register")
-            .json(&body)
-            .await;
+        let response = server.post("/auth/register").json(&body).await;
 
         response.assert_status_bad_request();
         Ok(())
@@ -382,10 +343,7 @@ mod auth_tests {
             "password": "PASSWORD123"
         });
 
-        let response = server
-            .post("/auth/register")
-            .json(&body)
-            .await;
+        let response = server.post("/auth/register").json(&body).await;
 
         response.assert_status_bad_request();
         Ok(())
@@ -403,10 +361,7 @@ mod auth_tests {
             "password": "PasswordOnly"
         });
 
-        let response = server
-            .post("/auth/register")
-            .json(&body)
-            .await;
+        let response = server.post("/auth/register").json(&body).await;
 
         response.assert_status_bad_request();
         Ok(())
@@ -423,10 +378,7 @@ mod auth_tests {
             "password": "Password123"
         });
 
-        let response = server
-            .post("/auth/register")
-            .json(&body)
-            .await;
+        let response = server.post("/auth/register").json(&body).await;
 
         // 422 Unprocessable Entity quando manca un campo obbligatorio
         response.assert_status_unprocessable_entity();
@@ -444,10 +396,7 @@ mod auth_tests {
             "username": "newuser"
         });
 
-        let response = server
-            .post("/auth/register")
-            .json(&body)
-            .await;
+        let response = server.post("/auth/register").json(&body).await;
 
         // 422 Unprocessable Entity quando manca un campo obbligatorio
         response.assert_status_unprocessable_entity();
@@ -463,10 +412,7 @@ mod auth_tests {
 
         let body = json!({});
 
-        let response = server
-            .post("/auth/register")
-            .json(&body)
-            .await;
+        let response = server.post("/auth/register").json(&body).await;
 
         // 422 Unprocessable Entity quando manca un campo obbligatorio
         response.assert_status_unprocessable_entity();
@@ -485,10 +431,7 @@ mod auth_tests {
             "password": "Password123"
         });
 
-        let response = server
-            .post("/auth/register")
-            .json(&body)
-            .await;
+        let response = server.post("/auth/register").json(&body).await;
 
         response.assert_status_ok();
         Ok(())
@@ -506,10 +449,7 @@ mod auth_tests {
             "password": "Password123"
         });
 
-        let response = server
-            .post("/auth/register")
-            .json(&body)
-            .await;
+        let response = server.post("/auth/register").json(&body).await;
 
         response.assert_status_ok();
         Ok(())
@@ -528,10 +468,7 @@ mod auth_tests {
             "password": "TestPass123"
         });
 
-        let register_response = server
-            .post("/auth/register")
-            .json(&register_body)
-            .await;
+        let register_response = server.post("/auth/register").json(&register_body).await;
 
         register_response.assert_status_ok();
 
@@ -541,15 +478,15 @@ mod auth_tests {
             "password": "TestPass123"
         });
 
-        let login_response = server
-            .post("/auth/login")
-            .json(&login_body)
-            .await;
+        let login_response = server.post("/auth/login").json(&login_body).await;
 
         login_response.assert_status_ok();
-        
+
         let headers = login_response.headers();
-        assert!(headers.get("authorization").is_some(), "Should have authorization header after login");
+        assert!(
+            headers.get("authorization").is_some(),
+            "Should have authorization header after login"
+        );
 
         Ok(())
     }

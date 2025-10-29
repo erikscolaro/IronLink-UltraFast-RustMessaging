@@ -27,7 +27,7 @@ mod chat_tests {
             .get("/chats")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .await;
 
@@ -36,9 +36,15 @@ mod chat_tests {
         assert!(!chats.is_empty(), "L'utente dovrebbe avere almeno una chat");
 
         for chat in &chats {
-            assert!(chat.get("chat_id").is_some(), "Ogni chat deve avere un chat_id");
+            assert!(
+                chat.get("chat_id").is_some(),
+                "Ogni chat deve avere un chat_id"
+            );
             assert!(chat.get("title").is_some(), "Ogni chat deve avere un title");
-            assert!(chat.get("chat_type").is_some(), "Ogni chat deve avere un chat_type");
+            assert!(
+                chat.get("chat_type").is_some(),
+                "Ogni chat deve avere un chat_type"
+            );
         }
 
         Ok(())
@@ -51,9 +57,7 @@ mod chat_tests {
         let app = server::create_router(state);
         let server = TestServer::new(app).expect("Failed to create test server");
 
-        let response = server
-            .get("/chats")
-            .await;
+        let response = server.get("/chats").await;
 
         response.assert_status_forbidden();
         Ok(())
@@ -70,7 +74,7 @@ mod chat_tests {
             .get("/chats")
             .add_header(
                 HeaderName::from_static("authorization"),
-                "Bearer invalid_token_here"
+                "Bearer invalid_token_here",
             )
             .await;
 
@@ -100,7 +104,7 @@ mod chat_tests {
             .post("/chats")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .json(&body)
             .await;
@@ -132,7 +136,7 @@ mod chat_tests {
             .post("/chats")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .json(&body)
             .await;
@@ -162,7 +166,7 @@ mod chat_tests {
             .post("/chats")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .json(&body)
             .await;
@@ -189,7 +193,7 @@ mod chat_tests {
             .post("/chats")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .json(&body)
             .await;
@@ -210,10 +214,7 @@ mod chat_tests {
             "chat_type": "Group"
         });
 
-        let response = server
-            .post("/chats")
-            .json(&body)
-            .await;
+        let response = server.post("/chats").json(&body).await;
 
         response.assert_status_forbidden();
         Ok(())
@@ -235,13 +236,13 @@ mod chat_tests {
             .get("/chats/1/messages")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .await;
 
         response.assert_status_ok();
         let messages: Vec<serde_json::Value> = response.json();
-        
+
         // Verifica che ci siano messaggi (potrebbero essere 0 se i fixtures non sono caricati)
         if !messages.is_empty() {
             for message in &messages {
@@ -268,7 +269,7 @@ mod chat_tests {
             .get("/chats/3/messages")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .await;
 
@@ -288,7 +289,7 @@ mod chat_tests {
             .get("/chats/999/messages")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .await;
 
@@ -312,7 +313,7 @@ mod chat_tests {
             .get("/chats/1/members")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .await;
 
@@ -336,7 +337,7 @@ mod chat_tests {
             .get("/chats/3/members")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .await;
 
@@ -361,7 +362,7 @@ mod chat_tests {
             .post("/chats/3/invite/2")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .await;
 
@@ -382,7 +383,7 @@ mod chat_tests {
             .post("/chats/1/invite/3")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .await;
 
@@ -403,7 +404,7 @@ mod chat_tests {
             .post("/chats/1/invite/2")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .await;
 
@@ -424,7 +425,7 @@ mod chat_tests {
             .post("/chats/2/invite/3")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .await;
 
@@ -449,7 +450,7 @@ mod chat_tests {
             .patch("/chats/1/members/2/role")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .json(&"Admin")
             .await;
@@ -471,7 +472,7 @@ mod chat_tests {
             .patch("/chats/3/members/1/role")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .json(&"Admin")
             .await;
@@ -493,7 +494,7 @@ mod chat_tests {
             .patch("/chats/1/members/2/role")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .json(&"Owner")
             .await;
@@ -519,7 +520,7 @@ mod chat_tests {
             .patch("/chats/1/transfer_ownership/2")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .await;
 
@@ -540,7 +541,7 @@ mod chat_tests {
             .patch("/chats/1/transfer_ownership/3")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .await;
 
@@ -562,7 +563,7 @@ mod chat_tests {
             .patch("/chats/3/transfer_ownership/2")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .await;
 
@@ -587,7 +588,7 @@ mod chat_tests {
             .delete("/chats/1/members/2")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .await;
 
@@ -608,7 +609,7 @@ mod chat_tests {
             .delete("/chats/1/members/3")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .await;
 
@@ -629,7 +630,7 @@ mod chat_tests {
             .delete("/chats/3/members/1")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .await;
 
@@ -654,7 +655,7 @@ mod chat_tests {
             .post("/chats/1/leave")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .await;
 
@@ -675,7 +676,7 @@ mod chat_tests {
             .post("/chats/3/leave")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .await;
 
@@ -696,12 +697,11 @@ mod chat_tests {
             .post("/chats/1/leave")
             .add_header(
                 HeaderName::from_static("authorization"),
-                format!("Bearer {}", token)
+                format!("Bearer {}", token),
             )
             .await;
 
         response.assert_status_conflict();
         Ok(())
     }
-
 }

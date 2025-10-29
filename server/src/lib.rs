@@ -8,10 +8,13 @@ pub mod services;
 pub mod ws;
 
 // Re-export dei tipi principali per facilitare l'import
-pub use core::{AppState, AppError, auth, config};
+pub use core::{AppError, AppState, auth, config};
 pub use services::root;
 
-use axum::{Router, middleware, routing::{any, delete, get, patch, post}};
+use axum::{
+    Router, middleware,
+    routing::{any, delete, get, patch, post},
+};
 use std::sync::Arc;
 
 /// Crea il router principale dell'applicazione
@@ -48,7 +51,7 @@ fn configure_auth_routes() -> Router<Arc<AppState>> {
 fn configure_user_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
     use core::authentication_middleware;
     use services::*;
-    
+
     Router::new()
         .route("/", get(search_user_with_username))
         .route("/{user_id}", get(get_user_by_id))
@@ -63,7 +66,7 @@ fn configure_user_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
 fn configure_chat_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
     use core::{authentication_middleware, chat_membership_middleware};
     use services::*;
-    
+
     // Rotte che NON richiedono membership (solo autenticazione)
     let public_routes = Router::new()
         .route("/", get(list_chats).post(create_chat))
@@ -81,7 +84,10 @@ fn configure_chat_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/{chat_id}/members/{user_id}/role",
             patch(update_member_role),
         )
-        .route("/{chat_id}/transfer_ownership/{new_owner_id}", patch(transfer_ownership))
+        .route(
+            "/{chat_id}/transfer_ownership/{new_owner_id}",
+            patch(transfer_ownership),
+        )
         .route("/{chat_id}/members/{user_id}", delete(remove_member))
         .route("/{chat_id}/leave", post(leave_chat))
         .layer(middleware::from_fn_with_state(
@@ -100,7 +106,7 @@ fn configure_chat_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
 fn configure_invitation_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
     use core::authentication_middleware;
     use services::*;
-    
+
     Router::new()
         .route("/pending", get(list_pending_invitations))
         .route("/{invite_id}/{action}", post(respond_to_invitation))

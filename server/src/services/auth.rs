@@ -10,8 +10,8 @@ use axum::{
     response::IntoResponse,
 };
 use std::sync::Arc;
-use validator::Validate;
 use tracing::{debug, error, info, instrument, warn};
+use validator::Validate;
 
 /// DTO per il login (solo username e password)
 #[derive(serde::Deserialize)]
@@ -61,7 +61,7 @@ pub async fn login_user(
         ));
     }
 
-    let token = encode_jwt(user.username.clone(), user.user_id, &state.jwt_secret)?;
+    let token = encode_jwt(&user.username, user.user_id, &state.jwt_secret)?;
 
     let cookie_value = format!(
         "token={}; HttpOnly; Secure; SameSite=Lax; Max-Age={}",
@@ -105,11 +105,10 @@ pub async fn register_user(
         return Err(AppError::conflict("Username already exists"));
     }
 
-    let password_hash = User::hash_password(&body.password)
-        .map_err(|e| {
-            error!("Failed to hash password: {:?}", e);
-            AppError::internal_server_error("Failed to hash password")
-        })?;
+    let password_hash = User::hash_password(&body.password).map_err(|e| {
+        error!("Failed to hash password: {:?}", e);
+        AppError::internal_server_error("Failed to hash password")
+    })?;
 
     let new_user = CreateUserDTO {
         username: body.username.clone(),
