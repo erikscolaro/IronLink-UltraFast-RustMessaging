@@ -23,3 +23,7 @@ regex = "1.11"
 tokio-stream = { version = "0.1.17", features = ["full"]}
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+axum-test = "18.1.0"
+

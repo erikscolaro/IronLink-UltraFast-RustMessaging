@@ -77,7 +77,10 @@ pub async fn delete_my_account(
             if chat_members.len() == 1 {
                 // Se l'owner è l'unico membro, cancellare la chat completamente
                 // ON DELETE CASCADE cancellerà automaticamente i metadata e i messaggi
-                info!("Deleting chat {} (user is the only member)", metadata.chat_id);
+                info!(
+                    "Deleting chat {} (user is the only member)",
+                    metadata.chat_id
+                );
                 state.chat.delete(&metadata.chat_id).await?;
             } else {
                 // Cercare un admin a cui trasferire l'ownership
@@ -96,7 +99,10 @@ pub async fn delete_my_account(
 
                 if let Some(new_owner) = new_owner {
                     // Trasferire l'ownership
-                    info!("Transferring ownership of chat {} to user {}", metadata.chat_id, new_owner.user_id);
+                    info!(
+                        "Transferring ownership of chat {} to user {}",
+                        metadata.chat_id, new_owner.user_id
+                    );
                     state
                         .meta
                         .transfer_ownership(

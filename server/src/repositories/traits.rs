@@ -7,6 +7,7 @@
 /// # Type Parameters
 /// * `Entity` - Type of the returned entity (with ID assigned by the database)
 /// * `CreateDTO` - DTO for creation (without ID, will be automatically generated)
+#[allow(async_fn_in_trait)]
 pub trait Create<Entity, CreateDTO> {
     /// Creates a new entity in the database
     ///
@@ -24,6 +25,7 @@ pub trait Create<Entity, CreateDTO> {
 /// # Type Parameters
 /// * `Entity` - Type of the entity to read
 /// * `Id` - Type of the primary key (e.g. `i32`, `String`, `(i32, i32)`)
+#[allow(async_fn_in_trait)]
 pub trait Read<Entity, Id> {
     /// Reads an entity from the database by its primary key
     ///
@@ -43,6 +45,7 @@ pub trait Read<Entity, Id> {
 /// * `Entity` - Type of the updated entity
 /// * `UpdateDTO` - DTO for updating (optional fields for partial updates)
 /// * `Id` - Type of the primary key
+#[allow(async_fn_in_trait)]
 pub trait Update<Entity, UpdateDTO, Id> {
     /// Updates an existing entity in the database
     ///
@@ -60,6 +63,7 @@ pub trait Update<Entity, UpdateDTO, Id> {
 ///
 /// # Type Parameters
 /// * `Id` - Type of the primary key
+#[allow(async_fn_in_trait)]
 pub trait Delete<Id> {
     /// Deletes an entity from the database
     ///

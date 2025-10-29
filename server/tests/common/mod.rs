@@ -1,45 +1,65 @@
-//! Test helpers and utilities
-//!
-//! Questo modulo contiene funzioni helper condivise tra tutti i test.
-//!
-//! ## Setup Database
-//! I test usano il macro `#[sqlx::test]` che gestisce automaticamente:
-//! - Creazione di un database di test isolato per ogni test
-//! - Applicazione automatica delle migrations da `migrations/`
-//! - Applicazione opzionale di fixtures da `fixtures/`
-//! - Cleanup automatico del database al termine del test
-//!
-//! ## Environment Variables
-//! Richiede `DATABASE_URL` con credenziali superuser (root) per creare/distruggere database di test.
-//! Esempio: `DATABASE_URL=mysql://root:password@localhost:3306`
+use axum_test::TestServer;
+use server::core::AppState;
+use sqlx::MySqlPool;
+use std::sync::Arc;
+
+/// Crea un AppState per i test
+///
+/// # Arguments
+/// * `pool` - Connection pool MySQL
+///
+/// # Returns
+/// Arc<AppState> configurato con il JWT secret di test
+pub fn create_test_state(pool: MySqlPool) -> Arc<AppState> {
+    let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
+    Arc::new(AppState::new(pool, jwt_secret.to_string()))
+}
+
+/// Crea un TestServer per i test
+///
+/// # Arguments
+/// * `state` - AppState da utilizzare per il server
+///
+/// # Returns
+/// TestServer configurato e pronto per eseguire richieste
+pub fn create_test_server(state: Arc<AppState>) -> TestServer {
+    let app = server::create_router(state);
+    TestServer::new(app).expect("Failed to create test server")
+}
 
 /// Genera un JWT token per testing
 ///
 /// # Arguments
 /// * `user_id` - ID dell'utente per cui generare il token
+/// * `username` - Username dell'utente
 /// * `jwt_secret` - Secret key per firmare il token
 ///
 /// # Returns
 /// Token JWT valido per 24 ore
-pub fn create_test_jwt(user_id: i32, jwt_secret: &str) -> String {
+pub fn create_test_jwt(user_id: i32, username: &str, jwt_secret: &str) -> String {
     use chrono::{Duration, Utc};
     use jsonwebtoken::{EncodingKey, Header, encode};
     use serde::{Deserialize, Serialize};
 
     #[derive(Debug, Serialize, Deserialize)]
     struct Claims {
-        sub: String,
-        exp: i64,
+        id: i32,
+        username: String,
+        exp: usize,
+        iat: usize,
     }
 
-    let expiration = Utc::now()
+    let now = Utc::now();
+    let expiration = now
         .checked_add_signed(Duration::hours(24))
         .expect("valid timestamp")
-        .timestamp();
+        .timestamp() as usize;
 
     let claims = Claims {
-        sub: user_id.to_string(),
+        id: user_id,
+        username: username.to_string(),
         exp: expiration,
+        iat: now.timestamp() as usize,
     };
 
     encode(

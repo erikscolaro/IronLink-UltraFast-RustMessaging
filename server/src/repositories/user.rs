@@ -173,18 +173,18 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn test_create_user_success(pool: MySqlPool) -> sqlx::Result<()> {
         let repo = UserRepository::new(pool.clone());
-        
+
         let create_dto = CreateUserDTO {
             username: "new_user".to_string(),
             password: "hashed_password_123".to_string(),
         };
-        
+
         let created = repo.create(&create_dto).await?;
-        
+
         assert!(created.user_id > 0);
         assert_eq!(created.username, create_dto.username);
         assert_eq!(created.password, create_dto.password);
-        
+
         Ok(())
     }
 
@@ -192,17 +192,20 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn test_create_user_fails_with_duplicate_username(pool: MySqlPool) -> sqlx::Result<()> {
         let repo = UserRepository::new(pool.clone());
-        
+
         // Dal fixture: alice esiste già
         let duplicate_dto = CreateUserDTO {
             username: "alice".to_string(),
             password: "some_password".to_string(),
         };
-        
+
         let result = repo.create(&duplicate_dto).await;
-        
-        assert!(result.is_err(), "Expected unique constraint violation for duplicate username");
-        
+
+        assert!(
+            result.is_err(),
+            "Expected unique constraint violation for duplicate username"
+        );
+
         Ok(())
     }
 
@@ -210,21 +213,21 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn test_create_user_case_sensitive_username(pool: MySqlPool) -> sqlx::Result<()> {
         let repo = UserRepository::new(pool.clone());
-        
+
         // Dal fixture: "alice" esiste (lowercase)
         let uppercase_dto = CreateUserDTO {
             username: "ALICE".to_string(),
             password: "password".to_string(),
         };
-        
+
         // Questo dovrebbe avere successo se il DB è case-sensitive, altrimenti fallisce
         let result = repo.create(&uppercase_dto).await;
-        
+
         // In MySQL con utf8mb4_unicode_ci (case-insensitive), questo fallisce
         // Se si usa utf8mb4_bin (case-sensitive), avrebbe successo
         // Verifichiamo solo che non ci sia panic
         let _ = result;
-        
+
         Ok(())
     }
 
@@ -232,16 +235,16 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn test_create_user_with_empty_password(pool: MySqlPool) -> sqlx::Result<()> {
         let repo = UserRepository::new(pool.clone());
-        
+
         let create_dto = CreateUserDTO {
             username: "user_empty_pass".to_string(),
             password: "".to_string(),
         };
-        
+
         let created = repo.create(&create_dto).await?;
-        
+
         assert_eq!(created.password, "");
-        
+
         Ok(())
     }
 
@@ -249,20 +252,20 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn test_create_user_with_long_fields(pool: MySqlPool) -> sqlx::Result<()> {
         let repo = UserRepository::new(pool.clone());
-        
+
         let long_username = "a".repeat(200); // Assumendo che il DB accetti 255 chars
         let long_password = "b".repeat(500);
-        
+
         let create_dto = CreateUserDTO {
             username: long_username.clone(),
             password: long_password.clone(),
         };
-        
+
         let created = repo.create(&create_dto).await?;
-        
+
         assert_eq!(created.username, long_username);
         assert_eq!(created.password, long_password);
-        
+
         Ok(())
     }
 
@@ -274,17 +277,17 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn test_read_user_success(pool: MySqlPool) -> sqlx::Result<()> {
         let repo = UserRepository::new(pool.clone());
-        
+
         // Dal fixture: user_id=1 è alice
         let user_id = 1;
-        
+
         let user = repo.read(&user_id).await?;
-        
+
         assert!(user.is_some());
         let u = user.unwrap();
         assert_eq!(u.user_id, user_id);
         assert_eq!(u.username, "alice");
-        
+
         Ok(())
     }
 
@@ -292,13 +295,13 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn test_read_user_not_found(pool: MySqlPool) -> sqlx::Result<()> {
         let repo = UserRepository::new(pool.clone());
-        
+
         let nonexistent_id = 9999;
-        
+
         let user = repo.read(&nonexistent_id).await?;
-        
+
         assert!(user.is_none(), "Expected None for nonexistent user");
-        
+
         Ok(())
     }
 
@@ -306,21 +309,21 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn test_read_after_create(pool: MySqlPool) -> sqlx::Result<()> {
         let repo = UserRepository::new(pool.clone());
-        
+
         let create_dto = CreateUserDTO {
             username: "test_read".to_string(),
             password: "password123".to_string(),
         };
-        
+
         let created = repo.create(&create_dto).await?;
-        
+
         let read_user = repo.read(&created.user_id).await?;
-        
+
         assert!(read_user.is_some());
         let u = read_user.unwrap();
         assert_eq!(u.user_id, created.user_id);
         assert_eq!(u.username, created.username);
-        
+
         Ok(())
     }
 
@@ -328,16 +331,16 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn test_read_returns_all_fields(pool: MySqlPool) -> sqlx::Result<()> {
         let repo = UserRepository::new(pool.clone());
-        
+
         // Dal fixture: user_id=2 è bob
         let user_id = 2;
-        
+
         let user = repo.read(&user_id).await?.unwrap();
-        
+
         assert_eq!(user.user_id, 2);
         assert_eq!(user.username, "bob");
         assert!(!user.password.is_empty()); // password esiste
-        
+
         Ok(())
     }
 
@@ -349,20 +352,20 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn test_update_user_password_success(pool: MySqlPool) -> sqlx::Result<()> {
         let repo = UserRepository::new(pool.clone());
-        
+
         let user_id = 1;
         let new_password = "new_hashed_password_456".to_string();
-        
+
         let update_dto = UpdateUserDTO {
             password: Some(new_password.clone()),
         };
-        
+
         let updated = repo.update(&user_id, &update_dto).await?;
-        
+
         assert_eq!(updated.user_id, user_id);
         assert_eq!(updated.password, new_password);
         assert_eq!(updated.username, "alice"); // username non cambia
-        
+
         Ok(())
     }
 
@@ -370,21 +373,19 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn test_update_user_with_no_password_change(pool: MySqlPool) -> sqlx::Result<()> {
         let repo = UserRepository::new(pool.clone());
-        
+
         let user_id = 1;
-        
+
         let before = repo.read(&user_id).await?.unwrap();
-        
-        let update_dto = UpdateUserDTO {
-            password: None,
-        };
-        
+
+        let update_dto = UpdateUserDTO { password: None };
+
         let updated = repo.update(&user_id, &update_dto).await?;
-        
+
         assert_eq!(updated.user_id, before.user_id);
         assert_eq!(updated.username, before.username);
         assert_eq!(updated.password, before.password);
-        
+
         Ok(())
     }
 
@@ -392,17 +393,17 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn test_update_user_not_found(pool: MySqlPool) -> sqlx::Result<()> {
         let repo = UserRepository::new(pool.clone());
-        
+
         let nonexistent_id = 9999;
-        
+
         let update_dto = UpdateUserDTO {
             password: Some("new_password".to_string()),
         };
-        
+
         let result = repo.update(&nonexistent_id, &update_dto).await;
-        
+
         assert!(result.is_err(), "Expected error for nonexistent user");
-        
+
         Ok(())
     }
 
@@ -410,18 +411,18 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn test_update_preserves_username(pool: MySqlPool) -> sqlx::Result<()> {
         let repo = UserRepository::new(pool.clone());
-        
+
         let user_id = 2;
         let original_username = "bob".to_string();
-        
+
         let update_dto = UpdateUserDTO {
             password: Some("totally_new_password".to_string()),
         };
-        
+
         let updated = repo.update(&user_id, &update_dto).await?;
-        
+
         assert_eq!(updated.username, original_username);
-        
+
         Ok(())
     }
 
@@ -429,17 +430,17 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn test_update_user_to_empty_password(pool: MySqlPool) -> sqlx::Result<()> {
         let repo = UserRepository::new(pool.clone());
-        
+
         let user_id = 1;
-        
+
         let update_dto = UpdateUserDTO {
             password: Some("".to_string()),
         };
-        
+
         let updated = repo.update(&user_id, &update_dto).await?;
-        
+
         assert_eq!(updated.password, "");
-        
+
         Ok(())
     }
 
@@ -447,30 +448,30 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn test_update_user_multiple_times(pool: MySqlPool) -> sqlx::Result<()> {
         let repo = UserRepository::new(pool.clone());
-        
+
         let user_id = 1;
-        
+
         // Primo update
         let update1 = UpdateUserDTO {
             password: Some("password1".to_string()),
         };
         let result1 = repo.update(&user_id, &update1).await?;
         assert_eq!(result1.password, "password1");
-        
+
         // Secondo update
         let update2 = UpdateUserDTO {
             password: Some("password2".to_string()),
         };
         let result2 = repo.update(&user_id, &update2).await?;
         assert_eq!(result2.password, "password2");
-        
+
         // Terzo update
         let update3 = UpdateUserDTO {
             password: Some("password3".to_string()),
         };
         let result3 = repo.update(&user_id, &update3).await?;
         assert_eq!(result3.password, "password3");
-        
+
         Ok(())
     }
 
@@ -482,26 +483,26 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn test_delete_user_soft_delete(pool: MySqlPool) -> sqlx::Result<()> {
         let repo = UserRepository::new(pool.clone());
-        
+
         let user_id = 1;
-        
+
         // Verifica stato iniziale
         let before = repo.read(&user_id).await?.unwrap();
         assert_eq!(before.username, "alice");
         assert!(!before.password.is_empty());
-        
+
         // Soft delete
         repo.delete(&user_id).await?;
-        
+
         // Verifica che l'utente esista ancora ma sia anonimizzato
         let after = repo.read(&user_id).await?;
         assert!(after.is_some(), "User should still exist after soft delete");
-        
+
         let deleted_user = after.unwrap();
         assert_eq!(deleted_user.user_id, user_id);
         assert_eq!(deleted_user.username, "Deleted User");
         assert_eq!(deleted_user.password, "");
-        
+
         Ok(())
     }
 
@@ -509,14 +510,17 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn test_delete_user_not_found(pool: MySqlPool) -> sqlx::Result<()> {
         let repo = UserRepository::new(pool.clone());
-        
+
         let nonexistent_id = 9999;
-        
+
         // Soft delete su utente inesistente non dovrebbe dare errore
         let result = repo.delete(&nonexistent_id).await;
-        
-        assert!(result.is_ok(), "Expected soft delete to succeed even for nonexistent user");
-        
+
+        assert!(
+            result.is_ok(),
+            "Expected soft delete to succeed even for nonexistent user"
+        );
+
         Ok(())
     }
 
@@ -524,15 +528,15 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn test_delete_preserves_user_id(pool: MySqlPool) -> sqlx::Result<()> {
         let repo = UserRepository::new(pool.clone());
-        
+
         let user_id = 2;
-        
+
         repo.delete(&user_id).await?;
-        
+
         let deleted_user = repo.read(&user_id).await?.unwrap();
-        
+
         assert_eq!(deleted_user.user_id, user_id);
-        
+
         Ok(())
     }
 
@@ -540,20 +544,20 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn test_delete_user_multiple_times(pool: MySqlPool) -> sqlx::Result<()> {
         let repo = UserRepository::new(pool.clone());
-        
+
         let user_id = 1;
-        
+
         // Primo soft delete
         repo.delete(&user_id).await?;
         let after_first = repo.read(&user_id).await?.unwrap();
         assert_eq!(after_first.username, "Deleted User");
-        
+
         // Secondo soft delete (dovrebbe essere idempotente)
         repo.delete(&user_id).await?;
         let after_second = repo.read(&user_id).await?.unwrap();
         assert_eq!(after_second.username, "Deleted User");
         assert_eq!(after_second.password, "");
-        
+
         Ok(())
     }
 
@@ -561,9 +565,9 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats", "messages")))]
     async fn test_delete_preserves_message_history(pool: MySqlPool) -> sqlx::Result<()> {
         let repo = UserRepository::new(pool.clone());
-        
+
         let user_id = 1; // Alice ha messaggi nei fixtures
-        
+
         // Conta i messaggi prima del soft delete
         let messages_before = sqlx::query!(
             "SELECT COUNT(*) as count FROM messages WHERE sender_id = ?",
@@ -571,10 +575,10 @@ mod tests {
         )
         .fetch_one(&pool)
         .await?;
-        
+
         // Soft delete
         repo.delete(&user_id).await?;
-        
+
         // Conta i messaggi dopo il soft delete
         let messages_after = sqlx::query!(
             "SELECT COUNT(*) as count FROM messages WHERE sender_id = ?",
@@ -582,10 +586,10 @@ mod tests {
         )
         .fetch_one(&pool)
         .await?;
-        
+
         // I messaggi dovrebbero essere preservati
         assert_eq!(messages_before.count, messages_after.count);
-        
+
         Ok(())
     }
 
@@ -597,16 +601,16 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn test_find_by_username_success(pool: MySqlPool) -> sqlx::Result<()> {
         let repo = UserRepository::new(pool.clone());
-        
+
         let username = "alice".to_string();
-        
+
         let user = repo.find_by_username(&username).await?;
-        
+
         assert!(user.is_some());
         let u = user.unwrap();
         assert_eq!(u.username, username);
         assert_eq!(u.user_id, 1);
-        
+
         Ok(())
     }
 
@@ -614,13 +618,13 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn test_find_by_username_not_found(pool: MySqlPool) -> sqlx::Result<()> {
         let repo = UserRepository::new(pool.clone());
-        
+
         let nonexistent_username = "nonexistent_user".to_string();
-        
+
         let user = repo.find_by_username(&nonexistent_username).await?;
-        
+
         assert!(user.is_none(), "Expected None for nonexistent username");
-        
+
         Ok(())
     }
 
@@ -628,14 +632,14 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn test_find_by_username_exact_match_only(pool: MySqlPool) -> sqlx::Result<()> {
         let repo = UserRepository::new(pool.clone());
-        
+
         // Dal fixture: esiste "alice", cerco "alic" (parziale)
         let partial_username = "alic".to_string();
-        
+
         let user = repo.find_by_username(&partial_username).await?;
-        
+
         assert!(user.is_none(), "Expected None for partial match");
-        
+
         Ok(())
     }
 
@@ -643,19 +647,19 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn test_find_by_username_after_create(pool: MySqlPool) -> sqlx::Result<()> {
         let repo = UserRepository::new(pool.clone());
-        
+
         let create_dto = CreateUserDTO {
             username: "findme".to_string(),
             password: "password".to_string(),
         };
-        
+
         let created = repo.create(&create_dto).await?;
-        
+
         let found = repo.find_by_username(&create_dto.username).await?;
-        
+
         assert!(found.is_some());
         assert_eq!(found.unwrap().user_id, created.user_id);
-        
+
         Ok(())
     }
 
@@ -663,22 +667,22 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn test_find_by_username_after_soft_delete(pool: MySqlPool) -> sqlx::Result<()> {
         let repo = UserRepository::new(pool.clone());
-        
+
         let user_id = 1;
-        
+
         // Soft delete alice
         repo.delete(&user_id).await?;
-        
+
         // Cerca "Deleted User"
         let deleted_user = repo.find_by_username(&"Deleted User".to_string()).await?;
-        
+
         // Dovrebbe trovare almeno un utente con "Deleted User"
         assert!(deleted_user.is_some());
-        
+
         // Non dovrebbe più trovare "alice"
         let alice = repo.find_by_username(&"alice".to_string()).await?;
         assert!(alice.is_none());
-        
+
         Ok(())
     }
 
@@ -690,18 +694,18 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn test_search_by_username_partial_success(pool: MySqlPool) -> sqlx::Result<()> {
         let repo = UserRepository::new(pool.clone());
-        
+
         // Dal fixture: alice, bob, charlie
         let pattern = "a".to_string(); // dovrebbe trovare alice e charlie
-        
+
         let users = repo.search_by_username_partial(&pattern).await?;
-        
+
         assert!(!users.is_empty());
         // Verifica che tutti i risultati inizino con "a"
         for user in users {
             assert!(user.username.starts_with("a"));
         }
-        
+
         Ok(())
     }
 
@@ -709,13 +713,13 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn test_search_by_username_partial_no_match(pool: MySqlPool) -> sqlx::Result<()> {
         let repo = UserRepository::new(pool.clone());
-        
+
         let pattern = "xyz".to_string(); // nessun utente inizia con xyz
-        
+
         let users = repo.search_by_username_partial(&pattern).await?;
-        
+
         assert!(users.is_empty(), "Expected empty array for no matches");
-        
+
         Ok(())
     }
 
@@ -723,7 +727,7 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn test_search_by_username_partial_limit(pool: MySqlPool) -> sqlx::Result<()> {
         let repo = UserRepository::new(pool.clone());
-        
+
         // Crea 15 utenti che iniziano con "test"
         for i in 0..15 {
             let create_dto = CreateUserDTO {
@@ -732,29 +736,31 @@ mod tests {
             };
             repo.create(&create_dto).await?;
         }
-        
+
         let pattern = "test".to_string();
-        
+
         let users = repo.search_by_username_partial(&pattern).await?;
-        
+
         // Dovrebbe restituire al massimo 10 risultati (LIMIT 10)
         assert!(users.len() <= 10, "Expected at most 10 results");
-        
+
         Ok(())
     }
 
     /// Test: verifica che search_by_username_partial trovi tutti i match
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
-    async fn test_search_by_username_partial_finds_all_matches(pool: MySqlPool) -> sqlx::Result<()> {
+    async fn test_search_by_username_partial_finds_all_matches(
+        pool: MySqlPool,
+    ) -> sqlx::Result<()> {
         let repo = UserRepository::new(pool.clone());
-        
+
         // Dal fixture: bob inizia con "b"
         let pattern = "b".to_string();
-        
+
         let users = repo.search_by_username_partial(&pattern).await?;
-        
+
         assert!(users.iter().any(|u| u.username == "bob"));
-        
+
         Ok(())
     }
 
@@ -762,20 +768,20 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users")))]
     async fn test_search_by_username_partial_case_insensitive(pool: MySqlPool) -> sqlx::Result<()> {
         let repo = UserRepository::new(pool.clone());
-        
+
         // Dal fixture: alice esiste (lowercase)
         let uppercase_pattern = "A".to_string();
-        
+
         let users = repo.search_by_username_partial(&uppercase_pattern).await?;
-        
+
         // Con utf8mb4_unicode_ci (case-insensitive), dovrebbe trovare alice
         // Se non trova nulla, il DB potrebbe essere case-sensitive
         let found_alice = users.iter().any(|u| u.username.to_lowercase() == "alice");
-        
+
         // Questo test potrebbe passare o fallire a seconda del collation del DB
         // Lo lasciamo per documentazione
         let _ = found_alice;
-        
+
         Ok(())
     }
 
@@ -785,11 +791,13 @@ mod tests {
 
     /// Test: verifica che HARD delete di user causi CASCADE DELETE su invitations (invited_id)
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats", "invitations")))]
-    async fn test_hard_delete_user_cascades_to_invitations_invited(pool: MySqlPool) -> sqlx::Result<()> {
+    async fn test_hard_delete_user_cascades_to_invitations_invited(
+        pool: MySqlPool,
+    ) -> sqlx::Result<()> {
         // Note: questo test usa HARD DELETE invece di soft delete per verificare CASCADE
-        
+
         let user_id = 3; // Charlie è invited_id in alcuni inviti
-        
+
         // Conta inviti per Charlie prima
         let invitations_before = sqlx::query!(
             "SELECT COUNT(*) as count FROM invitations WHERE invited_id = ?",
@@ -797,14 +805,17 @@ mod tests {
         )
         .fetch_one(&pool)
         .await?;
-        
-        assert!(invitations_before.count > 0, "Charlie should have invitations");
-        
+
+        assert!(
+            invitations_before.count > 0,
+            "Charlie should have invitations"
+        );
+
         // HARD DELETE (non soft delete)
         sqlx::query!("DELETE FROM users WHERE user_id = ?", user_id)
             .execute(&pool)
             .await?;
-        
+
         // Verifica che gli inviti siano stati eliminati per CASCADE
         let invitations_after = sqlx::query!(
             "SELECT COUNT(*) as count FROM invitations WHERE invited_id = ?",
@@ -812,17 +823,22 @@ mod tests {
         )
         .fetch_one(&pool)
         .await?;
-        
-        assert_eq!(invitations_after.count, 0, "Invitations should be deleted via CASCADE");
-        
+
+        assert_eq!(
+            invitations_after.count, 0,
+            "Invitations should be deleted via CASCADE"
+        );
+
         Ok(())
     }
 
     /// Test: verifica che HARD delete di user causi CASCADE DELETE su invitations (invitee_id)
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats", "invitations")))]
-    async fn test_hard_delete_user_cascades_to_invitations_inviter(pool: MySqlPool) -> sqlx::Result<()> {
+    async fn test_hard_delete_user_cascades_to_invitations_inviter(
+        pool: MySqlPool,
+    ) -> sqlx::Result<()> {
         let user_id = 2; // Bob è invitee_id in alcuni inviti
-        
+
         // Conta inviti creati da Bob prima
         let invitations_before = sqlx::query!(
             "SELECT COUNT(*) as count FROM invitations WHERE invitee_id = ?",
@@ -830,14 +846,17 @@ mod tests {
         )
         .fetch_one(&pool)
         .await?;
-        
-        assert!(invitations_before.count > 0, "Bob should have created invitations");
-        
+
+        assert!(
+            invitations_before.count > 0,
+            "Bob should have created invitations"
+        );
+
         // HARD DELETE
         sqlx::query!("DELETE FROM users WHERE user_id = ?", user_id)
             .execute(&pool)
             .await?;
-        
+
         // Verifica CASCADE
         let invitations_after = sqlx::query!(
             "SELECT COUNT(*) as count FROM invitations WHERE invitee_id = ?",
@@ -845,9 +864,12 @@ mod tests {
         )
         .fetch_one(&pool)
         .await?;
-        
-        assert_eq!(invitations_after.count, 0, "Invitations should be deleted via CASCADE");
-        
+
+        assert_eq!(
+            invitations_after.count, 0,
+            "Invitations should be deleted via CASCADE"
+        );
+
         Ok(())
     }
 
@@ -855,7 +877,7 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats", "messages")))]
     async fn test_hard_delete_user_cascades_to_messages(pool: MySqlPool) -> sqlx::Result<()> {
         let user_id = 1; // Alice ha messaggi
-        
+
         // Conta messaggi prima
         let messages_before = sqlx::query!(
             "SELECT COUNT(*) as count FROM messages WHERE sender_id = ?",
@@ -863,14 +885,14 @@ mod tests {
         )
         .fetch_one(&pool)
         .await?;
-        
+
         assert!(messages_before.count > 0, "Alice should have messages");
-        
+
         // HARD DELETE
         sqlx::query!("DELETE FROM users WHERE user_id = ?", user_id)
             .execute(&pool)
             .await?;
-        
+
         // Verifica CASCADE
         let messages_after = sqlx::query!(
             "SELECT COUNT(*) as count FROM messages WHERE sender_id = ?",
@@ -878,9 +900,12 @@ mod tests {
         )
         .fetch_one(&pool)
         .await?;
-        
-        assert_eq!(messages_after.count, 0, "Messages should be deleted via CASCADE");
-        
+
+        assert_eq!(
+            messages_after.count, 0,
+            "Messages should be deleted via CASCADE"
+        );
+
         Ok(())
     }
 
@@ -888,7 +913,7 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
     async fn test_hard_delete_user_cascades_to_metadata(pool: MySqlPool) -> sqlx::Result<()> {
         let user_id = 1; // Alice è membro di varie chat
-        
+
         // Conta metadata prima
         let metadata_before = sqlx::query!(
             "SELECT COUNT(*) as count FROM userchatmetadata WHERE user_id = ?",
@@ -896,14 +921,14 @@ mod tests {
         )
         .fetch_one(&pool)
         .await?;
-        
+
         assert!(metadata_before.count > 0, "Alice should have chat metadata");
-        
+
         // HARD DELETE
         sqlx::query!("DELETE FROM users WHERE user_id = ?", user_id)
             .execute(&pool)
             .await?;
-        
+
         // Verifica CASCADE
         let metadata_after = sqlx::query!(
             "SELECT COUNT(*) as count FROM userchatmetadata WHERE user_id = ?",
@@ -911,9 +936,12 @@ mod tests {
         )
         .fetch_one(&pool)
         .await?;
-        
-        assert_eq!(metadata_after.count, 0, "Metadata should be deleted via CASCADE");
-        
+
+        assert_eq!(
+            metadata_after.count, 0,
+            "Metadata should be deleted via CASCADE"
+        );
+
         Ok(())
     }
 
@@ -921,9 +949,9 @@ mod tests {
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats", "messages")))]
     async fn test_soft_delete_preserves_relations(pool: MySqlPool) -> sqlx::Result<()> {
         let repo = UserRepository::new(pool.clone());
-        
+
         let user_id = 1; // Alice
-        
+
         // Conta messaggi prima
         let messages_before = sqlx::query!(
             "SELECT COUNT(*) as count FROM messages WHERE sender_id = ?",
@@ -931,10 +959,10 @@ mod tests {
         )
         .fetch_one(&pool)
         .await?;
-        
+
         // SOFT DELETE tramite repository
         repo.delete(&user_id).await?;
-        
+
         // Verifica che i messaggi siano ancora presenti
         let messages_after = sqlx::query!(
             "SELECT COUNT(*) as count FROM messages WHERE sender_id = ?",
@@ -942,13 +970,16 @@ mod tests {
         )
         .fetch_one(&pool)
         .await?;
-        
-        assert_eq!(messages_before.count, messages_after.count, "Messages should be preserved with soft delete");
-        
+
+        assert_eq!(
+            messages_before.count, messages_after.count,
+            "Messages should be preserved with soft delete"
+        );
+
         // Verifica che l'utente sia anonimizzato ma esista
         let user = repo.read(&user_id).await?.unwrap();
         assert_eq!(user.username, "Deleted User");
-        
+
         Ok(())
     }
 }

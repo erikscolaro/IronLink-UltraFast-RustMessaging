@@ -15,8 +15,8 @@ use axum::{
 use axum_macros::debug_handler;
 use chrono::Utc;
 use std::sync::Arc;
-use validator::Validate;
 use tracing::{debug, info, instrument, warn};
+use validator::Validate;
 
 #[instrument(skip(state, _metadata), fields(chat_id = %chat_id))]
 pub async fn list_chat_members(
@@ -106,18 +106,16 @@ pub async fn invite_to_chat(
     require_role(&metadata, &[UserRole::Admin, UserRole::Owner])?;
 
     // Verificare che la chat esista e sia di tipo Group
-    let chat = state
-        .chat
-        .read(&chat_id)
-        .await?
-        .ok_or_else(|| {
-            warn!("Chat not found: {}", chat_id);
-            AppError::not_found("Chat not found")
-        })?;
+    let chat = state.chat.read(&chat_id).await?.ok_or_else(|| {
+        warn!("Chat not found: {}", chat_id);
+        AppError::not_found("Chat not found")
+    })?;
 
     if chat.chat_type != ChatType::Group {
         warn!("Attempted to invite user to private chat");
-        return Err(AppError::bad_request("Cannot invite users to private chats"));
+        return Err(AppError::bad_request(
+            "Cannot invite users to private chats",
+        ));
     }
 
     // Verificare che l'utente target esista nel database
@@ -138,7 +136,10 @@ pub async fn invite_to_chat(
         .has_pending_invitation(&user_id, &chat_id)
         .await?
     {
-        warn!("Pending invitation already exists for user {} to chat {}", user_id, chat_id);
+        warn!(
+            "Pending invitation already exists for user {} to chat {}",
+            user_id, chat_id
+        );
         return Err(AppError::conflict(
             "There is already a pending invitation for this user to this chat",
         ));
@@ -197,28 +198,30 @@ pub async fn respond_to_invitation(
     };
 
     // Recuperare l'invito
-    let invitation = state
-        .invitation
-        .read(&invite_id)
-        .await?
-        .ok_or_else(|| {
-            warn!("Invitation not found: {}", invite_id);
-            AppError::not_found("Invitation not found")
-        })?;
+    let invitation = state.invitation.read(&invite_id).await?.ok_or_else(|| {
+        warn!("Invitation not found: {}", invite_id);
+        AppError::not_found("Invitation not found")
+    })?;
 
     // Verificare che sia pending
     if invitation.state != InvitationStatus::Pending {
-        warn!("Invitation {} is already processed: {:?}", invite_id, invitation.state);
-        return Err(AppError::conflict("Invitation is already processed").with_details(format!(
-            "Invitation is already {:?}",
-            invitation.state
-        )));
+        warn!(
+            "Invitation {} is already processed: {:?}",
+            invite_id, invitation.state
+        );
+        return Err(AppError::conflict("Invitation is already processed")
+            .with_details(format!("Invitation is already {:?}", invitation.state)));
     }
 
     // Verificare che current_user sia l'invitato
     if invitation.invited_id != current_user.user_id {
-        warn!("User {} attempted to respond to invitation for user {}", current_user.user_id, invitation.invited_id);
-        return Err(AppError::forbidden("You are not the recipient of this invitation"));
+        warn!(
+            "User {} attempted to respond to invitation for user {}",
+            current_user.user_id, invitation.invited_id
+        );
+        return Err(AppError::forbidden(
+            "You are not the recipient of this invitation",
+        ));
     }
 
     let chat_id = invitation.target_chat_id;
@@ -282,7 +285,7 @@ pub async fn respond_to_invitation(
     let _ = state
         .chats_online
         .send(&chat_id, Arc::new(MessageDTO::from(saved_message)));
-    
+
     info!("Invitation response processed successfully");
     Ok(())
 }
@@ -330,11 +333,11 @@ pub async fn leave_chat(
     };
 
     let create_dto = CreateMessageDTO::try_from(message_dto.clone())
-    .map_err(|_| AppError::bad_request("Failed to build message dto"))?;
+        .map_err(|_| AppError::bad_request("Failed to build message dto"))?;
 
     create_dto
         .validate()
-    .map_err(|_| AppError::bad_request("Validation error"))?;
+        .map_err(|_| AppError::bad_request("Validation error"))?;
 
     let _saved_message = state.msg.create(&create_dto).await?;
 
@@ -365,14 +368,19 @@ pub async fn remove_member(
     require_role(&current_metadata, &[UserRole::Admin, UserRole::Owner])?;
 
     let target_meta = state.meta.read(&(user_id, chat_id)).await?.ok_or_else(|| {
-        warn!("Target user {} is not a member of chat {}", user_id, chat_id);
+        warn!(
+            "Target user {} is not a member of chat {}",
+            user_id, chat_id
+        );
         AppError::not_found("The user to be removed is not a member of this chat")
     })?;
 
     // Non si può rimuovere l'Owner
     if matches!(target_meta.user_role, Some(UserRole::Owner)) {
         warn!("Attempted to remove owner from chat");
-        return Err(AppError::forbidden("You cannot remove the owner of the chat"));
+        return Err(AppError::forbidden(
+            "You cannot remove the owner of the chat",
+        ));
     }
 
     state.meta.delete(&(user_id, chat_id)).await?;
@@ -414,7 +422,7 @@ pub async fn remove_member(
 #[instrument(skip(state, current_user, current_metadata, body), fields(chat_id = %chat_id, updating_user = %current_user.user_id, target_user = %user_id, new_role = ?body))]
 pub async fn update_member_role(
     State(state): State<Arc<AppState>>,
-    Path((user_id, chat_id)): Path<(i32, i32)>,
+    Path((chat_id, user_id)): Path<(i32, i32)>,
     Extension(current_user): Extension<User>,
     Extension(current_metadata): Extension<UserChatMetadata>, // ottenuto dal chat_membership_middleware
     Json(body): Json<UserRole>,
@@ -435,11 +443,21 @@ pub async fn update_member_role(
     require_role(&current_metadata, &[UserRole::Admin, UserRole::Owner])?;
 
     let target_meta = state.meta.read(&(user_id, chat_id)).await?.ok_or_else(|| {
-        warn!("Target user {} is not a member of chat {}", user_id, chat_id);
-        AppError::not_found(
-            "The user whose role is to be changed is not a member of this chat",
-        )
+        warn!(
+            "Target user {} is not a member of chat {}",
+            user_id, chat_id
+        );
+        AppError::not_found("The user whose role is to be changed is not a member of this chat")
     })?;
+
+    // Nessuno può assegnare il ruolo Owner tramite questo endpoint
+    // Per trasferire ownership, usare l'endpoint dedicato transfer_ownership
+    if body == UserRole::Owner {
+        warn!("Attempted to assign owner role via update_member_role");
+        return Err(AppError::forbidden(
+            "Cannot assign Owner role. Use transfer_ownership endpoint instead",
+        ));
+    }
 
     match current_metadata.user_role {
         Some(UserRole::Admin) => {
@@ -451,17 +469,9 @@ pub async fn update_member_role(
                     return Err(AppError::forbidden("Admin can modify only members"));
                 }
             }
-
-            // Admin non può assegnare Owner
-            match body {
-                UserRole::Owner => {
-                    warn!("Admin attempted to assign owner role");
-                    return Err(AppError::forbidden("Only Owner can assign ownership"));
-                }
-                _ => { /* ok */ }
-            }
         }
-        _ => { /* current user non-admin: altre regole già gestite sopra */ }
+        _ => { /* current user è Owner: può modificare tutti tranne assegnare Owner (già verificato sopra) */
+        }
     }
 
     state
@@ -489,11 +499,11 @@ pub async fn update_member_role(
     };
 
     let create_dto = CreateMessageDTO::try_from(message_dto.clone())
-    .map_err(|_| AppError::bad_request("Failed to build message dto"))?;
+        .map_err(|_| AppError::bad_request("Failed to build message dto"))?;
 
     create_dto
         .validate()
-    .map_err(|_| AppError::bad_request("Validation error"))?;
+        .map_err(|_| AppError::bad_request("Validation error"))?;
 
     let _saved_message = state.msg.create(&create_dto).await?;
 
@@ -555,6 +565,15 @@ pub async fn transfer_ownership(
         }
     };
 
+    // Verifica che il nuovo owner sia membro della chat
+    let new_owner_meta = state.meta.read(&(new_owner_id, chat_id)).await?;
+    if new_owner_meta.is_none() {
+        warn!("User {} is not a member of chat {}", new_owner_id, chat_id);
+        return Err(AppError::not_found(
+            "New owner must be a member of the chat",
+        ));
+    }
+
     debug!("Performing ownership transfer");
     // Trasferisce la proprietà dal current_user al nuovo owner
     state
@@ -574,8 +593,9 @@ pub async fn transfer_ownership(
         created_at: Some(Utc::now()),
     };
 
-    let create_dto = CreateMessageDTO::try_from(message_dto.clone())
-        .map_err(|e| AppError::bad_request("Failed to build message dto").with_details(e.to_string()))?;
+    let create_dto = CreateMessageDTO::try_from(message_dto.clone()).map_err(|e| {
+        AppError::bad_request("Failed to build message dto").with_details(e.to_string())
+    })?;
 
     create_dto
         .validate()

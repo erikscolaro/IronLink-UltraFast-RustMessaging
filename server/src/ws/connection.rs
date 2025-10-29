@@ -10,7 +10,7 @@ use axum::extract::ws::Utf8Bytes;
 use axum::extract::ws::{Message, WebSocket};
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
-use std::{sync::Arc};
+use std::sync::Arc;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio::time::Duration;
 use tokio::time::{interval, timeout};

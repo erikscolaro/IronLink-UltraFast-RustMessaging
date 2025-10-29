@@ -1,8 +1,8 @@
 use dashmap::DashMap;
-use tokio::sync::mpsc::{UnboundedSender};
+use tokio::sync::mpsc::UnboundedSender;
 use tracing::{info, instrument, warn};
 
-use crate::dtos::{InvitationDTO};
+use crate::dtos::InvitationDTO;
 
 pub enum InternalSignal {
     Shutdown,
@@ -49,3 +49,4 @@ impl UserMap {
         }
     }
 }
+
