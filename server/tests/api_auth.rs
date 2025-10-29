@@ -14,10 +14,9 @@ mod common;
 
 #[cfg(test)]
 mod auth_tests {
-    use axum_test::TestServer;
+    use super::common::*;
     use serde_json::json;
     use sqlx::MySqlPool;
-    use std::sync::Arc;
 
     // ============================================================
     // Test per POST /auth/login - login_user
@@ -25,10 +24,8 @@ mod auth_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_login_success(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         // Prima registriamo un nuovo utente
         let register_body = json!({
@@ -74,10 +71,8 @@ mod auth_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_login_wrong_password(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         let body = json!({
             "username": "alice",
@@ -92,10 +87,8 @@ mod auth_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_login_nonexistent_user(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         let body = json!({
             "username": "nonexistent",
@@ -110,10 +103,8 @@ mod auth_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_login_deleted_user(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         let body = json!({
             "username": "Deleted User",
@@ -128,10 +119,8 @@ mod auth_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_login_missing_password(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         let body = json!({
             "username": "alice"
@@ -146,10 +135,8 @@ mod auth_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_login_missing_username(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         let body = json!({
             "password": "password123"
@@ -164,10 +151,8 @@ mod auth_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_login_empty_body(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         let body = json!({});
 
@@ -184,10 +169,8 @@ mod auth_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_register_success(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         let body = json!({
             "username": "newuser",
@@ -207,10 +190,8 @@ mod auth_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_register_duplicate_username(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         let body = json!({
             "username": "alice",
@@ -225,10 +206,8 @@ mod auth_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_register_deleted_user_username(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         let body = json!({
             "username": "Deleted User",
@@ -243,10 +222,8 @@ mod auth_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_register_username_too_short(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         let body = json!({
             "username": "ab",
@@ -261,10 +238,8 @@ mod auth_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_register_username_too_long(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         let body = json!({
             "username": "a".repeat(51),
@@ -279,10 +254,8 @@ mod auth_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_register_username_invalid_characters(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         let body = json!({
             "username": "user@name",
@@ -297,10 +270,8 @@ mod auth_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_register_password_too_short(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         let body = json!({
             "username": "newuser",
@@ -315,10 +286,8 @@ mod auth_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_register_password_no_uppercase(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         let body = json!({
             "username": "newuser",
@@ -333,10 +302,8 @@ mod auth_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_register_password_no_lowercase(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         let body = json!({
             "username": "newuser",
@@ -351,10 +318,8 @@ mod auth_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_register_password_no_digit(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         let body = json!({
             "username": "newuser",
@@ -369,10 +334,8 @@ mod auth_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_register_missing_username(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         let body = json!({
             "password": "Password123"
@@ -387,10 +350,8 @@ mod auth_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_register_missing_password(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         let body = json!({
             "username": "newuser"
@@ -405,10 +366,8 @@ mod auth_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_register_empty_body(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         let body = json!({});
 
@@ -421,10 +380,8 @@ mod auth_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_register_valid_username_with_numbers(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         let body = json!({
             "username": "user123",
@@ -439,10 +396,8 @@ mod auth_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_register_valid_username_with_underscores(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         let body = json!({
             "username": "user_name",
@@ -457,10 +412,8 @@ mod auth_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_register_then_login(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         // Prima registrazione
         let register_body = json!({

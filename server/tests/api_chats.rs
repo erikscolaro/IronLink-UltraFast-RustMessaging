@@ -4,12 +4,10 @@ mod common;
 
 #[cfg(test)]
 mod chat_tests {
-    use super::common::create_test_jwt;
-    use axum_test::TestServer;
+    use super::common::*;
     use axum_test::http::HeaderName;
     use serde_json::json;
     use sqlx::MySqlPool;
-    use std::sync::Arc;
 
     // ============================================================
     // Test per GET /chats - list_chats
@@ -17,11 +15,9 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_get_chats_success(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(1, "alice", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
         let response = server
             .get("/chats")
@@ -52,10 +48,8 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_get_chats_without_token(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         let response = server.get("/chats").await;
 
@@ -65,10 +59,8 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_get_chats_with_invalid_token(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         let response = server
             .get("/chats")
@@ -88,11 +80,9 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_create_group_chat_success(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(1, "alice", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
         let body = json!({
             "title": "New Group Chat",
@@ -121,11 +111,9 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_create_private_chat_success(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(1, "alice", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
         let body = json!({
             "chat_type": "Private",
@@ -151,11 +139,9 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_create_private_chat_already_exists(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(1, "alice", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
         let body = json!({
             "chat_type": "Private",
@@ -177,11 +163,9 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_create_private_chat_invalid_user_list(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(1, "alice", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
         // user_list con 3 utenti invece di 2
         let body = json!({
@@ -204,10 +188,8 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_create_chat_without_token(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         let body = json!({
             "title": "New Chat",
@@ -226,11 +208,9 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats", "messages")))]
     async fn test_get_chat_messages_success(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(1, "alice", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
         let response = server
             .get("/chats/1/messages")
@@ -258,11 +238,9 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats", "messages")))]
     async fn test_get_chat_messages_not_member(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(2, "bob", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(2, "bob", &state.jwt_secret);
 
         // Bob non è membro della chat 3 (Dev Team)
         let response = server
@@ -279,11 +257,9 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats", "messages")))]
     async fn test_get_chat_messages_nonexistent_chat(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(1, "alice", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
         let response = server
             .get("/chats/999/messages")
@@ -303,11 +279,9 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_get_chat_members_success(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(1, "alice", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
         let response = server
             .get("/chats/1/members")
@@ -326,11 +300,9 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_get_chat_members_not_member(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(2, "bob", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(2, "bob", &state.jwt_secret);
 
         // Bob non è membro della chat 3
         let response = server
@@ -351,11 +323,9 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_invite_to_chat_success(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(1, "alice", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
         // Alice (OWNER) invita Bob alla chat 3 (Dev Team)
         let response = server
@@ -372,11 +342,9 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_invite_to_chat_not_admin(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(2, "bob", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(2, "bob", &state.jwt_secret);
 
         // Bob (MEMBER) cerca di invitare charlie alla chat 1
         let response = server
@@ -393,11 +361,9 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_invite_to_chat_already_member(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(1, "alice", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
         // Alice cerca di invitare Bob alla chat 1 dove è già membro
         let response = server
@@ -414,11 +380,9 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_invite_to_private_chat(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(1, "alice", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
         // Tentativo di invitare a una chat privata (non permesso)
         let response = server
@@ -439,11 +403,9 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_update_member_role_success(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(1, "alice", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
         // Alice (OWNER) promuove Bob ad ADMIN nella chat 1
         let response = server
@@ -461,11 +423,9 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_update_member_role_not_owner(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(3, "charlie", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(3, "charlie", &state.jwt_secret);
 
         // Charlie (ADMIN) cerca di modificare il ruolo (solo OWNER può)
         let response = server
@@ -483,11 +443,9 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_update_member_role_to_owner(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(1, "alice", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
         // Non si può promuovere a OWNER con questo endpoint
         let response = server
@@ -509,11 +467,9 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_transfer_ownership_success(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(1, "alice", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
         // Alice trasferisce ownership a Bob nella chat 1
         let response = server
@@ -530,11 +486,9 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_transfer_ownership_not_owner(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(2, "bob", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(2, "bob", &state.jwt_secret);
 
         // Bob non è OWNER, non può trasferire ownership
         let response = server
@@ -551,11 +505,9 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_transfer_ownership_to_non_member(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(1, "alice", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
         // Alice cerca di trasferire ownership della chat 3 (Dev Team) a Bob
         // Bob non è membro della chat 3 (solo Alice e Charlie sono membri)
@@ -577,11 +529,9 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_remove_member_success(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(1, "alice", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
         // Alice (OWNER) rimuove Bob dalla chat 1
         let response = server
@@ -598,11 +548,9 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_remove_member_not_admin(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(2, "bob", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(2, "bob", &state.jwt_secret);
 
         // Bob (MEMBER) cerca di rimuovere Charlie
         let response = server
@@ -619,11 +567,9 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_remove_owner(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(3, "charlie", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(3, "charlie", &state.jwt_secret);
 
         // Charlie (ADMIN) cerca di rimuovere Alice (OWNER)
         let response = server
@@ -644,11 +590,9 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_leave_chat_success(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(2, "bob", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(2, "bob", &state.jwt_secret);
 
         // Bob lascia la chat 1
         let response = server
@@ -665,11 +609,9 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_leave_chat_not_member(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(2, "bob", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(2, "bob", &state.jwt_secret);
 
         // Bob cerca di lasciare la chat 3 di cui non è membro
         let response = server
@@ -686,11 +628,9 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_leave_chat_as_owner(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(1, "alice", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
         // Alice (OWNER) cerca di lasciare la chat
         let response = server

@@ -9,13 +9,11 @@ mod common;
 
 #[cfg(test)]
 mod user_tests {
-    use super::common::create_test_jwt;
-    use axum_test::TestServer;
+    use super::common::*;
     use axum_test::http::HeaderName;
     use serde_json::json;
     use server::repositories::Read;
     use sqlx::MySqlPool;
-    use std::sync::Arc; // Per usare i metodi read() dei repository
 
     // ============================================================
     // Test per GET /users?search=username - search_user_with_username
@@ -23,11 +21,9 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_search_users_success(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(1, "alice", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
         let response = server
             .get("/users?search=al")
@@ -52,11 +48,9 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_search_users_partial_match(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(1, "alice", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
         let response = server
             .get("/users?search=cha")
@@ -80,11 +74,9 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_search_users_no_results(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(1, "alice", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
         let response = server
             .get("/users?search=nonexistent")
@@ -104,11 +96,9 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_search_users_empty_query(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(1, "alice", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
         let response = server
             .get("/users?search=")
@@ -133,10 +123,8 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_search_users_without_token(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         let response = server.get("/users?search=alice").await;
 
@@ -146,10 +134,8 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_search_users_with_invalid_token(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         let response = server
             .get("/users?search=alice")
@@ -169,11 +155,9 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_get_user_by_id_success(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(1, "alice", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
         let response = server
             .get("/users/2")
@@ -194,11 +178,9 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_get_user_by_id_not_found(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(1, "alice", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
         let response = server
             .get("/users/999")
@@ -219,11 +201,9 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_get_user_by_id_self(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(1, "alice", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
         let response = server
             .get("/users/1")
@@ -244,10 +224,8 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_get_user_by_id_without_token(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         let response = server.get("/users/1").await;
 
@@ -257,10 +235,8 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_get_user_by_id_with_invalid_token(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         let response = server
             .get("/users/1")
@@ -280,11 +256,9 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_delete_account_as_regular_member(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(2, "bob", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(2, "bob", &state.jwt_secret);
 
         // Bob è MEMBER in alcune chat, non owner
         let response = server
@@ -315,11 +289,9 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_delete_account_as_owner_with_other_members(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state.clone());
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token = create_test_jwt(1, "alice", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(1, "alice", &state.clone().jwt_secret);
 
         // Alice è OWNER della chat 1 (General Chat) con bob e charlie come membri
         // Alice è OWNER della chat 2 (Private Alice-Bob) con bob
@@ -373,10 +345,8 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_delete_account_without_chats(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         // Crea un nuovo utente senza chat
         let register_body = json!({
@@ -417,10 +387,8 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_delete_account_without_token(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         let response = server.delete("/users/me").await;
 
@@ -430,10 +398,8 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_delete_account_with_invalid_token(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         let response = server
             .delete("/users/me")
@@ -449,11 +415,9 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_delete_account_verify_soft_delete(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
-        let token_bob = create_test_jwt(2, "bob", jwt_secret);
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
+        let token_bob = create_test_jwt(2, "bob", &state.jwt_secret);
 
         // Elimina l'account di Bob
         let delete_response = server
@@ -467,7 +431,7 @@ mod user_tests {
         delete_response.assert_status_ok();
 
         // Verifica che l'utente sia stato rinominato "Deleted User"
-        let token_alice = create_test_jwt(1, "alice", jwt_secret);
+        let token_alice = create_test_jwt(1, "alice", &state.jwt_secret);
 
         let get_response = server
             .get("/users/2")
@@ -490,10 +454,8 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_delete_account_cannot_login_after(pool: MySqlPool) -> sqlx::Result<()> {
-        let jwt_secret = "ilmiobellissimosegretochevaassolutamentecambiato";
-        let state = Arc::new(server::core::AppState::new(pool, jwt_secret.to_string()));
-        let app = server::create_router(state);
-        let server = TestServer::new(app).expect("Failed to create test server");
+        let state = create_test_state(pool);
+        let server = create_test_server(state.clone());
 
         // Crea e logga un nuovo utente
         let register_body = json!({
