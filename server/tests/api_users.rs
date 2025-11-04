@@ -21,7 +21,7 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_search_users_success(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
@@ -48,7 +48,7 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_search_users_partial_match(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
@@ -74,7 +74,7 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_search_users_no_results(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
@@ -96,7 +96,7 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_search_users_empty_query(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
@@ -123,7 +123,7 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_search_users_without_token(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
 
         let response = server.get("/users?search=alice").await;
@@ -134,7 +134,7 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_search_users_with_invalid_token(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
 
         let response = server
@@ -155,7 +155,7 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_get_user_by_id_success(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
@@ -178,7 +178,7 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_get_user_by_id_not_found(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
@@ -201,7 +201,7 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_get_user_by_id_self(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
@@ -224,7 +224,7 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_get_user_by_id_without_token(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
 
         let response = server.get("/users/1").await;
@@ -235,7 +235,7 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_get_user_by_id_with_invalid_token(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
 
         let response = server
@@ -256,7 +256,7 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_delete_account_as_regular_member(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(2, "bob", &state.jwt_secret);
 
@@ -289,7 +289,7 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_delete_account_as_owner_with_other_members(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(1, "alice", &state.clone().jwt_secret);
 
@@ -345,7 +345,7 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_delete_account_without_chats(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
 
         // Crea un nuovo utente senza chat
@@ -387,7 +387,7 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_delete_account_without_token(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
 
         let response = server.delete("/users/me").await;
@@ -398,7 +398,7 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users")))]
     async fn test_delete_account_with_invalid_token(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
 
         let response = server
@@ -415,7 +415,7 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_delete_account_verify_soft_delete(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token_bob = create_test_jwt(2, "bob", &state.jwt_secret);
 
@@ -454,7 +454,7 @@ mod user_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_delete_account_cannot_login_after(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
 
         // Crea e logga un nuovo utente
