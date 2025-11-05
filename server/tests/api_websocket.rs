@@ -28,7 +28,7 @@ mod ws_tests {
     /// si connette due volte: la seconda connessione deve sovrascrivere la prima
     /// e il vecchio channel deve essere chiuso
     #[tokio::test]
-    async fn test_usermap_duplicate_connection_overwrites() {
+    async fn test_wf0_usermap_duplicate_connection_overwrites() {
         let user_map = UserMap::new();
         let user_id = 1;
 
@@ -71,7 +71,7 @@ mod ws_tests {
     /// Test che verifica che il task write_ws carichi le chat dell'utente dal database
     /// e le registri correttamente nella ChatMap
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
-    async fn test_write_task_loads_user_chats_from_db(pool: sqlx::MySqlPool) -> sqlx::Result<()> {
+    async fn test_wf0_write_task_loads_user_chats_from_db(pool: sqlx::MySqlPool) -> sqlx::Result<()> {
         use super::common::*;
 
         // Crea lo stato del server
@@ -270,12 +270,12 @@ mod ws_tests {
 
         Ok(())
     }
-
+    
     // ============================================================
-    // WF2: Test invio messaggio con campi errati - server invia errore
+    // WF1: Test invio messaggio con campi errati - server invia errore
     // ============================================================
-
-    /// WF2 - Verifica che il server invii un messaggio di errore quando riceve
+    
+    /// WF1 - Verifica che il server invii un messaggio di errore quando riceve
     /// un messaggio con struttura valida ma campi errati
     /// 
     /// Scenario:
@@ -292,7 +292,7 @@ mod ws_tests {
     /// 
     /// Questo test verifica la logica di process_message che valida i messaggi
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
-    async fn test_wf2_server_sends_error_for_invalid_message_fields(pool: sqlx::MySqlPool) -> sqlx::Result<()> {
+    async fn test_wf1_server_sends_error_for_invalid_message_fields(pool: sqlx::MySqlPool) -> sqlx::Result<()> {
         use server::ws::event_handlers::process_message;
 
         // === FASE 1: Setup - Utente1 si connette al server ===
@@ -431,6 +431,803 @@ mod ws_tests {
         Ok(())
     }
 
+    // ============================================================
+    // WF1: Test salvataggio messaggio nel database dopo invio WebSocket
+    // ============================================================
+
+    /// WF1 - Verifica che un messaggio valido inviato via WebSocket venga salvato nel database
+    /// in una chat privata con ricevente offline
+    /// 
+    /// Scenario:
+    /// 1. Alice connessa al server (Bob offline)
+    /// 2. Alice invia un messaggio valido in chat privata tramite process_message
+    /// 3. Il messaggio viene processato e validato
+    /// 4. Il messaggio viene salvato nel database (per Bob quando si connetterà)
+    /// 5. Verifica che il messaggio sia presente nel DB con i dati corretti
+    #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
+    async fn test_wf1_message_saved_to_database_after_websocket_send(pool: sqlx::MySqlPool) -> sqlx::Result<()> {
+        use server::ws::event_handlers::process_message;
+
+        // === FASE 1: Setup - Alice online in chat privata, Bob offline ===
+        let state = create_test_state(&pool);
+        let alice_id = 1; // Sender
+        let bob_id = 2;   // Receiver (offline)
+        let chat_id = 2;  // Chat PRIVATA Alice-Bob dai fixtures
+        
+        // Crea il channel per ricevere messaggi dal server
+        let (internal_tx, mut internal_rx) = tokio::sync::mpsc::unbounded_channel::<InternalSignal>();
+        
+        // Registra Alice come online (Bob rimane offline)
+        state.users_online.register_online(alice_id, internal_tx.clone());
+        
+        // Sottoscrivi Alice alla chat privata (simula il comportamento del write_ws task)
+        let _subscriptions = state.chats_online.subscribe_multiple(vec![chat_id]);
+
+        assert!(state.users_online.is_user_online(&alice_id), "Alice should be online");
+        assert!(!state.users_online.is_user_online(&bob_id), "Bob should be offline");
+
+        // === FASE 2: Conta i messaggi esistenti per questa chat ===
+        let messages_before = sqlx::query!(
+            "SELECT COUNT(*) as count FROM messages WHERE chat_id = ?",
+            chat_id
+        )
+        .fetch_one(&pool)
+        .await?;
+        
+        let count_before = messages_before.count;
+        info!("Messages in chat {} before sending: {}", chat_id, count_before);
+
+        // === FASE 3: Invia un messaggio valido tramite WebSocket (simula process_message) ===
+        let message_content = "Test message for database persistence in private chat (Bob offline)";
+        let valid_message = serde_json::from_str::<server::dtos::MessageDTO>(
+            &format!(
+                r#"{{"chat_id": {}, "sender_id": {}, "content": "{}", "message_type": "UserMessage"}}"#,
+                chat_id, alice_id, message_content
+            )
+        ).expect("Valid JSON");
+
+        // Processa il messaggio (come farebbe listen_ws dopo la deserializzazione)
+        process_message(&state, alice_id, valid_message).await;
+
+        // Aspetta un breve momento per permettere il salvataggio asincrono nel DB
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        // === FASE 4: Verifica che il messaggio sia stato salvato nel DB ===
+        let messages_after = sqlx::query!(
+            "SELECT COUNT(*) as count FROM messages WHERE chat_id = ?",
+            chat_id
+        )
+        .fetch_one(&pool)
+        .await?;
+        
+        let count_after = messages_after.count;
+        info!("Messages in chat {} after sending: {}", chat_id, count_after);
+
+        assert_eq!(
+            count_after, count_before + 1,
+            "Should have exactly one more message in the database after sending"
+        );
+
+        // === FASE 5: Verifica il contenuto del messaggio salvato ===
+        let saved_message = sqlx::query!(
+            "SELECT message_id, chat_id, sender_id, content, message_type 
+             FROM messages 
+             WHERE chat_id = ? AND content = ?
+             ORDER BY created_at DESC
+             LIMIT 1",
+            chat_id,
+            message_content
+        )
+        .fetch_one(&pool)
+        .await?;
+
+        assert_eq!(saved_message.chat_id, chat_id, "Chat ID should match");
+        assert_eq!(saved_message.sender_id, alice_id, "Sender ID should be Alice");
+        assert_eq!(saved_message.content, message_content, "Content should match sent message");
+        assert_eq!(saved_message.message_type.to_uppercase(), "USERMESSAGE", "Message type should be USERMESSAGE");
+
+        info!(
+            "Message successfully saved to database with ID: {} (will be delivered to Bob when he comes online)",
+            saved_message.message_id
+        );
+
+        // === FASE 6: Verifica che NON ci siano errori nel channel ===
+        // (il messaggio era valido, quindi non dovrebbe esserci alcun errore)
+        match internal_rx.try_recv() {
+            Err(_) => {
+                // Nessun messaggio nel channel = tutto OK
+                info!("No error messages received - message processed and saved successfully");
+            }
+            Ok(InternalSignal::Error(msg)) => {
+                panic!("Unexpected error received for valid message: {}", msg);
+            }
+            Ok(_) => {
+                // Altri tipi di segnale potrebbero essere OK (es. AddChat)
+                info!("Received non-error signal (this may be expected)");
+            }
+        }
+
+        // === FASE 7: Verifica finale ===
+        assert!(
+            state.users_online.is_user_online(&alice_id),
+            "Alice should still be online after sending message"
+        );
+
+        Ok(())
+    }
+
+    // ============================================================
+    // WF1: Test invio messaggio in chat privata con ricevente offline
+    // ============================================================
+
+    /// WF1 - Verifica che un messaggio inviato in una chat privata venga salvato
+    /// correttamente nel database quando il ricevente è offline
+    /// 
+    /// Scenario:
+    /// 1. Alice (sender) è online
+    /// 2. Bob (receiver) è OFFLINE
+    /// 3. Alice invia un messaggio a Bob in una chat PRIVATA
+    /// 4. Il messaggio viene salvato nel DB (per consegna futura)
+    /// 5. Il broadcast non ha receiver attivi (Bob offline)
+    /// 6. Alice non riceve errori
+    /// 7. Bob riceverà il messaggio quando si connetterà
+    /// 
+    /// Questo test verifica il comportamento WF1: chat privata, ricevente offline
+    #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
+    async fn test_wf1_send_message_private_chat_receiver_offline(pool: sqlx::MySqlPool) -> sqlx::Result<()> {
+        use server::ws::event_handlers::process_message;
+
+        // === FASE 1: Setup - Solo Alice online in chat privata, Bob offline ===
+        let state = create_test_state(&pool);
+        let alice_id = 1; // Sender
+        let bob_id = 2;   // Receiver (OFFLINE)
+        let chat_id = 2;  // Chat PRIVATE Alice-Bob dai fixtures
+        
+        // Solo Alice è online
+        let (internal_tx_alice, mut internal_rx_alice) = tokio::sync::mpsc::unbounded_channel::<InternalSignal>();
+        state.users_online.register_online(alice_id, internal_tx_alice.clone());
+        
+        // Bob NON è registrato come online (simula utente offline)
+        assert!(state.users_online.is_user_online(&alice_id), "Alice should be online");
+        assert!(!state.users_online.is_user_online(&bob_id), "Bob should be offline");
+
+        // Alice sottoscrivi alla chat privata
+        let _subscriptions = state.chats_online.subscribe_multiple(vec![chat_id]);
+
+        // === FASE 2: Verifica che sia una chat PRIVATA con 2 membri ===
+        let chat_info = sqlx::query!(
+            "SELECT chat_type FROM chats WHERE chat_id = ?",
+            chat_id
+        )
+        .fetch_one(&pool)
+        .await?;
+
+        assert_eq!(chat_info.chat_type, "PRIVATE", "Should be a private chat");
+
+        let chat_members = sqlx::query!(
+            "SELECT COUNT(DISTINCT user_id) as count 
+             FROM userchatmetadata 
+             WHERE chat_id = ?",
+            chat_id
+        )
+        .fetch_one(&pool)
+        .await?;
+
+        info!("Private chat {} has {} members", chat_id, chat_members.count);
+        assert_eq!(
+            chat_members.count, 2,
+            "Private chat should have exactly 2 members"
+        );
+
+        // === FASE 3: Conta messaggi prima dell'invio ===
+        let messages_before = sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM messages WHERE chat_id = ?",
+            chat_id
+        )
+        .fetch_one(&pool)
+        .await?;
+
+        info!("Messages in private chat before: {}", messages_before);
+
+        // === FASE 4: Alice invia un messaggio a Bob nella chat privata ===
+        let message_content = "Hey Bob! This message is for you while you're offline.";
+        let message = serde_json::from_str::<server::dtos::MessageDTO>(
+            &format!(
+                r#"{{"chat_id": {}, "sender_id": {}, "content": "{}", "message_type": "UserMessage"}}"#,
+                chat_id, alice_id, message_content
+            )
+        ).expect("Valid JSON");
+
+        // Processa il messaggio
+        process_message(&state, alice_id, message).await;
+
+        // Aspetta il salvataggio asincrono
+        tokio::time::sleep(tokio::time::Duration::from_millis(150)).await;
+
+        // === FASE 5: Verifica che il messaggio sia stato salvato nel DB ===
+        let messages_after = sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM messages WHERE chat_id = ?",
+            chat_id
+        )
+        .fetch_one(&pool)
+        .await?;
+
+        info!("Messages in private chat after: {}", messages_after);
+
+        assert_eq!(
+            messages_after, messages_before + 1,
+            "Message should be saved to database even when receiver is offline"
+        );
+
+        // Verifica il contenuto del messaggio salvato
+        let saved_message = sqlx::query!(
+            "SELECT message_id, sender_id, content, message_type 
+             FROM messages 
+             WHERE chat_id = ? AND content = ?",
+            chat_id,
+            message_content
+        )
+        .fetch_one(&pool)
+        .await?;
+
+        assert_eq!(saved_message.sender_id, alice_id, "Sender should be Alice");
+        assert_eq!(saved_message.content, message_content, "Content should match");
+        assert_eq!(saved_message.message_type.to_uppercase(), "USERMESSAGE", "Message type should be USERMESSAGE");
+        
+        info!(
+            "Message saved successfully with ID: {} (will be delivered to Bob when he comes online)",
+            saved_message.message_id
+        );
+
+        // === FASE 6: Verifica che Alice NON abbia ricevuto errori ===
+        let alice_errors = internal_rx_alice.try_recv();
+        
+        if let Ok(signal) = alice_errors {
+            match signal {
+                InternalSignal::Error(msg) => {
+                    // Errori DB sono accettabili, ma non errori di validazione
+                    assert!(
+                        !msg.contains("don't belong") && !msg.contains("Malformed"),
+                        "Should not receive validation errors, got: {}", msg
+                    );
+                    info!("Received error (possibly DB related): {}", msg);
+                }
+                _ => {
+                    info!("Received non-error signal");
+                }
+            }
+        } else {
+            info!("No error received - message processed successfully");
+        }
+
+        // === FASE 7: Verifica che Alice sia ancora online ===
+        assert!(
+            state.users_online.is_user_online(&alice_id),
+            "Alice should still be online after sending message"
+        );
+
+        // === FASE 8: Simula Bob che si connette e verifica che riceva il messaggio dal DB ===
+        info!("Simulating Bob coming online and fetching messages from DB...");
+        
+        let bob_messages = sqlx::query!(
+            "SELECT m.message_id, m.sender_id, m.content, m.created_at
+             FROM messages m
+             JOIN userchatmetadata ucm ON m.chat_id = ucm.chat_id
+             WHERE ucm.user_id = ? AND m.chat_id = ?
+             ORDER BY m.created_at DESC
+             LIMIT 10",
+            bob_id,
+            chat_id
+        )
+        .fetch_all(&pool)
+        .await?;
+
+        // Verifica che Bob possa vedere il messaggio di Alice
+        let alice_message_visible_to_bob = bob_messages.iter()
+            .any(|msg| msg.content == message_content && msg.sender_id == alice_id);
+
+        assert!(
+            alice_message_visible_to_bob,
+            "Bob should be able to see Alice's message from DB when he comes online"
+        );
+
+        info!(
+            "Success! Private chat message persisted correctly and will be delivered to Bob when he reconnects"
+        );
+
+        Ok(())
+    }
+
+    // ============================================================
+    // WF2: Test invio messaggio in chat di gruppo con tutti utenti offline
+    // ============================================================
+
+    /// WF2 - Verifica il comportamento corretto quando si invia un messaggio
+    /// in una chat di gruppo dove tutti gli altri membri sono offline
+    /// 
+    /// Scenario:
+    /// 1. Chat di gruppo con 3 utenti: Alice, Bob, Charlie
+    /// 2. Solo Alice è online (Bob e Charlie offline)
+    /// 3. Alice invia un messaggio nella chat di gruppo
+    /// 4. Il messaggio viene salvato nel DB
+    /// 5. Il broadcast NON genera errori (anche se non ci sono receiver attivi)
+    /// 6. Alice non riceve errori
+    /// 7. Bob e Charlie riceveranno il messaggio quando si connetteranno (persistenza DB)
+    #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
+    async fn test_wf2_send_message_to_group_chat_all_users_offline(pool: sqlx::MySqlPool) -> sqlx::Result<()> {
+        use server::ws::event_handlers::process_message;
+
+        // === FASE 1: Setup - Solo Alice online, Bob e Charlie offline ===
+        let state = create_test_state(&pool);
+        let alice_id = 1;
+        let bob_id = 2;
+        let charlie_id = 3;
+        let chat_id = 1; // Chat di gruppo dai fixtures
+        
+        // Solo Alice è online
+        let (internal_tx_alice, mut internal_rx_alice) = tokio::sync::mpsc::unbounded_channel::<InternalSignal>();
+        state.users_online.register_online(alice_id, internal_tx_alice.clone());
+        
+        // Bob e Charlie NON sono registrati come online (simulano utenti offline)
+        assert!(state.users_online.is_user_online(&alice_id), "Alice should be online");
+        assert!(!state.users_online.is_user_online(&bob_id), "Bob should be offline");
+        assert!(!state.users_online.is_user_online(&charlie_id), "Charlie should be offline");
+
+        // Alice sottoscrivi alla chat
+        let _subscriptions = state.chats_online.subscribe_multiple(vec![chat_id]);
+
+        // === FASE 2: Verifica membri della chat nel DB ===
+        let chat_members = sqlx::query!(
+            "SELECT COUNT(DISTINCT user_id) as count 
+             FROM userchatmetadata 
+             WHERE chat_id = ?",
+            chat_id
+        )
+        .fetch_one(&pool)
+        .await?;
+
+        info!("Chat {} has {} members in DB", chat_id, chat_members.count);
+        assert!(
+            chat_members.count >= 2,
+            "Chat should have at least 2 members for group chat test"
+        );
+
+        // === FASE 3: Conta messaggi prima dell'invio ===
+        let messages_before = sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM messages WHERE chat_id = ?",
+            chat_id
+        )
+        .fetch_one(&pool)
+        .await?;
+
+        info!("Messages in chat before: {}", messages_before);
+
+        // === FASE 4: Alice invia un messaggio nella chat di gruppo ===
+        let message_content = "Hello everyone! This message is sent when you're all offline.";
+        let message = serde_json::from_str::<server::dtos::MessageDTO>(
+            &format!(
+                r#"{{"chat_id": {}, "sender_id": {}, "content": "{}", "message_type": "UserMessage"}}"#,
+                chat_id, alice_id, message_content
+            )
+        ).expect("Valid JSON");
+
+        // Processa il messaggio
+        process_message(&state, alice_id, message).await;
+
+        // Aspetta il salvataggio asincrono
+        tokio::time::sleep(tokio::time::Duration::from_millis(150)).await;
+
+        // === FASE 5: Verifica che il messaggio sia stato salvato nel DB ===
+        let messages_after = sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM messages WHERE chat_id = ?",
+            chat_id
+        )
+        .fetch_one(&pool)
+        .await?;
+
+        info!("Messages in chat after: {}", messages_after);
+
+        assert_eq!(
+            messages_after, messages_before + 1,
+            "Message should be saved to database even when all other users are offline"
+        );
+
+        // Verifica il contenuto del messaggio salvato
+        let saved_message = sqlx::query!(
+            "SELECT message_id, sender_id, content 
+             FROM messages 
+             WHERE chat_id = ? AND content = ?",
+            chat_id,
+            message_content
+        )
+        .fetch_one(&pool)
+        .await?;
+
+        assert_eq!(saved_message.sender_id, alice_id, "Sender should be Alice");
+        assert_eq!(saved_message.content, message_content, "Content should match");
+        
+        info!(
+            "Message saved successfully with ID: {} (will be delivered to Bob and Charlie when they come online)",
+            saved_message.message_id
+        );
+
+        // === FASE 6: Verifica che Alice NON abbia ricevuto errori ===
+        // Il broadcast potrebbe non avere receiver attivi (tutti offline), ma questo è OK
+        let alice_errors = internal_rx_alice.try_recv();
+        
+        // Se c'è un messaggio, verifica che non sia un errore di "gruppo non trovato" o simili
+        if let Ok(signal) = alice_errors {
+            match signal {
+                InternalSignal::Error(msg) => {
+                    // Errori DB sono accettabili, ma non errori di validazione
+                    assert!(
+                        !msg.contains("don't belong") && !msg.contains("Malformed"),
+                        "Should not receive validation errors, got: {}", msg
+                    );
+                    info!("Received error (possibly DB related): {}", msg);
+                }
+                _ => {
+                    info!("Received non-error signal");
+                }
+            }
+        } else {
+            info!("No error received - message processed successfully");
+        }
+
+        // === FASE 7: Verifica che Alice sia ancora online ===
+        assert!(
+            state.users_online.is_user_online(&alice_id),
+            "Alice should still be online after sending message"
+        );
+
+        // === FASE 8: Simula Bob che si connette e verifica che riceva il messaggio dal DB ===
+        info!("Simulating Bob coming online and fetching messages from DB...");
+        
+        let bob_messages = sqlx::query!(
+            "SELECT m.message_id, m.sender_id, m.content, m.created_at
+             FROM messages m
+             JOIN userchatmetadata ucm ON m.chat_id = ucm.chat_id
+             WHERE ucm.user_id = ? AND m.chat_id = ?
+             ORDER BY m.created_at DESC
+             LIMIT 10",
+            bob_id,
+            chat_id
+        )
+        .fetch_all(&pool)
+        .await?;
+
+        // Verifica che Bob possa vedere il messaggio di Alice
+        let alice_message_visible_to_bob = bob_messages.iter()
+            .any(|msg| msg.content == message_content && msg.sender_id == alice_id);
+
+        assert!(
+            alice_message_visible_to_bob,
+            "Bob should be able to see Alice's message from DB when he comes online"
+        );
+
+        info!(
+            "Success! Message persisted correctly and will be delivered to offline users when they reconnect"
+        );
+
+        Ok(())
+    }
+
+    // ============================================================
+    // WF3: Test invio messaggio con utenti online - ricezione via broadcast
+    // ============================================================
+
+    /// WF3 - Verifica che un utente online riceva un messaggio in tempo reale
+    /// tramite broadcast quando un altro utente invia un messaggio
+    /// 
+    /// Scenario:
+    /// 1. Alice e Bob sono entrambi online
+    /// 2. Entrambi sottoscritti alla stessa chat privata
+    /// 3. Alice invia un messaggio a Bob
+    /// 4. Bob riceve il messaggio immediatamente via broadcast channel
+    /// 5. Il messaggio ricevuto ha tutti gli attributi corretti
+    /// 6. Il messaggio viene anche salvato nel DB
+    /// 
+    /// Questo test verifica il flusso completo: utenti online → broadcast in tempo reale
+    #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
+    async fn test_wf3_receiver_gets_message_via_broadcast_when_online(pool: sqlx::MySqlPool) -> sqlx::Result<()> {
+        use server::ws::event_handlers::process_message;
+
+        // === FASE 1: Setup - Alice e Bob online nella stessa chat privata ===
+        let state = create_test_state(&pool);
+        let alice_id = 1; // Sender
+        let bob_id = 2;   // Receiver (ONLINE)
+        let chat_id = 2;  // Chat PRIVATA Alice-Bob
+        
+        // Setup Alice (sender)
+        let (internal_tx_alice, mut _internal_rx_alice) = tokio::sync::mpsc::unbounded_channel::<InternalSignal>();
+        state.users_online.register_online(alice_id, internal_tx_alice.clone());
+        
+        // Setup Bob (receiver) - ONLINE e sottoscritto alla chat
+        let (internal_tx_bob, mut _internal_rx_bob) = tokio::sync::mpsc::unbounded_channel::<InternalSignal>();
+        state.users_online.register_online(bob_id, internal_tx_bob.clone());
+        
+        // Bob sottoscrivi alla chat per ricevere messaggi via broadcast
+        let mut receivers = state.chats_online.subscribe_multiple(vec![chat_id]);
+        assert_eq!(receivers.len(), 1, "Should have one broadcast receiver for the chat");
+        
+        let mut bob_chat_rx = receivers.remove(0);
+
+        // Verifica che entrambi siano online
+        assert!(state.users_online.is_user_online(&alice_id), "Alice should be online");
+        assert!(state.users_online.is_user_online(&bob_id), "Bob should be online");
+
+        // === FASE 2: Verifica che sia una chat PRIVATA ===
+        let chat_info = sqlx::query!(
+            "SELECT chat_type FROM chats WHERE chat_id = ?",
+            chat_id
+        )
+        .fetch_one(&pool)
+        .await?;
+
+        assert_eq!(chat_info.chat_type, "PRIVATE", "Should be a private chat");
+
+        // === FASE 3: Alice invia un messaggio a Bob ===
+        let message_content = "Hey Bob! You should receive this in real-time!";
+        let message = serde_json::from_str::<server::dtos::MessageDTO>(
+            &format!(
+                r#"{{"chat_id": {}, "sender_id": {}, "content": "{}", "message_type": "UserMessage"}}"#,
+                chat_id, alice_id, message_content
+            )
+        ).expect("Valid JSON");
+
+        info!("Alice sending message to Bob...");
+        
+        // Processa il messaggio (questo triggera il broadcast)
+        process_message(&state, alice_id, message).await;
+
+        // === FASE 4: Bob riceve il messaggio dal broadcast channel ===
+        info!("Waiting for Bob to receive message via broadcast...");
+        
+        // Aspetta un breve momento per il broadcast asincrono
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+
+        // Bob dovrebbe ricevere il messaggio immediatamente
+        let received_message = tokio::time::timeout(
+            tokio::time::Duration::from_millis(500),
+            bob_chat_rx.recv()
+        ).await;
+
+        assert!(
+            received_message.is_ok(),
+            "Bob should receive message from broadcast channel within timeout"
+        );
+
+        let received_message = received_message
+            .expect("Timeout error")
+            .expect("Should receive a message");
+
+        // === FASE 5: Verifica attributi del messaggio ricevuto ===
+        info!("Message received by Bob: {:?}", received_message);
+
+        assert_eq!(
+            received_message.chat_id,
+            Some(chat_id),
+            "Chat ID should match"
+        );
+
+        assert_eq!(
+            received_message.sender_id,
+            Some(alice_id),
+            "Sender ID should be Alice"
+        );
+
+        assert_eq!(
+            received_message.content,
+            Some(message_content.to_string()),
+            "Content should match sent message"
+        );
+
+        assert!(
+            matches!(received_message.message_type, Some(server::entities::MessageType::UserMessage)),
+            "Message type should be UserMessage"
+        );
+
+        // IMPORTANTE: message_id è None perché il broadcast avviene PRIMA del salvataggio DB
+        assert!(
+            received_message.message_id.is_none(),
+            "Message ID should be None (broadcast happens before DB save)"
+        );
+
+        info!("✓ Bob received message in real-time via broadcast!");
+
+        // === FASE 6: Verifica che il messaggio sia stato anche salvato nel DB ===
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        let saved_message = sqlx::query!(
+            "SELECT message_id, sender_id, content 
+             FROM messages 
+             WHERE chat_id = ? AND content = ?",
+            chat_id,
+            message_content
+        )
+        .fetch_one(&pool)
+        .await?;
+
+        assert_eq!(saved_message.sender_id, alice_id, "Sender should be Alice in DB");
+        assert_eq!(saved_message.content, message_content, "Content should match in DB");
+        
+        info!(
+            "✓ Message also persisted to database with ID: {}",
+            saved_message.message_id
+        );
+
+        // === FASE 7: Verifica che non ci siano altri messaggi pendenti ===
+        let no_more_messages = bob_chat_rx.try_recv();
+        assert!(
+            no_more_messages.is_err(),
+            "Should not have any more messages in the channel"
+        );
+
+        info!("Success! WF3: Real-time message delivery via broadcast works correctly!");
+
+        Ok(())
+    }
+
+    /// WF3 - Verifica che il sender riceva il proprio messaggio via broadcast
+    /// 
+    /// Scenario:
+    /// 1. Alice è online e sottoscritta a una chat di gruppo
+    /// 2. Alice invia un messaggio nella chat di gruppo
+    /// 3. Alice riceve il proprio messaggio via broadcast (echo)
+    /// 4. Il messaggio ricevuto ha gli attributi corretti
+    /// 5. Il messaggio viene salvato nel DB
+    /// 
+    /// Questo test verifica che il sender riceva una copia del proprio messaggio
+    /// tramite il broadcast channel (comportamento tipico delle chat)
+    #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
+    async fn test_wf3_sender_receives_own_message_via_broadcast(pool: sqlx::MySqlPool) -> sqlx::Result<()> {
+        use server::ws::event_handlers::process_message;
+
+        // === FASE 1: Setup - Alice online in una chat di gruppo ===
+        let state = create_test_state(&pool);
+        let alice_id = 1; // Sender
+        let chat_id = 1;  // Chat di GRUPPO (General Chat)
+        
+        // Setup Alice
+        let (internal_tx_alice, mut _internal_rx_alice) = tokio::sync::mpsc::unbounded_channel::<InternalSignal>();
+        state.users_online.register_online(alice_id, internal_tx_alice.clone());
+        
+        // Alice sottoscrivi alla chat di gruppo per ricevere messaggi via broadcast
+        let mut receivers = state.chats_online.subscribe_multiple(vec![chat_id]);
+        assert_eq!(receivers.len(), 1, "Should have one broadcast receiver for the chat");
+        
+        let mut alice_chat_rx = receivers.remove(0);
+
+        // Verifica che Alice sia online
+        assert!(state.users_online.is_user_online(&alice_id), "Alice should be online");
+
+        // === FASE 2: Verifica che sia una chat di GRUPPO ===
+        let chat_info = sqlx::query!(
+            "SELECT chat_type FROM chats WHERE chat_id = ?",
+            chat_id
+        )
+        .fetch_one(&pool)
+        .await?;
+
+        assert_eq!(chat_info.chat_type, "GROUP", "Should be a group chat");
+
+        // Verifica membri della chat
+        let chat_members = sqlx::query!(
+            "SELECT COUNT(DISTINCT user_id) as count 
+             FROM userchatmetadata 
+             WHERE chat_id = ?",
+            chat_id
+        )
+        .fetch_one(&pool)
+        .await?;
+
+        info!("Group chat {} has {} members", chat_id, chat_members.count);
+        assert!(
+            chat_members.count >= 2,
+            "Group chat should have at least 2 members"
+        );
+
+        // === FASE 3: Alice invia un messaggio nella chat di gruppo ===
+        let message_content = "Hello everyone! I should receive my own message too!";
+        let message = serde_json::from_str::<server::dtos::MessageDTO>(
+            &format!(
+                r#"{{"chat_id": {}, "sender_id": {}, "content": "{}", "message_type": "UserMessage"}}"#,
+                chat_id, alice_id, message_content
+            )
+        ).expect("Valid JSON");
+
+        info!("Alice sending message to group chat...");
+        
+        // Processa il messaggio
+        process_message(&state, alice_id, message).await;
+
+        // === FASE 4: Alice riceve il proprio messaggio dal broadcast channel ===
+        info!("Waiting for Alice to receive her own message via broadcast...");
+        
+        // Aspetta un breve momento per il broadcast asincrono
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+
+        // Alice dovrebbe ricevere il proprio messaggio (echo)
+        let received_message = tokio::time::timeout(
+            tokio::time::Duration::from_millis(500),
+            alice_chat_rx.recv()
+        ).await;
+
+        assert!(
+            received_message.is_ok(),
+            "Alice should receive her own message from broadcast channel within timeout"
+        );
+
+        let received_message = received_message
+            .expect("Timeout error")
+            .expect("Should receive a message");
+
+        // === FASE 5: Verifica attributi del messaggio ricevuto ===
+        info!("Message received by Alice (echo): {:?}", received_message);
+
+        assert_eq!(
+            received_message.chat_id,
+            Some(chat_id),
+            "Chat ID should match"
+        );
+
+        assert_eq!(
+            received_message.sender_id,
+            Some(alice_id),
+            "Sender ID should be Alice (herself)"
+        );
+
+        assert_eq!(
+            received_message.content,
+            Some(message_content.to_string()),
+            "Content should match sent message"
+        );
+
+        assert!(
+            matches!(received_message.message_type, Some(server::entities::MessageType::UserMessage)),
+            "Message type should be UserMessage"
+        );
+
+        // IMPORTANTE: message_id è None perché il broadcast avviene PRIMA del salvataggio DB
+        assert!(
+            received_message.message_id.is_none(),
+            "Message ID should be None (broadcast happens before DB save)"
+        );
+
+        info!("✓ Alice received her own message via broadcast (echo)!");
+
+        // === FASE 6: Verifica che il messaggio sia stato salvato nel DB ===
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        let saved_message = sqlx::query!(
+            "SELECT message_id, sender_id, content 
+             FROM messages 
+             WHERE chat_id = ? AND content = ?",
+            chat_id,
+            message_content
+        )
+        .fetch_one(&pool)
+        .await?;
+
+        assert_eq!(saved_message.sender_id, alice_id, "Sender should be Alice in DB");
+        assert_eq!(saved_message.content, message_content, "Content should match in DB");
+        
+        info!(
+            "✓ Message also persisted to database with ID: {}",
+            saved_message.message_id
+        );
+
+        // === FASE 7: Verifica che non ci siano altri messaggi pendenti ===
+        let no_more_messages = alice_chat_rx.try_recv();
+        assert!(
+            no_more_messages.is_err(),
+            "Should not have any more messages in the channel"
+        );
+
+        info!("Success! WF3: Sender receives own message (echo) via broadcast!");
+
+        Ok(())
+    }
+
     
 }
-

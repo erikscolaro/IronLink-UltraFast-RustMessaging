@@ -24,6 +24,7 @@ pub fn create_test_state(pool: &MySqlPool) -> Arc<AppState> {
 ///
 /// # Returns
 /// TestServer configurato e pronto per eseguire richieste
+#[allow(dead_code)]
 pub fn create_test_server(state: Arc<AppState>) -> TestServer {
     let app = server::create_router(state);
     TestServer::new(app).expect("Failed to create test server")
