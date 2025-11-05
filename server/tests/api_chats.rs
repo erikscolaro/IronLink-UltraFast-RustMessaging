@@ -15,7 +15,7 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_get_chats_success(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
@@ -48,7 +48,7 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_get_chats_without_token(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
 
         let response = server.get("/chats").await;
@@ -59,7 +59,7 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_get_chats_with_invalid_token(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
 
         let response = server
@@ -80,7 +80,7 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_create_group_chat_success(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
@@ -111,7 +111,7 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_create_private_chat_success(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
@@ -139,7 +139,7 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_create_private_chat_already_exists(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
@@ -163,7 +163,7 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_create_private_chat_invalid_user_list(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
@@ -188,7 +188,7 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_create_chat_without_token(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
 
         let body = json!({
@@ -208,7 +208,7 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats", "messages")))]
     async fn test_get_chat_messages_success(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
@@ -238,7 +238,7 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats", "messages")))]
     async fn test_get_chat_messages_not_member(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(2, "bob", &state.jwt_secret);
 
@@ -257,7 +257,7 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats", "messages")))]
     async fn test_get_chat_messages_nonexistent_chat(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
@@ -279,7 +279,7 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_get_chat_members_success(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
@@ -300,7 +300,7 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_get_chat_members_not_member(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(2, "bob", &state.jwt_secret);
 
@@ -323,7 +323,7 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_invite_to_chat_success(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
@@ -342,7 +342,7 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_invite_to_chat_not_admin(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(2, "bob", &state.jwt_secret);
 
@@ -361,7 +361,7 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_invite_to_chat_already_member(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
@@ -380,7 +380,7 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_invite_to_private_chat(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
@@ -403,7 +403,7 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_update_member_role_success(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
@@ -423,7 +423,7 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_update_member_role_not_owner(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(3, "charlie", &state.jwt_secret);
 
@@ -443,7 +443,7 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_update_member_role_to_owner(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
@@ -467,7 +467,7 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_transfer_ownership_success(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
@@ -486,7 +486,7 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_transfer_ownership_not_owner(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(2, "bob", &state.jwt_secret);
 
@@ -505,7 +505,7 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_transfer_ownership_to_non_member(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
@@ -529,7 +529,7 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_remove_member_success(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
@@ -548,7 +548,7 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_remove_member_not_admin(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(2, "bob", &state.jwt_secret);
 
@@ -567,7 +567,7 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_remove_owner(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(3, "charlie", &state.jwt_secret);
 
@@ -590,7 +590,7 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_leave_chat_success(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(2, "bob", &state.jwt_secret);
 
@@ -609,7 +609,7 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_leave_chat_not_member(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(2, "bob", &state.jwt_secret);
 
@@ -628,7 +628,7 @@ mod chat_tests {
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_leave_chat_as_owner(pool: MySqlPool) -> sqlx::Result<()> {
-        let state = create_test_state(pool);
+        let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
         let token = create_test_jwt(1, "alice", &state.jwt_secret);
 
