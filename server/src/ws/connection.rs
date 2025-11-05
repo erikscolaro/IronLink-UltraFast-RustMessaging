@@ -65,12 +65,13 @@ pub async fn write_ws(
 
     state
         .chats_online
-        .subscribe_multiple(chat_vec.clone())
+        .subscribe_multiple(chat_vec.clone()) 
         .into_iter()
-        .zip(chat_vec.iter())
-        .for_each(|(rx, &chat_id)| {
+        .zip(chat_vec.into_iter()) // drop the object, no need to waste ram
+        .for_each(|(rx, chat_id)| {
             stream_map.insert(chat_id, BroadcastStream::new(rx));
         });
+    
 
     let mut batch: Vec<Arc<MessageDTO>> = Vec::new();
     let mut interval = tokio::time::interval(Duration::from_millis(BATCH_INTERVAL));

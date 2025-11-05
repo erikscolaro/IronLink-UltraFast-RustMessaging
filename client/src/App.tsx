@@ -1,50 +1,58 @@
+import { Button, Card, Col, Container, Row } from "react-bootstrap";
+import Sidebar from "./components/Sidebar/Sidebar";
 import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { User, Chat, ChatType, Invite} from "./models/Chat";
+
+
+const users: User[] = [
+  { id: 1, username: "erik", member_since: "2022-01-01" },
+  { id: 2, username: "lucas", member_since: "2023-04-15" },
+  { id: 3, username: "mario", member_since: "2024-09-09" }
+];
+
+const chats: Chat[] = [
+  {
+    id: 1,
+    name: "Università",
+    description: "Gruppo di studio",
+    type: ChatType.Group,
+    members: [users[0], users[1], users[2]],
+    messages: [
+      { id: 1, content: "Ciao a tutti", timestamp: new Date() },
+      { id: 2, content: "Domani esame?", timestamp: new Date() }
+    ]
+  },
+  {
+    id: 2,
+    name: "Privata con Lucas",
+    type: ChatType.Private,
+    members: [users[0], users[1]],
+    messages: [
+      { id: 1, content: "Pronto per il progetto?", timestamp: new Date() }
+    ]
+  }
+];
+
+const invites: Invite[] = [
+  { id: 1, content: "Invito al gruppo Università", from: 2 },
+  { id: 2, content: "Richiesta chat privata", from: 3 }
+];
+
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+  const [items, setItems] = useState<(Chat | Invite)[]>([...chats, ...invites]);
+  const [selected, setSelected] = useState<(string | null)>(null);
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+    <Container fluid className=" fill-window p-4 m-0">
+      <Row className="fill">
+        <Col md={3} >
+          <Sidebar items={items} setItem={setItems} selectedItem={selected} selectItem={setSelected}/>
+        </Col>
+      
+      </Row>
+    </Container>
   );
 }
 
