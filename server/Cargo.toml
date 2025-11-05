@@ -26,4 +26,5 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dev-dependencies]
 axum-test = "18.1.0"
+tokio-tungstenite = "0.24.0"
 
