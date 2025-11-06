@@ -15,7 +15,7 @@ use axum::{
 use axum_macros::debug_handler;
 use chrono::Utc;
 use std::sync::Arc;
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, error, info, instrument, warn};
 use validator::Validate;
 
 #[instrument(skip(state, _metadata), fields(chat_id = %chat_id))]
@@ -162,6 +162,47 @@ pub async fn invite_to_chat(
     state
         .users_online
         .send_server_message_if_online(&user_id, InternalSignal::Invitation(invitation_dto));
+
+    // Creare e inviare un messaggio di sistema a tutti i membri della chat
+    // per notificarli dell'invito
+    let inviter_username = &current_user.username;
+    let invitee = state.user.read(&user_id).await?.ok_or_else(|| {
+        error!("Invitee user not found after invitation creation");
+        AppError::internal_server_error("Failed to retrieve invitee information")
+    })?;
+    let invitee_username = &invitee.username;
+    
+    let system_message_content = format!(
+        "{} ha invitato {} ad unirsi alla chat",
+        inviter_username, invitee_username
+    );
+    
+    // Salva il messaggio di sistema nel database
+    use crate::dtos::{CreateMessageDTO, MessageDTO};
+    use crate::entities::MessageType;
+    
+    let create_message_dto = CreateMessageDTO {
+        chat_id,
+        sender_id: current_user.user_id, // Usa l'ID dell'inviter come sender
+        content: system_message_content,
+        message_type: MessageType::SystemMessage,
+        created_at: Utc::now(),
+    };
+    
+    create_message_dto
+        .validate()
+        .map_err(|_| AppError::bad_request("Validation error"))?;
+    
+    let saved_message = state.msg.create(&create_message_dto).await?;
+    debug!(
+        "System message created with id {} for invitation",
+        saved_message.message_id
+    );
+    
+    // Broadcast del messaggio di sistema a tutti i membri online della chat via ChatMap
+    let _ = state
+        .chats_online
+        .send(&chat_id, Arc::new(MessageDTO::from(saved_message)));
 
     info!("User successfully invited to chat");
     Ok(())

@@ -341,6 +341,84 @@ mod chat_tests {
     }
 
     #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
+    async fn test_invite_to_chat_creates_invitation_in_db(pool: MySqlPool) -> sqlx::Result<()> {
+        let state = create_test_state(&pool);
+        let server = create_test_server(state.clone());
+        let alice_id = 1;
+        let bob_id = 2;
+        let chat_id = 3;
+        let token = create_test_jwt(alice_id, "alice", &state.jwt_secret);
+
+        // Verifica che l'invito NON esista prima della chiamata
+        // NOTA: Nel codice invited_id=user_id (invitato) e invitee_id=inviter (chi invita)
+        // I nomi sono invertiti rispetto a ciò che suggeriscono
+        let invitations_before = sqlx::query!(
+            "SELECT COUNT(*) as count FROM invitations 
+             WHERE target_chat_id = ? AND invited_id = ? AND invitee_id = ?",
+            chat_id,
+            bob_id,  // invited_id = l'utente che viene invitato (Bob)
+            alice_id // invitee_id = l'utente che invita (Alice)
+        )
+        .fetch_one(&pool)
+        .await?;
+
+        assert_eq!(
+            invitations_before.count, 0,
+            "Non dovrebbero esserci inviti prima della chiamata"
+        );
+
+        // Alice (OWNER) invita Bob alla chat 3 (Dev Team) tramite HTTP
+        let response = server
+            .post(&format!("/chats/{}/invite/{}", chat_id, bob_id))
+            .add_header(
+                HeaderName::from_static("authorization"),
+                format!("Bearer {}", token),
+            )
+            .await;
+
+        response.assert_status_ok();
+
+        // Verifica che l'invito sia stato creato nel database
+        let invitations_after = sqlx::query!(
+            "SELECT COUNT(*) as count FROM invitations 
+             WHERE target_chat_id = ? AND invited_id = ? AND invitee_id = ?",
+            chat_id,
+            bob_id,  // invited_id = Bob (invitato)
+            alice_id // invitee_id = Alice (inviter)
+        )
+        .fetch_one(&pool)
+        .await?;
+
+        assert_eq!(
+            invitations_after.count, 1,
+            "Dovrebbe esistere esattamente un invito dopo la chiamata"
+        );
+
+        // Verifica i dettagli dell'invito creato
+        let invitation = sqlx::query!(
+            "SELECT invite_id, target_chat_id, invited_id, invitee_id, state 
+             FROM invitations 
+             WHERE target_chat_id = ? AND invited_id = ? AND invitee_id = ?",
+            chat_id,
+            bob_id,
+            alice_id
+        )
+        .fetch_one(&pool)
+        .await?;
+
+        assert_eq!(invitation.target_chat_id, chat_id, "Chat ID deve corrispondere");
+        assert_eq!(invitation.invited_id, bob_id, "invited_id deve essere Bob (l'invitato)");
+        assert_eq!(invitation.invitee_id, alice_id, "invitee_id deve essere Alice (l'inviter)");
+        assert_eq!(invitation.state, "PENDING", "Stato deve essere PENDING");
+        assert!(
+            invitation.invite_id > 0,
+            "Invitation ID deve essere valido"
+        );
+
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
     async fn test_invite_to_chat_not_admin(pool: MySqlPool) -> sqlx::Result<()> {
         let state = create_test_state(&pool);
         let server = create_test_server(state.clone());
@@ -394,6 +472,66 @@ mod chat_tests {
             .await;
 
         response.assert_status_bad_request();
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
+    async fn test_invite_self_to_chat(pool: MySqlPool) -> sqlx::Result<()> {
+        let state = create_test_state(&pool);
+        let server = create_test_server(state.clone());
+        let alice_id = 1;
+        let token = create_test_jwt(alice_id, "alice", &state.jwt_secret);
+
+        // Alice cerca di invitare se stessa alla chat 3 (già membro)
+        let response = server
+            .post(&format!("/chats/3/invite/{}", alice_id))
+            .add_header(
+                HeaderName::from_static("authorization"),
+                format!("Bearer {}", token),
+            )
+            .await;
+
+        // Dovrebbe fallire perché è già membro (conflict)
+        response.assert_status_conflict();
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
+    async fn test_invite_nonexistent_user_to_chat(pool: MySqlPool) -> sqlx::Result<()> {
+        let state = create_test_state(&pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(1, "alice", &state.jwt_secret);
+
+        // Alice cerca di invitare un utente inesistente
+        let response = server
+            .post("/chats/3/invite/99999")
+            .add_header(
+                HeaderName::from_static("authorization"),
+                format!("Bearer {}", token),
+            )
+            .await;
+
+        response.assert_status_not_found();
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures(path = "../fixtures", scripts("users", "chats")))]
+    async fn test_invite_verifies_inviter_is_member(pool: MySqlPool) -> sqlx::Result<()> {
+        let state = create_test_state(&pool);
+        let server = create_test_server(state.clone());
+        let token = create_test_jwt(2, "bob", &state.jwt_secret);
+
+        // Bob (NON membro della chat 3) cerca di invitare Charlie alla chat 3
+        // Dovrebbe fallire perché Bob non è membro della chat 3
+        let response = server
+            .post("/chats/3/invite/3")
+            .add_header(
+                HeaderName::from_static("authorization"),
+                format!("Bearer {}", token),
+            )
+            .await;
+
+        response.assert_status_forbidden();
         Ok(())
     }
 
