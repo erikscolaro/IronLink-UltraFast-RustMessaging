@@ -59,6 +59,7 @@ fn configure_chat_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/{chat_id}/transfer_ownership", patch(transfer_ownership))
         .route("/{chat_id}/members/{user_id}", delete(remove_member))
         .route("/{chat_id}/leave", post(leave_chat))
+        .route("/{chat_id}/clean", post(clean_chat))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             chat_membership_middleware,

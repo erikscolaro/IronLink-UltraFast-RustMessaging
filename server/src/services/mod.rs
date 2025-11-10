@@ -12,8 +12,8 @@ pub mod user;
 pub use auth::{login_user, register_user};
 pub use chat::{create_chat, get_chat_messages, list_chats};
 pub use membership::{
-    invite_to_chat, leave_chat, list_chat_members, list_pending_invitations, remove_member,
-    respond_to_invitation, transfer_ownership, update_member_role,
+    clean_chat, invite_to_chat, leave_chat, list_chat_members, list_pending_invitations,
+    remove_member, respond_to_invitation, transfer_ownership, update_member_role,
 };
 pub use user::{delete_my_account, get_my_user, get_user_by_id, search_user_with_username};
 
