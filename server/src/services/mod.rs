@@ -15,7 +15,7 @@ pub use membership::{
     invite_to_chat, leave_chat, list_chat_members, list_pending_invitations, remove_member,
     respond_to_invitation, transfer_ownership, update_member_role,
 };
-pub use user::{delete_my_account, get_user_by_id, search_user_with_username};
+pub use user::{delete_my_account, get_my_user, get_user_by_id, search_user_with_username};
 
 use crate::AppState;
 use axum::{extract::State, http::StatusCode, response::IntoResponse};

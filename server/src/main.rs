@@ -29,8 +29,8 @@ fn configure_auth_routes() -> Router<Arc<AppState>> {
 fn configure_user_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
     Router::new()
         .route("/", get(search_user_with_username))
+        .route("/me", get(get_my_user).delete(delete_my_account))
         .route("/{user_id}", get(get_user_by_id))
-        .route("/me", delete(delete_my_account))
         .layer(middleware::from_fn_with_state(
             state,
             authentication_middleware,

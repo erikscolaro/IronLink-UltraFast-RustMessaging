@@ -33,6 +33,16 @@ pub async fn search_user_with_username(
     Ok(Json::from(users_dto))
 }
 
+#[instrument(skip(current_user), fields(user_id = %current_user.user_id))]
+pub async fn get_my_user(
+    Extension(current_user): Extension<User>, // ottenuto dall'autenticazione JWT
+) -> Result<Json<UserDTO>, AppError> {
+    debug!("Fetching current user information");
+    // Ritorna le informazioni dell'utente autenticato
+    info!("Returning current user information");
+    Ok(Json(UserDTO::from(current_user)))
+}
+
 #[instrument(skip(state), fields(user_id = %user_id))]
 pub async fn get_user_by_id(
     State(state): State<Arc<AppState>>,

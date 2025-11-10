@@ -123,41 +123,18 @@ export function logout(): void {
 
 // ==================== USERS ====================
 
-// Interfaccia per i dati del JWT
-interface JWTPayload {
-  id: number;
-  username: string;
-  exp: number;
-  iat: number;
-}
-
-// Decodifica manuale del JWT (base64)
-function decodeJWT(token: string): JWTPayload {
-  const parts = token.split('.');
-  if (parts.length !== 3) {
-    throw new Error('Invalid JWT token');
-  }
-  
-  // Decodifica il payload (seconda parte)
-  const payload = parts[1];
-  const decoded = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
-  return JSON.parse(decoded);
-}
-
 export async function getCurrentUser(): Promise<UserDTO> {
   const token = getAuthToken();
   if (!token) {
     throw new Error('No token found');
   }
   
-  try {
-    const payload = decodeJWT(token);
-    // Ottieni i dati completi dell'utente dal backend
-    return await getUserById(payload.id);
-  } catch (error) {
-    console.error('Error decoding JWT:', error);
-    throw new Error('Invalid token');
-  }
+  // Usa la nuova rotta GET /users/me per ottenere i dati dell'utente corrente
+  const response = await fetch(`${API_BASE_URL}/users/me`, {
+    headers: getAuthHeaders(),
+  });
+  
+  return handleResponse<UserDTO>(response);
 }
 
 export async function getUserById(userId: number): Promise<UserDTO> {
@@ -213,12 +190,15 @@ export async function createChat(chatData: CreateChatRequest): Promise<ChatDTO> 
   return handleResponse<ChatDTO>(response);
 }
 
-export async function getChatMessages(chatId: number, limit?: number, offset?: number): Promise<MessageDTO[]> {
+export async function getChatMessages(chatId: number, beforeDate?: string): Promise<MessageDTO[]> {
   let url = `${API_BASE_URL}/chats/${chatId}/messages`;
-  const params = new URLSearchParams();
-  if (limit) params.append('limit', limit.toString());
-  if (offset) params.append('offset', offset.toString());
-  if (params.toString()) url += `?${params.toString()}`;
+  
+  // Il backend accetta un parametro "before_date" per la paginazione
+  // Se fornito, restituisce i 50 messaggi precedenti a quella data
+  // Se non fornito, restituisce gli ultimi 50 messaggi
+  if (beforeDate) {
+    url += `?before_date=${encodeURIComponent(beforeDate)}`;
+  }
   
   const response = await fetch(url, {
     headers: getAuthHeaders(),
