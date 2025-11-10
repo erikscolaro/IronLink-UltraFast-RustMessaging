@@ -7,17 +7,22 @@
   color: white;
   display: flex;
   flex-direction: column;
-  border-left: 2px solid #2c3e50;
-  position: fixed;
-  top: 0;
-  right: 0;
-  z-index: 1000;
+  border-left: none;
+  position: static;
 }
 
 @media (min-width: 768px) {
   .chatInfo {
-    width: 320px;
-    position: static;
+    border-left: 1px solid #2c3e50;
+  }
+}
+
+@media (max-width: 767px) {
+  .chatInfo {
+    position: fixed;
+    top: 0;
+    right: 0;
+    z-index: 1000;
   }
 }
 
