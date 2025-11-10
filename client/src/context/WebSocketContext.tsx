@@ -12,6 +12,8 @@ interface WebSocketContextType {
   sendMessage: (message: MessageDTO) => void;
   subscribeToChat: (chatId: number, callback: (message: MessageDTO) => void) => () => void;
   onError: (callback: (error: string) => void) => () => void;
+  onChatAdded: (callback: (chatId: number) => void) => () => void;
+  onChatRemoved: (callback: (chatId: number) => void) => () => void;
 }
 
 const WebSocketContext = createContext<WebSocketContextType | undefined>(undefined);
@@ -33,6 +35,8 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
   const [isConnected, setIsConnected] = useState(false);
   const chatCallbacksRef = useRef<Map<number, Set<(message: MessageDTO) => void>>>(new Map());
   const errorCallbacksRef = useRef<Set<(error: string) => void>>(new Set());
+  const chatAddedCallbacksRef = useRef<Set<(chatId: number) => void>>(new Set());
+  const chatRemovedCallbacksRef = useRef<Set<(chatId: number) => void>>(new Set());
   const reconnectTimeoutRef = useRef<number | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const MAX_RECONNECT_ATTEMPTS = 5;
@@ -89,9 +93,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
         // Evento: messaggio ricevuto
         const unlistenMessage = await listen<string>('ws-message', (event) => {
           try {
-            console.log('Messaggio WebSocket ricevuto (raw):', event.payload);
             const data = JSON.parse(event.payload);
-            console.log('Messaggio WebSocket parsato:', data);
             
             // Gestione errori dal server
             if (data.error) {
@@ -100,23 +102,29 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
               return;
             }
             
+            // Gestione segnali AddChat/RemoveChat
+            if (data.AddChat !== undefined) {
+              const chatId = data.AddChat;
+              chatAddedCallbacksRef.current.forEach(callback => callback(chatId));
+              return;
+            }
+            
+            if (data.RemoveChat !== undefined) {
+              const chatId = data.RemoveChat;
+              chatRemovedCallbacksRef.current.forEach(callback => callback(chatId));
+              return;
+            }
+            
             // Il backend invia i messaggi in batch (array)
             const messages: MessageDTO[] = Array.isArray(data) ? data : [data];
-            console.log('Batch di messaggi ricevuti:', messages.length);
             
             // Elabora ogni messaggio nel batch
             messages.forEach((msg) => {
               if (msg.chat_id && msg.content) {
-                console.log('Messaggio valido ricevuto per chat_id:', msg.chat_id);
                 const callbacks = chatCallbacksRef.current.get(msg.chat_id);
-                console.log('Callbacks registrati per questa chat:', callbacks ? callbacks.size : 0);
                 if (callbacks) {
                   callbacks.forEach(callback => callback(msg));
-                } else {
-                  console.warn('Nessun callback registrato per chat_id:', msg.chat_id);
                 }
-              } else {
-                console.warn('Messaggio ricevuto ma mancano chat_id o content:', msg);
               }
             });
           } catch (error) {
@@ -210,9 +218,27 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
   const onError = useCallback((callback: (error: string) => void) => {
     errorCallbacksRef.current.add(callback);
 
-    // Ritorna funzione per rimuovere il callback
+    // Ritorna funzione per unsubscribe
     return () => {
       errorCallbacksRef.current.delete(callback);
+    };
+  }, []);
+
+  const onChatAdded = useCallback((callback: (chatId: number) => void) => {
+    chatAddedCallbacksRef.current.add(callback);
+
+    // Ritorna funzione per unsubscribe
+    return () => {
+      chatAddedCallbacksRef.current.delete(callback);
+    };
+  }, []);
+
+  const onChatRemoved = useCallback((callback: (chatId: number) => void) => {
+    chatRemovedCallbacksRef.current.add(callback);
+
+    // Ritorna funzione per unsubscribe
+    return () => {
+      chatRemovedCallbacksRef.current.delete(callback);
     };
   }, []);
 
@@ -221,6 +247,8 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     sendMessage,
     subscribeToChat,
     onError,
+    onChatAdded,
+    onChatRemoved,
   };
 
   return <WebSocketContext.Provider value={value}>{children}</WebSocketContext.Provider>;
