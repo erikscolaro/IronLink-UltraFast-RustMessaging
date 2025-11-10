@@ -15,6 +15,7 @@ use axum::{
 use sqlx::mysql::MySqlPoolOptions;
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 use tokio::net::TcpListener;
+use tower_http::cors::{CorsLayer, Any};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 /// Configura le routes di autenticazione (login, register)
@@ -139,6 +140,16 @@ async fn main() {
         .await
         .expect("Unable to start TCP listener.");
 
+    // Configurazione CORS per permettere richieste dal frontend
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any)
+        .expose_headers([
+            axum::http::header::AUTHORIZATION,
+            axum::http::header::SET_COOKIE,
+        ]);
+
     // Costruzione del router principale con tutte le routes
     let app = Router::new()
         .route("/", get(root))
@@ -153,6 +164,7 @@ async fn main() {
                 authentication_middleware,
             )),
         )
+        .layer(cors)
         .with_state(state);
 
     // Avvia il server

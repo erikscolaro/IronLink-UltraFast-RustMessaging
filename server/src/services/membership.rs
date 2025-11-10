@@ -308,12 +308,19 @@ pub async fn leave_chat(
     // 8. Inviare il messaggio tramite WebSocket a tutti i membri online (operazione non bloccante)
     // 9. Ritornare StatusCode::OK
 
-    // L'Owner non può lasciare la chat
+    // L'Owner non può lasciare la chat, a meno che non sia l'unico membro
     if matches!(metadata.user_role, Some(UserRole::Owner)) {
-        warn!("Owner attempted to leave chat");
-        return Err(AppError::conflict(
-            "The owner cannot leave the chat. Transfer ownership or delete the chat.",
-        ));
+        // Contare i membri della chat
+        let members = state.meta.find_many_by_chat_id(&chat_id).await?;
+        
+        if members.len() > 1 {
+            warn!("Owner attempted to leave chat with other members present");
+            return Err(AppError::conflict(
+                "The owner cannot leave the chat. Transfer ownership or delete the chat.",
+            ));
+        }
+        // Se è l'unico membro, può uscire (la chat verrà eliminata)
+        debug!("Owner is the only member, allowing exit");
     }
 
     state.meta.delete(&(current_user.user_id, chat_id)).await?;
