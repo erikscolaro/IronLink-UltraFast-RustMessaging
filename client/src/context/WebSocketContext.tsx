@@ -89,22 +89,36 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
         // Evento: messaggio ricevuto
         const unlistenMessage = await listen<string>('ws-message', (event) => {
           try {
+            console.log('Messaggio WebSocket ricevuto (raw):', event.payload);
             const data = JSON.parse(event.payload);
+            console.log('Messaggio WebSocket parsato:', data);
             
             // Gestione errori dal server
             if (data.error) {
+              console.error('Errore dal server WebSocket:', data.error);
               errorCallbacksRef.current.forEach(callback => callback(data.error));
               return;
             }
             
-            // Gestione messaggi
-            if (data.chat_id && data.content) {
-              const message: MessageDTO = data;
-              const callbacks = chatCallbacksRef.current.get(data.chat_id);
-              if (callbacks) {
-                callbacks.forEach(callback => callback(message));
+            // Il backend invia i messaggi in batch (array)
+            const messages: MessageDTO[] = Array.isArray(data) ? data : [data];
+            console.log('Batch di messaggi ricevuti:', messages.length);
+            
+            // Elabora ogni messaggio nel batch
+            messages.forEach((msg) => {
+              if (msg.chat_id && msg.content) {
+                console.log('Messaggio valido ricevuto per chat_id:', msg.chat_id);
+                const callbacks = chatCallbacksRef.current.get(msg.chat_id);
+                console.log('Callbacks registrati per questa chat:', callbacks ? callbacks.size : 0);
+                if (callbacks) {
+                  callbacks.forEach(callback => callback(msg));
+                } else {
+                  console.warn('Nessun callback registrato per chat_id:', msg.chat_id);
+                }
+              } else {
+                console.warn('Messaggio ricevuto ma mancano chat_id o content:', msg);
               }
-            }
+            });
           } catch (error) {
             console.error('Errore parsing messaggio:', error);
           }
