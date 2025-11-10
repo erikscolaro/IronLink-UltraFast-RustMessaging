@@ -12,9 +12,10 @@ interface ChatInfoProps {
   onClose: () => void;
   onStartInvite: (chatId: number, memberIds: number[], onInvite: (userId: number) => Promise<void>) => void;
   onChatLeft?: () => void; // Callback quando l'utente esce dalla chat
+  onChatCleaned?: () => void; // Callback quando la chat viene pulita
 }
 
-export default function ChatInfo({ chat, isVisible, onClose, onStartInvite, onChatLeft }: ChatInfoProps) {
+export default function ChatInfo({ chat, isVisible, onClose, onStartInvite, onChatLeft, onChatCleaned }: ChatInfoProps) {
   const { user } = useAuth();
   const [members, setMembers] = useState<UserChatMetadataDTO[]>([]);
   const [memberNames, setMemberNames] = useState<Map<number, string>>(new Map());
@@ -78,10 +79,23 @@ export default function ChatInfo({ chat, isVisible, onClose, onStartInvite, onCh
     loadMembers();
   }, [chat.chat_id, isVisible]);
 
+  const handleCleanChat = async () => {
+    if (confirm('Vuoi pulire questa chat? I messaggi precedenti non saranno più visibili.')) {
+      try {
+        await api.cleanChat(chat.chat_id);
+        if (onChatCleaned) onChatCleaned(); // Notifica che la chat è stata pulita
+        alert('Chat pulita con successo');
+      } catch (error) {
+        console.error('Errore pulizia chat:', error);
+        alert('Errore durante la pulizia della chat');
+      }
+    }
+  };
+
   const handleDeleteChat = async () => {
     const message = isPrivate 
-      ? 'Eliminare questa chat cancellerà tutti i messaggi. Continuare?'
-      : 'Sei sicuro di voler eliminare questa chat?';
+      ? 'Eliminare questa chat rimuoverà definitivamente tutti i tuoi metadati e messaggi. Continuare?'
+      : 'Eliminare questa chat ti farà uscire dal gruppo e rimuoverà tutti i tuoi dati. Continuare?';
       
     if (confirm(message)) {
       try {
@@ -386,22 +400,34 @@ export default function ChatInfo({ chat, isVisible, onClose, onStartInvite, onCh
             <div className="mb-4">
               <h5 className="text-uppercase text-muted mb-3">Azioni</h5>
               <div className="d-grid gap-2">
-                {!isPrivate && (
-                  <Button
-                    variant="outline-light"
-                    onClick={handleLeaveChat}
-                  >
-                    <i className="bi bi-box-arrow-right me-2"></i>
-                    Esci dalla chat
-                  </Button>
-                )}
+                {/* Pulisci chat - disponibile per tutti i tipi di chat */}
                 <Button
-                  variant="danger"
-                  onClick={handleDeleteChat}
+                  variant="outline-warning"
+                  onClick={handleCleanChat}
                 >
-                  <i className="bi bi-trash me-2"></i>
-                  {isPrivate ? 'Elimina chat' : 'Elimina chat'}
+                  <i className="bi bi-eraser me-2"></i>
+                  Pulisci chat
                 </Button>
+                
+                {/* Azioni per chat di gruppo */}
+                {!isPrivate && (
+                  <>
+                    <Button
+                      variant="outline-light"
+                      onClick={handleLeaveChat}
+                    >
+                      <i className="bi bi-box-arrow-right me-2"></i>
+                      Esci dalla chat
+                    </Button>
+                    <Button
+                      variant="danger"
+                      onClick={handleDeleteChat}
+                    >
+                      <i className="bi bi-trash me-2"></i>
+                      Elimina chat
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
           </>

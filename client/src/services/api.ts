@@ -262,6 +262,15 @@ export async function transferOwnership(chatId: number, newOwnerId: number): Pro
   await handleResponse<void>(response);
 }
 
+export async function cleanChat(chatId: number): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/chats/${chatId}/clean`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+  
+  await handleResponse<void>(response);
+}
+
 // ==================== INVITATIONS ====================
 
 export async function listPendingInvitations(): Promise<InvitationDTO[]> {

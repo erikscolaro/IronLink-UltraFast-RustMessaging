@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { ChatDTO } from '../../models/types';
 import { Container, Row, Col, Spinner } from 'react-bootstrap';
 import * as api from '../../services/api';
+import { useWebSocket } from '../../context/WebSocketContext';
 import Sidebar from '../../components/Sidebar/Sidebar';
 import ChatArea from '../../components/ChatArea/ChatArea';
 import ChatInfo from '../../components/ChatInfo/ChatInfo';
@@ -10,11 +11,13 @@ import ProfileModal from '../../components/ProfileModal/ProfileModal';
 import styles from './Home.module.css';
 
 export default function Home() {
+  const { onChatAdded, onChatRemoved } = useWebSocket();
   const [chats, setChats] = useState<ChatDTO[]>([]);
   const [selectedChatId, setSelectedChatId] = useState<number | null>(null);
   const [showChatInfo, setShowChatInfo] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [cleanChatTrigger, setCleanChatTrigger] = useState(0); // Trigger per pulire messaggi
   const [inviteMode, setInviteMode] = useState<{
     chatId: number;
     existingMemberIds: number[];
@@ -26,6 +29,34 @@ export default function Home() {
   useEffect(() => {
     loadChats();
   }, []);
+
+  // Gestisci AddChat dal WebSocket
+  useEffect(() => {
+    const unsubscribe = onChatAdded(async (_chatId) => {
+      try {
+        // Ricarica la lista completa per avere i dettagli della nuova chat
+        const chatsData = await api.listChats();
+        setChats(chatsData);
+      } catch (error) {
+        console.error('Errore ricaricamento chat dopo AddChat:', error);
+      }
+    });
+
+    return unsubscribe;
+  }, [onChatAdded]);
+
+  // Gestisci RemoveChat dal WebSocket
+  useEffect(() => {
+    const unsubscribe = onChatRemoved((chatId) => {
+      setChats(prev => prev.filter(chat => chat.chat_id !== chatId));
+      // Se era selezionata, deseleziona
+      if (selectedChatId === chatId) {
+        setSelectedChatId(null);
+      }
+    });
+
+    return unsubscribe;
+  }, [onChatRemoved, selectedChatId]);
 
   const loadChats = async () => {
     setIsLoading(true);
@@ -67,9 +98,9 @@ export default function Home() {
             onSelectChat={(chatId) => {
               setSelectedChatId(chatId);
               setShowChatInfo(false);
-              loadChats(); // Ricarica lista dopo aver selezionato una chat
             }}
             onShowProfile={() => setShowProfile(true)}
+            onRefreshChats={loadChats}
             inviteMode={inviteMode}
           />
         </Col>
@@ -85,6 +116,7 @@ export default function Home() {
               chat={selectedChat}
               onShowInfo={() => setShowChatInfo(!showChatInfo)}
               onBack={() => setSelectedChatId(null)}
+              cleanChatTrigger={cleanChatTrigger}
             />
           ) : (
             <div className="d-none d-md-flex flex-column align-items-center justify-content-center h-100 text-muted">
@@ -115,6 +147,10 @@ export default function Home() {
                 setChats(prevChats => prevChats.filter(c => c.chat_id !== selectedChat.chat_id));
                 setSelectedChatId(null);
                 setShowChatInfo(false);
+              }}
+              onChatCleaned={() => {
+                // Incrementa il trigger per segnalare a ChatArea di pulire i messaggi
+                setCleanChatTrigger(prev => prev + 1);
               }}
             />
           </Col>

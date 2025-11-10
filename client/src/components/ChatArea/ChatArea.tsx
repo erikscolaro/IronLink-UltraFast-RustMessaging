@@ -14,9 +14,10 @@ interface ChatAreaProps {
   chat: ChatDTO;
   onShowInfo: () => void;
   onBack?: () => void; // Per tornare alla lista chat su mobile
+  cleanChatTrigger?: number; // Trigger per pulire i messaggi
 }
 
-export default function ChatArea({ chat, onShowInfo, onBack }: ChatAreaProps) {
+export default function ChatArea({ chat, onShowInfo, onBack, cleanChatTrigger }: ChatAreaProps) {
   const { user } = useAuth();
   const { sendMessage, subscribeToChat } = useWebSocket();
   const [messages, setMessages] = useState<MessageDTO[]>([]);
@@ -29,9 +30,9 @@ export default function ChatArea({ chat, onShowInfo, onBack }: ChatAreaProps) {
     const loadChatData = async () => {
       setIsLoading(true);
       try {
-        // Carica messaggi
+        // Carica messaggi (arrivano in ordine DESC, invertiamo per avere i più recenti in basso)
         const msgs = await api.getChatMessages(chat.chat_id);
-        setMessages(msgs);
+        setMessages(msgs.reverse());
 
         // Carica membri per ottenere gli username
         const chatMembers = await api.listChatMembers(chat.chat_id);
@@ -63,14 +64,28 @@ export default function ChatArea({ chat, onShowInfo, onBack }: ChatAreaProps) {
 
   // Sottoscrivi ai messaggi WebSocket
   useEffect(() => {
-    console.log('Sottoscrizione WebSocket per chat_id:', chat.chat_id);
     const unsubscribe = subscribeToChat(chat.chat_id, (newMessage) => {
-      console.log('Nuovo messaggio ricevuto tramite callback:', newMessage);
-      setMessages((prev) => [...prev, newMessage]);
+      // Evita duplicati: controlla se il messaggio esiste già
+      setMessages((prev) => {
+        // Se ha message_id, controlla per ID
+        if (newMessage.message_id) {
+          const exists = prev.some(msg => msg.message_id === newMessage.message_id);
+          if (exists) return prev;
+        } else {
+          // Senza message_id, controlla per contenuto+timestamp+sender
+          const exists = prev.some(msg => 
+            msg.content === newMessage.content &&
+            msg.created_at === newMessage.created_at &&
+            msg.sender_id === newMessage.sender_id
+          );
+          if (exists) return prev;
+        }
+        
+        return [...prev, newMessage];
+      });
     });
 
     return () => {
-      console.log('Rimozione sottoscrizione per chat_id:', chat.chat_id);
       unsubscribe();
     };
   }, [chat.chat_id, subscribeToChat]);
@@ -79,6 +94,13 @@ export default function ChatArea({ chat, onShowInfo, onBack }: ChatAreaProps) {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Gestione pulizia chat tramite trigger
+  useEffect(() => {
+    if (cleanChatTrigger && cleanChatTrigger > 0) {
+      setMessages([]);
+    }
+  }, [cleanChatTrigger]);
 
   const handleSendMessage = (content: string) => {
     if (!user) return;
