@@ -1,0 +1,81 @@
+/* ChatMessage Styles */
+
+.messageContainer {
+  display: flex;
+  margin-bottom: 1rem;
+  padding: 0 1rem;
+}
+
+.ownMessage {
+  justify-content: flex-end;
+}
+
+.otherMessage {
+  justify-content: flex-start;
+}
+
+.messageCard {
+  max-width: 60%;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  word-wrap: break-word;
+}
+
+.ownMessage .messageCard {
+  background-color: #e74c3c;
+  color: white;
+}
+
+.otherMessage .messageCard {
+  background-color: #ecf0f1;
+  color: #2c3e50;
+}
+
+.senderName {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  color: #7f8c8d;
+}
+
+.messageContent {
+  font-size: 1rem;
+  line-height: 1.4;
+  margin-bottom: 0.25rem;
+}
+
+.messageFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.messageTime {
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
+.messageStatus {
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+}
+
+.systemMessage {
+  display: flex;
+  justify-content: center;
+  margin: 1rem 0;
+  padding: 0 1rem;
+}
+
+.systemContent {
+  padding: 0.5rem 1rem;
+  background-color: #bdc3c7;
+  color: #2c3e50;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-style: italic;
+  text-align: center;
+}
