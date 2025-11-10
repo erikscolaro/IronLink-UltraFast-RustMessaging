@@ -126,10 +126,21 @@ export default function Sidebar({
 
   // Crea chat privata con utente selezionato
   const handleCreatePrivateChat = async (userId: number) => {
+    if (!user) {
+      console.error('Utente non autenticato');
+      return;
+    }
+
     try {
+      const currentUserId = user.id || user.user_id;
+      if (!currentUserId) {
+        console.error('ID utente corrente non disponibile');
+        return;
+      }
+
       const newChat = await api.createChat({
         chat_type: ChatType.Private,
-        user_list: [userId]
+        user_list: [currentUserId, userId] // Include entrambi gli utenti
       });
       onSelectChat(newChat.chat_id);
       setCurrentView('chats');
