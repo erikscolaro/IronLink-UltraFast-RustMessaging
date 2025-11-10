@@ -1,6 +1,6 @@
 // ChatArea - Area principale della chat con messaggi
 import { useEffect, useState, useRef } from 'react';
-import { ChatDTO, MessageDTO, MessageType } from '../../models/types';
+import { ChatDTO, MessageDTO, MessageType, getUserId } from '../../models/types';
 import { Spinner } from 'react-bootstrap';
 import { useAuth } from '../../context/AuthContext';
 import { useWebSocket } from '../../context/WebSocketContext';
@@ -63,11 +63,16 @@ export default function ChatArea({ chat, onShowInfo, onBack }: ChatAreaProps) {
 
   // Sottoscrivi ai messaggi WebSocket
   useEffect(() => {
+    console.log('Sottoscrizione WebSocket per chat_id:', chat.chat_id);
     const unsubscribe = subscribeToChat(chat.chat_id, (newMessage) => {
+      console.log('Nuovo messaggio ricevuto tramite callback:', newMessage);
       setMessages((prev) => [...prev, newMessage]);
     });
 
-    return unsubscribe;
+    return () => {
+      console.log('Rimozione sottoscrizione per chat_id:', chat.chat_id);
+      unsubscribe();
+    };
   }, [chat.chat_id, subscribeToChat]);
 
   // Auto-scroll all'ultimo messaggio
@@ -78,9 +83,15 @@ export default function ChatArea({ chat, onShowInfo, onBack }: ChatAreaProps) {
   const handleSendMessage = (content: string) => {
     if (!user) return;
 
+    const userId = getUserId(user);
+    if (!userId) {
+      console.error('User ID non disponibile');
+      return;
+    }
+
     const newMessage: MessageDTO = {
       chat_id: chat.chat_id,
-      sender_id: user.user_id,
+      sender_id: userId,
       content,
       message_type: MessageType.UserMessage,
       created_at: new Date().toISOString(),
@@ -92,8 +103,9 @@ export default function ChatArea({ chat, onShowInfo, onBack }: ChatAreaProps) {
   // Ottiene l'username dell'altro utente in chat private
   const getOtherUsername = (): string | undefined => {
     if (!user) return undefined;
+    const currentUserId = getUserId(user);
     for (const [userId, username] of members.entries()) {
-      if (userId !== user.user_id) {
+      if (userId !== currentUserId) {
         return username;
       }
     }
@@ -131,7 +143,7 @@ export default function ChatArea({ chat, onShowInfo, onBack }: ChatAreaProps) {
               key={msg.message_id || `msg-${index}`}
               message={msg}
               senderUsername={msg.sender_id ? members.get(msg.sender_id) : undefined}
-              isOwnMessage={msg.sender_id === user?.user_id}
+              isOwnMessage={user ? msg.sender_id === getUserId(user) : false}
             />
           ))
         )}
