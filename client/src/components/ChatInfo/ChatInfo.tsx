@@ -1,6 +1,6 @@
 // ChatInfo - Pannello laterale con informazioni sulla chat
 import { useEffect, useState } from 'react';
-import { ChatDTO, ChatType, UserChatMetadataDTO, UserRole } from '../../models/types';
+import { ChatDTO, ChatType, UserChatMetadataDTO, UserRole, getUserId } from '../../models/types';
 import { Button, ListGroup, Badge, Spinner, Form } from 'react-bootstrap';
 import { useAuth } from '../../context/AuthContext';
 import * as api from '../../services/api';
@@ -26,7 +26,8 @@ export default function ChatInfo({ chat, isVisible, onClose, onStartInvite, onCh
   const isPrivate = chat.chat_type === ChatType.Private;
   
   // Trova il ruolo dell'utente corrente
-  const currentUserMember = members.find(m => m.user_id === user?.user_id);
+  const currentUserId = user ? getUserId(user) : undefined;
+  const currentUserMember = members.find(m => m.user_id === currentUserId);
   const currentUserRole = currentUserMember?.user_role;
   const isOwner = currentUserRole === UserRole.Owner;
   const isAdmin = currentUserRole === UserRole.Admin;
@@ -37,7 +38,7 @@ export default function ChatInfo({ chat, isVisible, onClose, onStartInvite, onCh
 
   // Debug: log dei permessi
   console.log('ChatInfo Debug:', {
-    userId: user?.user_id,
+    userId: currentUserId,
     currentUserMember,
     currentUserRole,
     isOwner,
@@ -266,12 +267,12 @@ export default function ChatInfo({ chat, isVisible, onClose, onStartInvite, onCh
                   {/* Mostra prima l'utente corrente */}
                   {members
                     .sort((a, b) => {
-                      if (a.user_id === user?.user_id) return -1;
-                      if (b.user_id === user?.user_id) return 1;
+                      if (a.user_id === currentUserId) return -1;
+                      if (b.user_id === currentUserId) return 1;
                       return 0;
                     })
                     .map((member) => {
-                      const isCurrentUser = member.user_id === user?.user_id;
+                      const isCurrentUser = member.user_id === currentUserId;
                       const canRemoveThisMember = 
                         !isCurrentUser && 
                         ((member.user_role === UserRole.Member && canRemoveMembers) ||
@@ -364,7 +365,7 @@ export default function ChatInfo({ chat, isVisible, onClose, onStartInvite, onCh
                     >
                       <option value="">Seleziona un admin...</option>
                       {members
-                        .filter(m => m.user_role === UserRole.Admin && m.user_id !== user?.user_id)
+                        .filter(m => m.user_role === UserRole.Admin && m.user_id !== currentUserId)
                         .map(m => (
                           <option key={m.user_id} value={m.user_id}>
                             {m.username || memberNames.get(m.user_id) || `Utente ${m.user_id}`}

@@ -215,6 +215,10 @@ export default function Sidebar({
         title: groupName,
         description: groupDescription || undefined
       });
+      
+      // Ricarica la lista per vedere il nuovo gruppo
+      await onRefreshChats();
+      
       onSelectChat(newChat.chat_id);
       setCurrentView('chats');
       setGroupName('');
