@@ -2,7 +2,7 @@
 import styles from "./Sidebar.module.css";
 import { useState, useEffect } from "react";
 import { ChatDTO, ChatType, UserDTO, getUserId, InvitationDTO } from "../../models/types";
-import { Button, Form, InputGroup } from "react-bootstrap";
+import { Button, Form, InputGroup, Modal } from "react-bootstrap";
 import { useAuth } from "../../context/AuthContext";
 import * as api from "../../services/api";
 
@@ -52,6 +52,8 @@ export default function Sidebar({
   const [pendingInvitations, setPendingInvitations] = useState<InvitationDTO[]>([]);
   const [inviterNames, setInviterNames] = useState<Record<number, string>>({});
   const [chatNames, setChatNames] = useState<Record<number, string>>({});
+  const [showInviteConfirm, setShowInviteConfirm] = useState(false);
+  const [userToInvite, setUserToInvite] = useState<{ id: number; username: string } | null>(null);
 
   // Carica gli inviti pending all'avvio
   useEffect(() => {
@@ -225,19 +227,34 @@ export default function Sidebar({
     }
   };
 
-  // Invita utente al gruppo
-  const handleInviteUser = async (userId: number) => {
-    if (!inviteMode) return;
+  // Mostra modale conferma invito utente
+  const handleShowInviteConfirm = (user: UserDTO) => {
+    const userId = getUserId(user);
+    setUserToInvite({ id: userId, username: user.username || `Utente ${userId}` });
+    setShowInviteConfirm(true);
+  };
+
+  // Conferma invito utente al gruppo
+  const handleConfirmInvite = async () => {
+    if (!inviteMode || !userToInvite) return;
     
     try {
-      await inviteMode.onInvite(userId);
+      await inviteMode.onInvite(userToInvite.id);
       setSearchQuery('');
       setSearchResults([]);
+      setShowInviteConfirm(false);
+      setUserToInvite(null);
       inviteMode.onCancel(); // Chiude la modalità invito
     } catch (error) {
       console.error('Errore invito utente:', error);
       alert('Errore durante l\'invito dell\'utente');
     }
+  };
+
+  // Annulla invito
+  const handleCancelInvite = () => {
+    setShowInviteConfirm(false);
+    setUserToInvite(null);
   };
 
   // Accetta invito
@@ -565,9 +582,9 @@ export default function Sidebar({
                 <div
                   key={getUserId(foundUser)}
                   className={styles.searchResultItem}
-                  onClick={() => handleInviteUser(getUserId(foundUser))}
+                  onClick={() => handleShowInviteConfirm(foundUser)}
                 >
-                  <i className="bi bi-person-circle me-2"></i>
+                  <i className="bi bi-person me-2"></i>
                   {foundUser.username}
                 </div>
               ))}
@@ -597,6 +614,32 @@ export default function Sidebar({
           </Button>
         </div>
       )}
+
+      {/* Modale conferma invito */}
+      <Modal 
+        show={showInviteConfirm} 
+        onHide={handleCancelInvite}
+        centered
+        contentClassName="bg-dark text-white"
+      >
+        <Modal.Header closeButton className="border-secondary">
+          <Modal.Title>Conferma Invito</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p className="mb-0">
+            Vuoi invitare <strong>{userToInvite?.username}</strong> a questo gruppo?
+          </p>
+        </Modal.Body>
+        <Modal.Footer className="border-secondary">
+          <Button variant="secondary" onClick={handleCancelInvite}>
+            Annulla
+          </Button>
+          <Button variant="success" onClick={handleConfirmInvite}>
+            <i className="bi bi-check-circle me-2"></i>
+            Conferma Invito
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 }
