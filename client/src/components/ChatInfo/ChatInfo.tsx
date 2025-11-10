@@ -93,25 +93,8 @@ export default function ChatInfo({ chat, isVisible, onClose, onStartInvite, onCh
     }
   };
 
-  const handleDeleteChat = async () => {
-    const message = isPrivate 
-      ? 'Eliminare questa chat rimuoverà definitivamente tutti i tuoi metadati e messaggi. Continuare?'
-      : 'Eliminare questa chat ti farà uscire dal gruppo e rimuoverà tutti i tuoi dati. Continuare?';
-      
-    if (confirm(message)) {
-      try {
-        await api.leaveChat(chat.chat_id);
-        onClose();
-        if (onChatLeft) onChatLeft(); // Notifica che la chat è stata lasciata
-      } catch (error) {
-        console.error('Errore eliminazione chat:', error);
-        alert('Errore durante l\'eliminazione della chat');
-      }
-    }
-  };
-
   const handleLeaveChat = async () => {
-    if (confirm('Sei sicuro di voler uscire da questa chat?')) {
+    if (confirm('Sei sicuro di voler lasciare questa chat? Se sei l\'Owner, devi prima trasferire l\'ownership.')) {
       try {
         await api.leaveChat(chat.chat_id);
         onClose();
@@ -410,24 +393,15 @@ export default function ChatInfo({ chat, isVisible, onClose, onStartInvite, onCh
                   Pulisci chat
                 </Button>
                 
-                {/* Azioni per chat di gruppo */}
+                {/* Lascia chat - solo per chat di gruppo */}
                 {!isPrivate && (
-                  <>
-                    <Button
-                      variant="outline-light"
-                      onClick={handleLeaveChat}
-                    >
-                      <i className="bi bi-box-arrow-right me-2"></i>
-                      Esci dalla chat
-                    </Button>
-                    <Button
-                      variant="danger"
-                      onClick={handleDeleteChat}
-                    >
-                      <i className="bi bi-trash me-2"></i>
-                      Elimina chat
-                    </Button>
-                  </>
+                  <Button
+                    variant="outline-light"
+                    onClick={handleLeaveChat}
+                  >
+                    <i className="bi bi-box-arrow-right me-2"></i>
+                    Lascia la chat
+                  </Button>
                 )}
               </div>
             </div>

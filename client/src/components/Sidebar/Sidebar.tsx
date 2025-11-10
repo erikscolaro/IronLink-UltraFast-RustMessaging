@@ -1,7 +1,7 @@
 // Sidebar - Pannello laterale con lista chat e azioni utente
 import styles from "./Sidebar.module.css";
 import { useState, useEffect } from "react";
-import { ChatDTO, ChatType, UserDTO, getUserId } from "../../models/types";
+import { ChatDTO, ChatType, UserDTO, getUserId, InvitationDTO } from "../../models/types";
 import { Button, ListGroup, Form, InputGroup } from "react-bootstrap";
 import { useAuth } from "../../context/AuthContext";
 import * as api from "../../services/api";
@@ -49,6 +49,58 @@ export default function Sidebar({
   const [groupDescription, setGroupDescription] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [privateChatNames, setPrivateChatNames] = useState<Record<number, string>>({});
+  const [pendingInvitations, setPendingInvitations] = useState<InvitationDTO[]>([]);
+  const [inviterNames, setInviterNames] = useState<Record<number, string>>({});
+  const [chatNames, setChatNames] = useState<Record<number, string>>({});
+
+  // Carica gli inviti pending all'avvio e quando le chat cambiano
+  useEffect(() => {
+    const loadInvitations = async () => {
+      try {
+        const invites = await api.listPendingInvitations();
+        setPendingInvitations(invites);
+
+        // Carica i nomi degli inviter e delle chat
+        for (const invite of invites) {
+          // Carica il nome dell'inviter
+          if (!inviterNames[invite.inviter_id]) {
+            try {
+              const inviter = await api.getUserById(invite.inviter_id);
+              if (inviter && inviter.username) {
+                setInviterNames(prev => ({
+                  ...prev,
+                  [invite.inviter_id]: inviter.username!
+                }));
+              }
+            } catch (error) {
+              console.error(`Errore caricamento inviter ${invite.inviter_id}:`, error);
+            }
+          }
+
+          // Carica il nome della chat
+          if (!chatNames[invite.chat_id]) {
+            try {
+              const chatData = chats.find(c => c.chat_id === invite.chat_id);
+              if (chatData && chatData.title) {
+                setChatNames(prev => ({
+                  ...prev,
+                  [invite.chat_id]: chatData.title!
+                }));
+              }
+            } catch (error) {
+              console.error(`Errore caricamento chat ${invite.chat_id}:`, error);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Errore caricamento inviti:', error);
+      }
+    };
+
+    if (user) {
+      loadInvitations();
+    }
+  }, [chats, user]);
 
   // Carica i nomi degli utenti per le chat private
   useEffect(() => {
@@ -169,6 +221,32 @@ export default function Sidebar({
     }
   };
 
+  // Accetta invito
+  const handleAcceptInvite = async (inviteId: number) => {
+    try {
+      await api.respondToInvitation(inviteId, 'accept');
+      // Rimuovi l'invito dalla lista
+      setPendingInvitations(prev => prev.filter(inv => inv.invitation_id !== inviteId));
+      // Ricarica le chat per vedere la nuova chat
+      await onRefreshChats();
+    } catch (error) {
+      console.error('Errore accettazione invito:', error);
+      alert('Errore durante l\'accettazione dell\'invito');
+    }
+  };
+
+  // Rifiuta invito
+  const handleDeclineInvite = async (inviteId: number) => {
+    try {
+      await api.respondToInvitation(inviteId, 'decline');
+      // Rimuovi l'invito dalla lista
+      setPendingInvitations(prev => prev.filter(inv => inv.invitation_id !== inviteId));
+    } catch (error) {
+      console.error('Errore rifiuto invito:', error);
+      alert('Errore durante il rifiuto dell\'invito');
+    }
+  };
+
   // Crea chat privata con utente selezionato
   const handleCreatePrivateChat = async (userId: number) => {
     if (!user) {
@@ -255,6 +333,52 @@ export default function Sidebar({
           <>
             {/* Lista chat */}
             <div className={styles.listContainer}>
+              {/* Inviti pending */}
+              {pendingInvitations.length > 0 && (
+                <div className="mb-3">
+                  <div className="px-3 py-2">
+                    <small className="text-uppercase text-muted fw-bold">
+                      Inviti Pending ({pendingInvitations.length})
+                    </small>
+                  </div>
+                  {pendingInvitations.map((invite) => (
+                    <div key={invite.invitation_id} className={styles.inviteItem}>
+                      <div className="d-flex align-items-start gap-2 mb-2">
+                        <i className="bi bi-envelope-fill text-warning fs-5"></i>
+                        <div className="flex-grow-1">
+                          <div className="fw-bold">
+                            {chatNames[invite.chat_id] || `Gruppo ${invite.chat_id}`}
+                          </div>
+                          <small className="text-muted">
+                            Invitato da {inviterNames[invite.inviter_id] || `Utente ${invite.inviter_id}`}
+                          </small>
+                        </div>
+                      </div>
+                      <div className={styles.inviteActions}>
+                        <Button
+                          size="sm"
+                          variant="success"
+                          onClick={() => handleAcceptInvite(invite.invitation_id)}
+                          className={styles.acceptButton}
+                        >
+                          <i className="bi bi-check-circle me-1"></i>
+                          Accetta
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          onClick={() => handleDeclineInvite(invite.invitation_id)}
+                          className={styles.declineButton}
+                        >
+                          <i className="bi bi-x-circle me-1"></i>
+                          Rifiuta
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {chats.length === 0 ? (
                 <div className="text-center py-5 text-muted">
                   <i className="bi bi-chat-dots mb-3" style={{ fontSize: '3rem' }}></i>
