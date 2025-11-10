@@ -11,6 +11,7 @@ interface SidebarProps {
   selectedChatId: number | null;
   onSelectChat: (chatId: number) => void;
   onShowProfile: () => void;
+  onRefreshChats: () => Promise<void>;
   inviteMode?: {
     chatId: number;
     existingMemberIds: number[];
@@ -26,6 +27,7 @@ export default function Sidebar({
   selectedChatId,
   onSelectChat,
   onShowProfile,
+  onRefreshChats,
   inviteMode,
 }: SidebarProps) {
   const { user } = useAuth();
@@ -46,6 +48,46 @@ export default function Sidebar({
   const [groupName, setGroupName] = useState('');
   const [groupDescription, setGroupDescription] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [privateChatNames, setPrivateChatNames] = useState<Record<number, string>>({});
+
+  // Carica i nomi degli utenti per le chat private
+  useEffect(() => {
+    const loadPrivateChatNames = async () => {
+      if (!user) return;
+      
+      const currentUserId = getUserId(user);
+      const privateChats = chats.filter(chat => 
+        chat.chat_type === ChatType.Private && chat.user_list && chat.user_list.length === 2
+      );
+
+      for (const chat of privateChats) {
+        if (!chat.user_list) continue;
+        
+        // Trova l'ID dell'altro utente (non quello corrente)
+        const otherUserId = chat.user_list.find(id => id !== currentUserId);
+        
+        if (!otherUserId || privateChatNames[chat.chat_id]) continue;
+
+        try {
+          const members = await api.listChatMembers(chat.chat_id);
+          const otherUser = members.find((m) => m.user_id !== currentUserId);
+          
+          if (otherUser && otherUser.username) {
+            setPrivateChatNames(prev => ({
+              ...prev,
+              [chat.chat_id]: otherUser.username!
+            }));
+          }
+        } catch (error) {
+          console.error(`Errore caricamento membri chat ${chat.chat_id}:`, error);
+        }
+      }
+    };
+
+    if (chats.length > 0 && user) {
+      loadPrivateChatNames();
+    }
+  }, [chats, user]);
 
   // Ricerca utenti per chat privata
   const handleSearch = async (query: string) => {
@@ -58,18 +100,25 @@ export default function Sidebar({
 
     setIsSearching(true);
     try {
+      if (!user) return;
+      
+      const currentUserId = getUserId(user);
       const results = await api.searchUserByUsername(query);
-      console.log('Search results:', results);
+      
+      // Trova tutti gli utenti con cui ho già una chat privata
+      const existingPrivateChatUserIds = chats
+        .filter(chat => chat.chat_type === ChatType.Private && chat.user_list && chat.user_list.length > 0)
+        .flatMap(chat => chat.user_list!)
+        .filter(id => id !== currentUserId); // Escludi me stesso
       
       // Filtra risultati:
       // 1. Escludi l'utente corrente
       // 2. Escludi utenti con cui esiste già una chat privata
       const filteredResults = results.filter((foundUser) => {
-        // Escludi solo se stesso
-        return getUserId(foundUser) !== user?.user_id;
+        const userId = getUserId(foundUser);
+        return userId !== currentUserId && !existingPrivateChatUserIds.includes(userId);
       });
       
-      console.log('Filtered results:', filteredResults);
       setSearchResults(filteredResults);
     } catch (error) {
       console.error('Errore ricerca utenti:', error);
@@ -90,17 +139,13 @@ export default function Sidebar({
     setIsSearching(true);
     try {
       const results = await api.searchUserByUsername(query);
-      console.log('Invite search results:', results);
       
       // Filtra risultati escludendo membri esistenti
       const filteredResults = results.filter((foundUser) => {
         const userId = getUserId(foundUser);
-        const isExisting = inviteMode?.existingMemberIds.includes(userId);
-        console.log(`User ${foundUser.username} (${userId}): existing=${isExisting}`);
-        return !isExisting;
+        return !inviteMode?.existingMemberIds.includes(userId);
       });
       
-      console.log('Filtered invite results:', filteredResults);
       setSearchResults(filteredResults);
     } catch (error) {
       console.error('Errore ricerca utenti:', error);
@@ -142,6 +187,10 @@ export default function Sidebar({
         chat_type: ChatType.Private,
         user_list: [currentUserId, userId] // Include entrambi gli utenti
       });
+      
+      // Ricarica la lista per vedere la nuova chat
+      await onRefreshChats();
+      
       onSelectChat(newChat.chat_id);
       setCurrentView('chats');
       setSearchQuery('');
@@ -210,24 +259,36 @@ export default function Sidebar({
                 </div>
               ) : (
                 <ListGroup variant="flush">
-                  {chats.map((chat) => (
-                    <ListGroup.Item
-                      key={chat.chat_id}
-                      action
-                      active={selectedChatId === chat.chat_id}
-                      onClick={() => onSelectChat(chat.chat_id)}
-                      className="bg-transparent text-white border-0"
-                    >
-                      <div className="fw-bold">
-                        {chat.title || `Chat ${chat.chat_id}`}
-                      </div>
-                      {chat.description && (
-                        <small className="text-muted text-truncate d-block">
-                          {chat.description}
-                        </small>
-                      )}
-                    </ListGroup.Item>
-                  ))}
+                  {chats.map((chat) => {
+                    const isPrivate = chat.chat_type === ChatType.Private;
+                    const displayName = isPrivate 
+                      ? (privateChatNames[chat.chat_id] || `Chat ${chat.chat_id}`)
+                      : (chat.title || `Gruppo ${chat.chat_id}`);
+                    
+                    return (
+                      <ListGroup.Item
+                        key={chat.chat_id}
+                        action
+                        active={selectedChatId === chat.chat_id}
+                        onClick={() => onSelectChat(chat.chat_id)}
+                        className="bg-transparent text-white border-0"
+                      >
+                        <div className="d-flex align-items-center gap-2">
+                          <i className={`bi ${isPrivate ? 'bi-person-circle' : 'bi-people-fill'} fs-5`}></i>
+                          <div className="flex-grow-1">
+                            <div className="fw-bold">
+                              {displayName}
+                            </div>
+                            {chat.description && !isPrivate && (
+                              <small className="text-muted text-truncate d-block">
+                                {chat.description}
+                              </small>
+                            )}
+                          </div>
+                        </div>
+                      </ListGroup.Item>
+                    );
+                  })}
                 </ListGroup>
               )}
             </div>
