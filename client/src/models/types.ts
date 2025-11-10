@@ -32,7 +32,8 @@ export interface ChatDTO {
   title?: string;
   description?: string;
   chat_type: ChatType;
-  created_at: string;
+  created_at?: string;
+  user_list?: number[]; // Lista ID utenti per chat private/gruppo
 }
 
 export interface MessageDTO {
