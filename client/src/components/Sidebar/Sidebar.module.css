@@ -168,6 +168,25 @@
   color: #95a5a6;
 }
 
+.chatItem {
+  padding: 1rem 1.5rem;
+  background-color: #34495e;
+  margin: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s;
+  border-left: 3px solid transparent;
+}
+
+.chatItem:hover {
+  background-color: #3e5468;
+}
+
+.chatItem.selected {
+  background-color: #3e5468;
+  border-left-color: #e74c3c;
+}
+
 .inviteItem {
   padding: 1rem 1.5rem;
   background-color: #34495e;

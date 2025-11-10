@@ -2,7 +2,7 @@
 import styles from "./Sidebar.module.css";
 import { useState, useEffect } from "react";
 import { ChatDTO, ChatType, UserDTO, getUserId, InvitationDTO } from "../../models/types";
-import { Button, ListGroup, Form, InputGroup } from "react-bootstrap";
+import { Button, Form, InputGroup } from "react-bootstrap";
 import { useAuth } from "../../context/AuthContext";
 import * as api from "../../services/api";
 
@@ -53,45 +53,64 @@ export default function Sidebar({
   const [inviterNames, setInviterNames] = useState<Record<number, string>>({});
   const [chatNames, setChatNames] = useState<Record<number, string>>({});
 
-  // Carica gli inviti pending all'avvio e quando le chat cambiano
+  // Carica gli inviti pending all'avvio
   useEffect(() => {
     const loadInvitations = async () => {
       try {
         const invites = await api.listPendingInvitations();
         setPendingInvitations(invites);
 
-        // Carica i nomi degli inviter e delle chat
-        for (const invite of invites) {
-          // Carica il nome dell'inviter
-          if (!inviterNames[invite.inviter_id]) {
-            try {
-              const inviter = await api.getUserById(invite.inviter_id);
-              if (inviter && inviter.username) {
-                setInviterNames(prev => ({
-                  ...prev,
-                  [invite.inviter_id]: inviter.username!
-                }));
-              }
-            } catch (error) {
-              console.error(`Errore caricamento inviter ${invite.inviter_id}:`, error);
+        // Carica i nomi degli inviter e delle chat in parallelo
+        const inviterPromises = invites.map(async (invite) => {
+          try {
+            const inviter = await api.getUserById(invite.inviter_id);
+            if (inviter && inviter.username) {
+              return { id: invite.inviter_id, name: inviter.username };
             }
+          } catch (error) {
+            console.error(`Errore caricamento inviter ${invite.inviter_id}:`, error);
           }
+          return null;
+        });
 
-          // Carica il nome della chat
-          if (!chatNames[invite.chat_id]) {
-            try {
-              const chatData = chats.find(c => c.chat_id === invite.chat_id);
-              if (chatData && chatData.title) {
-                setChatNames(prev => ({
-                  ...prev,
-                  [invite.chat_id]: chatData.title!
-                }));
-              }
-            } catch (error) {
-              console.error(`Errore caricamento chat ${invite.chat_id}:`, error);
+        const chatPromises = invites.map(async (invite) => {
+          try {
+            // Prova a caricare i membri per verificare che la chat esista
+            await api.listChatMembers(invite.chat_id);
+            // Se la chat esiste nelle chat caricate, usa il suo titolo
+            const existingChat = chats.find(c => c.chat_id === invite.chat_id);
+            if (existingChat && existingChat.title) {
+              return { id: invite.chat_id, name: existingChat.title };
             }
+            return { id: invite.chat_id, name: `Gruppo ${invite.chat_id}` };
+          } catch (error) {
+            // Se non riesci a caricare i membri, usa un nome generico
+            return { id: invite.chat_id, name: `Gruppo ${invite.chat_id}` };
           }
-        }
+        });
+
+        const [inviterResults, chatResults] = await Promise.all([
+          Promise.all(inviterPromises),
+          Promise.all(chatPromises)
+        ]);
+
+        // Aggiorna gli stati con i risultati
+        const newInviterNames: Record<number, string> = {};
+        inviterResults.forEach(result => {
+          if (result) {
+            newInviterNames[result.id] = result.name;
+          }
+        });
+        setInviterNames(newInviterNames);
+
+        const newChatNames: Record<number, string> = {};
+        chatResults.forEach(result => {
+          if (result) {
+            newChatNames[result.id] = result.name;
+          }
+        });
+        setChatNames(newChatNames);
+
       } catch (error) {
         console.error('Errore caricamento inviti:', error);
       }
@@ -100,7 +119,7 @@ export default function Sidebar({
     if (user) {
       loadInvitations();
     }
-  }, [chats, user]);
+  }, [user]);
 
   // Carica i nomi degli utenti per le chat private
   useEffect(() => {
@@ -314,7 +333,7 @@ export default function Sidebar({
       {/* Header con info utente e azioni */}
       <div className={styles.header}>
         <div className="d-flex align-items-center gap-2">
-          <i className="bi bi-person-circle fs-2"></i>
+          <i className="bi bi-person fs-2"></i>
           <span className="fw-bold">{user?.username || 'Utente'}</span>
         </div>
         <Button
@@ -335,49 +354,48 @@ export default function Sidebar({
             <div className={styles.listContainer}>
               {/* Inviti pending */}
               {pendingInvitations.length > 0 && (
-                <div className="mb-3">
-                  <div className="px-3 py-2">
-                    <small className="text-uppercase text-muted fw-bold">
-                      Inviti Pending ({pendingInvitations.length})
-                    </small>
+                <>
+                  <div className="px-3 py-2 mb-2">
+                    <small className="text-uppercase text-muted fw-bold">Inviti</small>
                   </div>
                   {pendingInvitations.map((invite) => (
                     <div key={invite.invitation_id} className={styles.inviteItem}>
-                      <div className="d-flex align-items-start gap-2 mb-2">
-                        <i className="bi bi-envelope-fill text-warning fs-5"></i>
+                      <div className="d-flex align-items-center gap-2 mb-2">
+                        <i className="bi bi-envelope fs-5"></i>
                         <div className="flex-grow-1">
                           <div className="fw-bold">
                             {chatNames[invite.chat_id] || `Gruppo ${invite.chat_id}`}
                           </div>
                           <small className="text-muted">
-                            Invitato da {inviterNames[invite.inviter_id] || `Utente ${invite.inviter_id}`}
+                            da {inviterNames[invite.inviter_id] || `Utente ${invite.inviter_id}`}
                           </small>
                         </div>
                       </div>
                       <div className={styles.inviteActions}>
-                        <Button
-                          size="sm"
-                          variant="success"
-                          onClick={() => handleAcceptInvite(invite.invitation_id)}
+                        <button
                           className={styles.acceptButton}
+                          onClick={() => handleAcceptInvite(invite.invitation_id)}
                         >
                           <i className="bi bi-check-circle me-1"></i>
                           Accetta
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="danger"
-                          onClick={() => handleDeclineInvite(invite.invitation_id)}
+                        </button>
+                        <button
                           className={styles.declineButton}
+                          onClick={() => handleDeclineInvite(invite.invitation_id)}
                         >
                           <i className="bi bi-x-circle me-1"></i>
                           Rifiuta
-                        </Button>
+                        </button>
                       </div>
                     </div>
                   ))}
-                </div>
+                </>
               )}
+
+              {/* Sezione Chat */}
+              <div className="px-3 py-2 mb-2">
+                <small className="text-uppercase text-muted fw-bold">Chats</small>
+              </div>
 
               {chats.length === 0 ? (
                 <div className="text-center py-5 text-muted">
@@ -386,7 +404,7 @@ export default function Sidebar({
                   <small>Crea una nuova chat per iniziare</small>
                 </div>
               ) : (
-                <ListGroup variant="flush">
+                <>
                   {chats.map((chat) => {
                     const isPrivate = chat.chat_type === ChatType.Private;
                     const displayName = isPrivate 
@@ -394,15 +412,13 @@ export default function Sidebar({
                       : (chat.title || `Gruppo ${chat.chat_id}`);
                     
                     return (
-                      <ListGroup.Item
+                      <div
                         key={chat.chat_id}
-                        action
-                        active={selectedChatId === chat.chat_id}
+                        className={`${styles.chatItem} ${selectedChatId === chat.chat_id ? styles.selected : ''}`}
                         onClick={() => onSelectChat(chat.chat_id)}
-                        className="bg-transparent text-white border-0"
                       >
                         <div className="d-flex align-items-center gap-2">
-                          <i className={`bi ${isPrivate ? 'bi-person-circle' : 'bi-people-fill'} fs-5`}></i>
+                          <i className={`bi ${isPrivate ? 'bi-person' : 'bi-people'} fs-5`}></i>
                           <div className="flex-grow-1">
                             <div className="fw-bold">
                               {displayName}
@@ -414,10 +430,10 @@ export default function Sidebar({
                             )}
                           </div>
                         </div>
-                      </ListGroup.Item>
+                      </div>
                     );
                   })}
-                </ListGroup>
+                </>
               )}
             </div>
           </>
