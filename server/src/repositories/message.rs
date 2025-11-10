@@ -91,6 +91,38 @@ impl MessageRepository {
 
         Ok(messages)
     }
+
+    /// Delete all messages older than a specific date for a chat
+    ///
+    /// # Arguments
+    /// * `chat_id` - The chat ID
+    /// * `before_date` - Delete messages created before this date
+    ///
+    /// # Returns
+    /// Number of messages deleted
+    #[instrument(skip(self))]
+    pub async fn delete_messages_before(
+        &self,
+        chat_id: &i32,
+        before_date: &DateTime<Utc>,
+    ) -> Result<u64, Error> {
+        debug!("Deleting messages before {:?} for chat {}", before_date, chat_id);
+        
+        let result = sqlx::query!(
+            r#"
+            DELETE FROM messages 
+            WHERE chat_id = ? AND created_at < ?
+            "#,
+            chat_id,
+            before_date
+        )
+        .execute(&self.connection_pool)
+        .await?;
+
+        let deleted = result.rows_affected();
+        info!("Deleted {} messages from chat {}", deleted, chat_id);
+        Ok(deleted)
+    }
 }
 
 impl Create<Message, CreateMessageDTO> for MessageRepository {
