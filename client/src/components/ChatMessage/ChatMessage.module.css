@@ -21,13 +21,13 @@
   word-wrap: break-word;
 }
 
-.ownMessage .messageCard {
+.messageCard.ownMessage {
   background-color: #e74c3c;
   color: white;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
-.otherMessage .messageCard {
+.messageCard.otherMessage {
   background-color: #34495e;
   color: white;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
@@ -44,7 +44,7 @@
   color: rgba(255, 255, 255, 0.8);
 }
 
-.otherMessage .senderName {
+.messageCard.otherMessage .senderName {
   color: #bdc3c7;
 }
 
