@@ -31,8 +31,30 @@ async fn connect_websocket(
 ) -> Result<String, String> {
     println!("Tentativo di connessione WebSocket a: {}", ws_url);
 
-    // Aggiungi il token all'URL come query parameter
-    let url_with_token = format!("{}?token={}", ws_url, token);
+    // Crea la richiesta HTTP con l'header Authorization
+    use tokio_tungstenite::tungstenite::http::Request;
+    
+    // Estrai l'host dall'URL WebSocket
+    // Formato: ws://host:port/path -> host:port
+    let host = ws_url
+        .trim_start_matches("ws://")
+        .trim_start_matches("wss://")
+        .split('/')
+        .next()
+        .unwrap_or("localhost:3000");
+    
+    println!("Host estratto: {}", host);
+    
+    let request = Request::builder()
+        .uri(&ws_url)
+        .header("Host", host)
+        .header("Authorization", format!("Bearer {}", token))
+        .header("Sec-WebSocket-Version", "13")
+        .header("Connection", "Upgrade")
+        .header("Upgrade", "websocket")
+        .header("Sec-WebSocket-Key", tokio_tungstenite::tungstenite::handshake::client::generate_key())
+        .body(())
+        .map_err(|e| format!("Errore creazione richiesta: {}", e))?;
     
     // Crea un canale per inviare messaggi al WebSocket
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
@@ -45,7 +67,7 @@ async fn connect_websocket(
 
     // Spawn task per gestire la connessione WebSocket
     tokio::spawn(async move {
-        match connect_async(&url_with_token).await {
+        match connect_async(request).await {
             Ok((ws_stream, _)) => {
                 println!("WebSocket connesso con successo!");
                 
