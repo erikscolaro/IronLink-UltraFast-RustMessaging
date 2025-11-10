@@ -24,18 +24,28 @@
 .ownMessage .messageCard {
   background-color: #e74c3c;
   color: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
 .otherMessage .messageCard {
-  background-color: #ecf0f1;
-  color: #2c3e50;
+  background-color: #34495e;
+  color: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
 .senderName {
   font-size: 0.85rem;
   font-weight: 600;
   margin-bottom: 0.25rem;
-  color: #7f8c8d;
+  color: #95a5a6;
+}
+
+.ownMessage .senderName {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.otherMessage .senderName {
+  color: #bdc3c7;
 }
 
 .messageContent {
@@ -72,10 +82,11 @@
 
 .systemContent {
   padding: 0.5rem 1rem;
-  background-color: #bdc3c7;
-  color: #2c3e50;
+  background-color: rgba(52, 73, 94, 0.1);
+  color: #34495e;
   border-radius: 12px;
   font-size: 0.85rem;
   font-style: italic;
   text-align: center;
+  border: 1px solid rgba(52, 73, 94, 0.2);
 }
