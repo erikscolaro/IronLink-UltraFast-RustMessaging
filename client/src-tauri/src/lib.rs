@@ -186,6 +186,7 @@ async fn disconnect_websocket(
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(WebSocketState {
             sender: Arc::new(Mutex::new(None)),
         })

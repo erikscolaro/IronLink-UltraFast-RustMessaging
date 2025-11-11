@@ -1,9 +1,10 @@
 // WebSocketContext - Gestisce la connessione WebSocket per messaggi real-time tramite Tauri
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
-import { MessageDTO, EnrichedInvitationDTO } from '../models/types';
+import { MessageDTO, EnrichedInvitationDTO, MessageType } from '../models/types';
 import { useAuth } from './AuthContext';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { useNotifications } from '../hooks/useNotifications';
 
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
 
@@ -33,6 +34,7 @@ interface WebSocketProviderProps {
 
 export function WebSocketProvider({ children }: WebSocketProviderProps) {
   const { isAuthenticated } = useAuth();
+  const { notifyNewMessage, notifyNewInvitation } = useNotifications();
   const [isConnected, setIsConnected] = useState(false);
   const chatCallbacksRef = useRef<Map<number, Set<(message: MessageDTO) => void>>>(new Map());
   const errorCallbacksRef = useRef<Set<(error: string) => void>>(new Set());
@@ -55,15 +57,11 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     }
 
     try {
-      console.log('Connessione WebSocket tramite Tauri...');
-      
       // Usa il comando Tauri per connettersi
       await invoke('connect_websocket', {
         wsUrl: WS_URL,
         token: token,
       });
-
-      console.log('Comando WebSocket inviato');
     } catch (error) {
       console.error('Errore connessione WebSocket:', error);
       errorCallbacksRef.current.forEach(callback => 
@@ -73,7 +71,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       // Tentativo di riconnessione
       if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
         reconnectAttemptsRef.current++;
-        console.log(`Tentativo di riconnessione ${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS}...`);
         reconnectTimeoutRef.current = setTimeout(connect, RECONNECT_DELAY) as unknown as number;
       }
     }
@@ -87,7 +84,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       const setupListeners = async () => {
         // Evento: connesso
         const unlistenConnected = await listen('ws-connected', () => {
-          console.log('WebSocket connesso (evento Tauri)');
           setIsConnected(true);
           reconnectAttemptsRef.current = 0;
         });
@@ -95,9 +91,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
         // Evento: messaggio ricevuto
         const unlistenMessage = await listen<string>('ws-message', (event) => {
           try {
-            console.log('📨 WebSocket message received:', event.payload);
             const data = JSON.parse(event.payload);
-            console.log('📦 Parsed data:', data);
             
             // Gestione errori dal server
             if (data.error) {
@@ -109,24 +103,20 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
             // Gestione segnali AddChat/RemoveChat/Invitation
             if (data.AddChat !== undefined) {
               const chatId = data.AddChat;
-              console.log('✅ AddChat signal received for chat_id:', chatId);
-              console.log('📢 Notifying', chatAddedCallbacksRef.current.size, 'subscribers');
               chatAddedCallbacksRef.current.forEach(callback => callback(chatId));
               return;
             }
             
             if (data.RemoveChat !== undefined) {
               const chatId = data.RemoveChat;
-              console.log('❌ RemoveChat signal received for chat_id:', chatId);
-              console.log('📢 Notifying', chatRemovedCallbacksRef.current.size, 'subscribers');
               chatRemovedCallbacksRef.current.forEach(callback => callback(chatId));
               return;
             }
 
             if (data.Invitation !== undefined) {
               const invitation: EnrichedInvitationDTO = data.Invitation;
-              console.log('📩 Invitation signal received:', invitation);
-              console.log('📢 Notifying', invitationCallbacksRef.current.size, 'subscribers');
+              // Notifica nuovo invito
+              notifyNewInvitation(invitation.chat?.title);
               invitationCallbacksRef.current.forEach(callback => callback(invitation));
               return;
             }
@@ -137,6 +127,11 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
             // Elabora ogni messaggio nel batch
             messages.forEach((msg) => {
               if (msg.chat_id && msg.content) {
+                // Notifica nuovo messaggio (solo per messaggi utente, non di sistema)
+                if (msg.message_type !== MessageType.SystemMessage) {
+                  notifyNewMessage(msg);
+                }
+                
                 const callbacks = chatCallbacksRef.current.get(msg.chat_id);
                 if (callbacks) {
                   callbacks.forEach(callback => callback(msg));
@@ -150,13 +145,11 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
 
         // Evento: disconnesso
         const unlistenDisconnected = await listen('ws-disconnected', () => {
-          console.log('WebSocket disconnesso (evento Tauri)');
           setIsConnected(false);
           
           // Tentativo di riconnessione
           if (isAuthenticated && reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
             reconnectAttemptsRef.current++;
-            console.log(`Tentativo di riconnessione ${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS}...`);
             reconnectTimeoutRef.current = setTimeout(connect, RECONNECT_DELAY) as unknown as number;
           }
         });
