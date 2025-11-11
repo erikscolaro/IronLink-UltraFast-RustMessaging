@@ -86,6 +86,9 @@ async fn connect_websocket(
                                 // Emetti evento con il messaggio ricevuto
                                 let _ = app_handle_read.emit("ws-message", text);
                             }
+                            Ok(Message::Pong(_)) => {
+                                println!("Pong ricevuto dal server");
+                            }
                             Ok(Message::Close(_)) => {
                                 println!("WebSocket chiuso dal server");
                                 let _ = app_handle_read.emit("ws-disconnected", ());
@@ -101,14 +104,32 @@ async fn connect_websocket(
                     }
                 });
 
-                // Task per inviare messaggi al WebSocket
+                // Task per inviare messaggi al WebSocket con ping periodici
                 let app_handle_write = app_handle.clone();
                 let write_task = tokio::spawn(async move {
-                    while let Some(msg) = rx.recv().await {
-                        if let Err(e) = write.send(Message::Text(msg)).await {
-                            eprintln!("Errore invio messaggio: {}", e);
-                            let _ = app_handle_write.emit("ws-error", format!("{}", e));
-                            break;
+                    use tokio::time::{interval, Duration};
+                    let mut ping_interval = interval(Duration::from_secs(30));
+                    ping_interval.tick().await; // Consuma il primo tick
+                    
+                    loop {
+                        tokio::select! {
+                            // Messaggio da inviare
+                            Some(msg) = rx.recv() => {
+                                if let Err(e) = write.send(Message::Text(msg)).await {
+                                    eprintln!("Errore invio messaggio: {}", e);
+                                    let _ = app_handle_write.emit("ws-error", format!("{}", e));
+                                    break;
+                                }
+                            }
+                            // Ping periodico ogni 30 secondi
+                            _ = ping_interval.tick() => {
+                                if let Err(e) = write.send(Message::Ping(vec![])).await {
+                                    eprintln!("Errore invio ping: {}", e);
+                                    let _ = app_handle_write.emit("ws-error", format!("{}", e));
+                                    break;
+                                }
+                                println!("Ping inviato al server");
+                            }
                         }
                     }
                 });
