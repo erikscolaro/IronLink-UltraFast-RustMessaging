@@ -116,10 +116,28 @@ pub async fn write_ws(
                         info!(chat_id, "Adding chat subscription");
                         let rx = state.chats_online.subscribe(&chat_id);
                         stream_map.insert(chat_id, BroadcastStream::new(rx));
+                        
+                        // Invia notifica al client
+                        let msg = serde_json::json!({"AddChat": chat_id});
+                        if let Ok(json) = serde_json::to_string(&msg) {
+                            if let Err(e) = websocket_tx.send(Message::Text(Utf8Bytes::from(json))).await {
+                                error!("Failed to send AddChat notification: {:?}", e);
+                                break 'external;
+                            }
+                        }
                     }
                     Some(InternalSignal::RemoveChat(chat_id)) => {
                         info!(chat_id, "Removing chat subscription");
                         stream_map.remove(&chat_id);
+                        
+                        // Invia notifica al client
+                        let msg = serde_json::json!({"RemoveChat": chat_id});
+                        if let Ok(json) = serde_json::to_string(&msg) {
+                            if let Err(e) = websocket_tx.send(Message::Text(Utf8Bytes::from(json))).await {
+                                error!("Failed to send RemoveChat notification: {:?}", e);
+                                break 'external;
+                            }
+                        }
                     }
                     Some(InternalSignal::Error(err_msg)) => {
                         warn!(error_message = err_msg, "Sending error message to client");
@@ -130,7 +148,9 @@ pub async fn write_ws(
                     }
                     Some(InternalSignal::Invitation(invitation)) => {
                         info!(invite_id = invitation.invite_id, "Sending invitation to client");
-                        if let Ok(json) = serde_json::to_string(&invitation) {
+                        // Wrappa l'invitation in un oggetto per consistenza con AddChat/RemoveChat
+                        let wrapped = serde_json::json!({"Invitation": invitation});
+                        if let Ok(json) = serde_json::to_string(&wrapped) {
                             if let Err(e) = websocket_tx.send(Message::Text(Utf8Bytes::from(json))).await {
                                 error!("Failed to send invitation: {:?}", e);
                                 break 'external;

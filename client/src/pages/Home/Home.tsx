@@ -11,13 +11,14 @@ import ProfileModal from '../../components/ProfileModal/ProfileModal';
 import styles from './Home.module.css';
 
 export default function Home() {
-  const { onChatAdded, onChatRemoved } = useWebSocket();
+  const { onChatAdded, onChatRemoved, subscribeToChat } = useWebSocket();
   const [chats, setChats] = useState<ChatDTO[]>([]);
   const [selectedChatId, setSelectedChatId] = useState<number | null>(null);
   const [showChatInfo, setShowChatInfo] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [cleanChatTrigger, setCleanChatTrigger] = useState(0); // Trigger per pulire messaggi
+  const [chatsWithUnread, setChatsWithUnread] = useState<Set<number>>(new Set());
   const [inviteMode, setInviteMode] = useState<{
     chatId: number;
     existingMemberIds: number[];
@@ -29,6 +30,26 @@ export default function Home() {
   useEffect(() => {
     loadChats();
   }, []);
+
+  // Ascolta messaggi su tutte le chat per aggiornare il pallino non letto
+  useEffect(() => {
+    const unsubscribes: (() => void)[] = [];
+
+    // Sottoscrivi a tutte le chat
+    chats.forEach(chat => {
+      const unsubscribe = subscribeToChat(chat.chat_id, (message) => {
+        // Se il messaggio arriva su una chat diversa da quella selezionata, marca come non letta
+        if (message.chat_id && message.chat_id !== selectedChatId) {
+          setChatsWithUnread(prev => new Set(prev).add(message.chat_id!));
+        }
+      });
+      unsubscribes.push(unsubscribe);
+    });
+
+    return () => {
+      unsubscribes.forEach(unsub => unsub());
+    };
+  }, [chats, selectedChatId, subscribeToChat]);
 
   // Gestisci AddChat dal WebSocket
   useEffect(() => {
@@ -98,10 +119,17 @@ export default function Home() {
             onSelectChat={(chatId) => {
               setSelectedChatId(chatId);
               setShowChatInfo(false);
+              // Rimuovi il pallino quando apri la chat
+              setChatsWithUnread(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(chatId);
+                return newSet;
+              });
             }}
             onShowProfile={() => setShowProfile(true)}
             onRefreshChats={loadChats}
             inviteMode={inviteMode}
+            chatsWithUnread={chatsWithUnread}
           />
         </Col>
 

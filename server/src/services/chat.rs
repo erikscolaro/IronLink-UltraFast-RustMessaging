@@ -181,10 +181,12 @@ pub async fn create_chat(
             );
 
             // Notifica gli utenti online di aggiungere la chat al loro stream
+            info!("Attempting to send AddChat signal to user {}", current_user.user_id);
             state.users_online.send_server_message_if_online(
                 &current_user.user_id,
                 crate::ws::usermap::InternalSignal::AddChat(chat.chat_id),
             );
+            info!("Attempting to send AddChat signal to user {}", second_user_id);
             state.users_online.send_server_message_if_online(
                 second_user_id,
                 crate::ws::usermap::InternalSignal::AddChat(chat.chat_id),

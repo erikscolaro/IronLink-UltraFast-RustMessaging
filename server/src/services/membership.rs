@@ -2,8 +2,8 @@
 
 use crate::core::{AppError, AppState, require_role};
 use crate::dtos::{
-    CreateInvitationDTO, CreateMessageDTO, CreateUserChatMetadataDTO, InvitationDTO, MessageDTO,
-    UpdateInvitationDTO, UserInChatDTO,
+    CreateInvitationDTO, CreateMessageDTO, CreateUserChatMetadataDTO, EnrichedInvitationDTO,
+    MessageDTO, UpdateInvitationDTO, UserInChatDTO,
 };
 use crate::entities::{ChatType, InvitationStatus, MessageType, User, UserChatMetadata, UserRole};
 use crate::repositories::{Create, Delete, Read, Update};
@@ -65,12 +65,12 @@ pub async fn list_chat_members(
 pub async fn list_pending_invitations(
     State(state): State<Arc<AppState>>,
     Extension(current_user): Extension<User>,
-) -> Result<Json<Vec<InvitationDTO>>, AppError> {
+) -> Result<Json<Vec<EnrichedInvitationDTO>>, AppError> {
     debug!("Listing pending invitations for user");
     // 1. Ottenere l'utente corrente dall'Extension (autenticato tramite JWT)
     // 2. Recuperare tutti gli inviti pending per l'utente corrente
-    // 3. Convertire ogni invito in InvitationDTO
-    // 4. Ritornare la lista di InvitationDTO come risposta JSON
+    // 3. Per ogni invito, arricchire con username dell'inviter e titolo della chat
+    // 4. Ritornare la lista di EnrichedInvitationDTO come risposta JSON
 
     let invitations = state
         .invitation
@@ -79,10 +79,38 @@ pub async fn list_pending_invitations(
 
     info!("Found {} pending invitations", invitations.len());
 
-    let invitations_dto: Vec<InvitationDTO> =
-        invitations.into_iter().map(InvitationDTO::from).collect();
+    // Arricchire ogni invito con i dati completi dell'inviter e della chat
+    let mut enriched_invitations = Vec::new();
+    
+    for invitation in invitations {
+        // Recupera l'utente inviter completo
+        let inviter = state
+            .user
+            .read(&invitation.invited_id)
+            .await
+            .ok()
+            .flatten()
+            .map(|user| user.into());
 
-    Ok(Json(invitations_dto))
+        // Recupera la chat completa
+        let chat = state
+            .chat
+            .read(&invitation.target_chat_id)
+            .await
+            .ok()
+            .flatten()
+            .map(|chat| chat.into());
+
+        enriched_invitations.push(EnrichedInvitationDTO {
+            invite_id: invitation.invite_id,
+            state: invitation.state,
+            created_at: invitation.created_at,
+            inviter,
+            chat,
+        });
+    }
+
+    Ok(Json(enriched_invitations))
 }
 
 #[instrument(skip(state, current_user, metadata), fields(chat_id = %chat_id, inviting_user = %current_user.user_id, target_user = %user_id))]
@@ -158,10 +186,34 @@ pub async fn invite_to_chat(
     debug!("Invitation created with id {}", invitation.invite_id);
 
     // Inviare l'invitation via WebSocket all'utente invitato (se online)
-    let invitation_dto = InvitationDTO::from(invitation);
+    // Arricchire l'invito con i dati dell'inviter e della chat
+    let inviter = state
+        .user
+        .read(&invitation.invited_id)
+        .await
+        .ok()
+        .flatten()
+        .map(|user| user.into());
+
+    let chat_dto = state
+        .chat
+        .read(&invitation.target_chat_id)
+        .await
+        .ok()
+        .flatten()
+        .map(|chat| chat.into());
+
+    let enriched_invitation = EnrichedInvitationDTO {
+        invite_id: invitation.invite_id,
+        state: invitation.state,
+        created_at: invitation.created_at,
+        inviter,
+        chat: chat_dto,
+    };
+
     state
         .users_online
-        .send_server_message_if_online(&user_id, InternalSignal::Invitation(invitation_dto));
+        .send_server_message_if_online(&user_id, InternalSignal::Invitation(enriched_invitation));
 
     info!("User successfully invited to chat");
     Ok(())
@@ -393,6 +445,7 @@ pub async fn remove_member(
     state.meta.delete(&(user_id, chat_id)).await?;
 
     // Notifica l'utente rimosso di rimuovere la chat dalla sua lista
+    info!("Sending RemoveChat signal to user {} for chat {}", user_id, chat_id);
     state.users_online.send_server_message_if_online(
         &user_id,
         crate::ws::usermap::InternalSignal::RemoveChat(chat_id),

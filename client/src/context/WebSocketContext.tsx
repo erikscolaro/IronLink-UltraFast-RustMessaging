@@ -1,6 +1,6 @@
 // WebSocketContext - Gestisce la connessione WebSocket per messaggi real-time tramite Tauri
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
-import { MessageDTO } from '../models/types';
+import { MessageDTO, EnrichedInvitationDTO } from '../models/types';
 import { useAuth } from './AuthContext';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -14,6 +14,7 @@ interface WebSocketContextType {
   onError: (callback: (error: string) => void) => () => void;
   onChatAdded: (callback: (chatId: number) => void) => () => void;
   onChatRemoved: (callback: (chatId: number) => void) => () => void;
+  onInvitation: (callback: (invitation: EnrichedInvitationDTO) => void) => () => void;
 }
 
 const WebSocketContext = createContext<WebSocketContextType | undefined>(undefined);
@@ -37,6 +38,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
   const errorCallbacksRef = useRef<Set<(error: string) => void>>(new Set());
   const chatAddedCallbacksRef = useRef<Set<(chatId: number) => void>>(new Set());
   const chatRemovedCallbacksRef = useRef<Set<(chatId: number) => void>>(new Set());
+  const invitationCallbacksRef = useRef<Set<(invitation: EnrichedInvitationDTO) => void>>(new Set());
   const reconnectTimeoutRef = useRef<number | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const MAX_RECONNECT_ATTEMPTS = 5;
@@ -93,7 +95,9 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
         // Evento: messaggio ricevuto
         const unlistenMessage = await listen<string>('ws-message', (event) => {
           try {
+            console.log('📨 WebSocket message received:', event.payload);
             const data = JSON.parse(event.payload);
+            console.log('📦 Parsed data:', data);
             
             // Gestione errori dal server
             if (data.error) {
@@ -102,16 +106,28 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
               return;
             }
             
-            // Gestione segnali AddChat/RemoveChat
+            // Gestione segnali AddChat/RemoveChat/Invitation
             if (data.AddChat !== undefined) {
               const chatId = data.AddChat;
+              console.log('✅ AddChat signal received for chat_id:', chatId);
+              console.log('📢 Notifying', chatAddedCallbacksRef.current.size, 'subscribers');
               chatAddedCallbacksRef.current.forEach(callback => callback(chatId));
               return;
             }
             
             if (data.RemoveChat !== undefined) {
               const chatId = data.RemoveChat;
+              console.log('❌ RemoveChat signal received for chat_id:', chatId);
+              console.log('📢 Notifying', chatRemovedCallbacksRef.current.size, 'subscribers');
               chatRemovedCallbacksRef.current.forEach(callback => callback(chatId));
+              return;
+            }
+
+            if (data.Invitation !== undefined) {
+              const invitation: EnrichedInvitationDTO = data.Invitation;
+              console.log('📩 Invitation signal received:', invitation);
+              console.log('📢 Notifying', invitationCallbacksRef.current.size, 'subscribers');
+              invitationCallbacksRef.current.forEach(callback => callback(invitation));
               return;
             }
             
@@ -242,6 +258,15 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     };
   }, []);
 
+  const onInvitation = useCallback((callback: (invitation: EnrichedInvitationDTO) => void) => {
+    invitationCallbacksRef.current.add(callback);
+
+    // Ritorna funzione per unsubscribe
+    return () => {
+      invitationCallbacksRef.current.delete(callback);
+    };
+  }, []);
+
   const value: WebSocketContextType = {
     isConnected,
     sendMessage,
@@ -249,6 +274,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     onError,
     onChatAdded,
     onChatRemoved,
+    onInvitation,
   };
 
   return <WebSocketContext.Provider value={value}>{children}</WebSocketContext.Provider>;
