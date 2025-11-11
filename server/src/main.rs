@@ -56,7 +56,7 @@ fn configure_chat_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/{chat_id}/members/{user_id}/role",
             patch(update_member_role),
         )
-        .route("/{chat_id}/transfer_ownership", patch(transfer_ownership))
+        .route("/{chat_id}/transfer_ownership/{new_owner_id}", patch(transfer_ownership))
         .route("/{chat_id}/members/{user_id}", delete(remove_member))
         .route("/{chat_id}/leave", post(leave_chat))
         .route("/{chat_id}/clean", post(clean_chat))
