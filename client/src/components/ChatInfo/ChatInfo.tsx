@@ -170,6 +170,26 @@ export default function ChatInfo({ chat, isVisible, onClose, onStartInvite, onCh
     }
   };
 
+  // Retrocedi admin a membro
+  const handleDemoteToMember = async (userId: number) => {
+    if (!canPromote) {
+      alert('Solo l\'owner può retrocedere gli admin');
+      return;
+    }
+
+    const memberName = memberNames.get(userId) || 'questo utente';
+    if (confirm(`Vuoi retrocedere ${memberName} a Member?`)) {
+      try {
+        await api.updateMemberRole(chat.chat_id, userId, UserRole.Member);
+        alert(`${memberName} è stato retrocesso a Member`);
+        loadMembers();
+      } catch (error) {
+        console.error('Errore retrocessione membro:', error);
+        alert('Errore durante la retrocessione del membro');
+      }
+    }
+  };
+
   // Trasferisci ownership
   const handleTransferOwnership = async () => {
     if (!selectedAdminForTransfer) {
@@ -264,6 +284,10 @@ export default function ChatInfo({ chat, isVisible, onClose, onStartInvite, onCh
                         !isCurrentUser && 
                         member.user_role === UserRole.Member && 
                         canPromote;
+                      const canDemoteThisMember = 
+                        !isCurrentUser && 
+                        member.user_role === UserRole.Admin && 
+                        canPromote;
 
                       return (
                         <ListGroup.Item 
@@ -291,7 +315,7 @@ export default function ChatInfo({ chat, isVisible, onClose, onStartInvite, onCh
                           </div>
                           
                           {/* Azioni membro */}
-                          {(canRemoveThisMember || canPromoteThisMember) && (
+                          {(canRemoveThisMember || canPromoteThisMember || canDemoteThisMember) && (
                             <div className="d-flex gap-2">
                               {canPromoteThisMember && (
                                 <Button
@@ -301,6 +325,16 @@ export default function ChatInfo({ chat, isVisible, onClose, onStartInvite, onCh
                                 >
                                   <i className="bi bi-arrow-up-circle me-1"></i>
                                   Promuovi ad Admin
+                                </Button>
+                              )}
+                              {canDemoteThisMember && (
+                                <Button
+                                  size="sm"
+                                  variant="outline-info"
+                                  onClick={() => handleDemoteToMember(member.user_id)}
+                                >
+                                  <i className="bi bi-arrow-down-circle me-1"></i>
+                                  Retrocedi a Member
                                 </Button>
                               )}
                               {canRemoveThisMember && (
