@@ -36,17 +36,6 @@ export default function ChatInfo({ chat, isVisible, onClose, onStartInvite, onCh
   const canRemoveAdmins = isOwner;
   const canPromote = isOwner;
 
-  // Debug: log dei permessi
-  console.log('ChatInfo Debug:', {
-    userId: currentUserId,
-    currentUserMember,
-    currentUserRole,
-    isOwner,
-    isAdmin,
-    canInvite,
-    members: members.length
-  });
-
   const loadMembers = async () => {
     setIsLoading(true);
     try {

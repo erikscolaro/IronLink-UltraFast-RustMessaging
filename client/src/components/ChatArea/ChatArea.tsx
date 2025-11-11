@@ -160,14 +160,28 @@ export default function ChatArea({ chat, onShowInfo, onBack, cleanChatTrigger }:
             <p>Nessun messaggio ancora. Inizia la conversazione!</p>
           </div>
         ) : (
-          messages.map((msg, index) => (
-            <ChatMessage
-              key={msg.message_id || `msg-${index}`}
-              message={msg}
-              senderUsername={msg.sender_id ? members.get(msg.sender_id) : undefined}
-              isOwnMessage={user ? msg.sender_id === getUserId(user) : false}
-            />
-          ))
+          messages.map((msg, index) => {
+            const isOwnMessage = user ? msg.sender_id === getUserId(user) : false;
+            const isPrivateChat = chat.chat_type === 'Private';
+            
+            // Determina se mostrare il nome utente:
+            // 1. Mai nelle chat private
+            // 2. Mai per i propri messaggi
+            // 3. Mai se il messaggio precedente è dello stesso utente
+            const previousMsg = index > 0 ? messages[index - 1] : null;
+            const shouldShowUsername = !isPrivateChat && 
+                                      !isOwnMessage && 
+                                      (!previousMsg || previousMsg.sender_id !== msg.sender_id);
+            
+            return (
+              <ChatMessage
+                key={msg.message_id || `msg-${index}`}
+                message={msg}
+                senderUsername={shouldShowUsername ? (msg.sender_id ? members.get(msg.sender_id) : undefined) : undefined}
+                isOwnMessage={isOwnMessage}
+              />
+            );
+          })
         )}
         <div ref={messagesEndRef} />
       </div>

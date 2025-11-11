@@ -33,8 +33,8 @@ export default function ChatMessage({ message, senderUsername, isOwnMessage, sta
   return (
     <div className={`d-flex mb-3 px-3 ${isOwnMessage ? 'justify-content-end' : 'justify-content-start'}`}>
       <div className={`${styles.messageCard} ${isOwnMessage ? styles.ownMessage : styles.otherMessage}`}>
-        {!isOwnMessage && (
-          <div className={styles.senderName}>{senderUsername || 'Utente'}</div>
+        {!isOwnMessage && senderUsername && (
+          <div className={styles.senderName}>{senderUsername}</div>
         )}
         <div className={styles.messageContent}>{message.content}</div>
         <div className={styles.messageFooter}>

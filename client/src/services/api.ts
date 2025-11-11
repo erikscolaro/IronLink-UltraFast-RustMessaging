@@ -253,10 +253,9 @@ export async function leaveChat(chatId: number): Promise<void> {
 }
 
 export async function transferOwnership(chatId: number, newOwnerId: number): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/chats/${chatId}/transfer_ownership`, {
+  const response = await fetch(`${API_BASE_URL}/chats/${chatId}/transfer_ownership/${newOwnerId}`, {
     method: 'PATCH',
     headers: getAuthHeaders(),
-    body: JSON.stringify({ new_owner_id: newOwnerId }),
   });
   
   await handleResponse<void>(response);
