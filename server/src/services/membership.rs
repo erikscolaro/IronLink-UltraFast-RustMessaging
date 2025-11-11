@@ -15,7 +15,7 @@ use axum::{
 use axum_macros::debug_handler;
 use chrono::Utc;
 use std::sync::Arc;
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, error, info, instrument, warn};
 use validator::Validate;
 
 #[instrument(skip(state, _metadata), fields(chat_id = %chat_id))]
@@ -377,6 +377,32 @@ pub async fn leave_chat(
 
     state.meta.delete(&(current_user.user_id, chat_id)).await?;
 
+    // Dopo che l'utente esce, controllare se ci sono messaggi da eliminare fisicamente
+    // Recupera tutti i metadata rimanenti della chat
+    let remaining_metadata = state.meta.find_many_by_chat_id(&chat_id).await?;
+    
+    if !remaining_metadata.is_empty() {
+        // Trova il messages_visible_from più vecchio tra i membri rimasti
+        let oldest_visible_date = remaining_metadata
+            .iter()
+            .map(|m| m.messages_visible_from)
+            .min()
+            .unwrap();
+        
+        debug!("After user exit, oldest visible date for chat {}: {:?}", chat_id, oldest_visible_date);
+        
+        // Elimina fisicamente i messaggi che nessun membro rimasto può più vedere
+        let deleted_count = state
+            .msg
+            .delete_messages_before(&chat_id, &oldest_visible_date)
+            .await?;
+        
+        if deleted_count > 0 {
+            info!("Deleted {} old messages from chat {} after user exit (before {:?})", 
+                deleted_count, chat_id, oldest_visible_date);
+        }
+    }
+
     // Se l'utente è online, inviare segnale RemoveChat per disiscriversi dai messaggi della chat
     state
         .users_online
@@ -443,6 +469,32 @@ pub async fn remove_member(
     }
 
     state.meta.delete(&(user_id, chat_id)).await?;
+
+    // Dopo la rimozione del membro, controllare se ci sono messaggi da eliminare fisicamente
+    // Recupera tutti i metadata rimanenti della chat
+    let remaining_metadata = state.meta.find_many_by_chat_id(&chat_id).await?;
+    
+    if !remaining_metadata.is_empty() {
+        // Trova il messages_visible_from più vecchio tra i membri rimasti
+        let oldest_visible_date = remaining_metadata
+            .iter()
+            .map(|m| m.messages_visible_from)
+            .min()
+            .unwrap();
+        
+        debug!("After member removal, oldest visible date for chat {}: {:?}", chat_id, oldest_visible_date);
+        
+        // Elimina fisicamente i messaggi che nessun membro rimasto può più vedere
+        let deleted_count = state
+            .msg
+            .delete_messages_before(&chat_id, &oldest_visible_date)
+            .await?;
+        
+        if deleted_count > 0 {
+            info!("Deleted {} old messages from chat {} after member removal (before {:?})", 
+                deleted_count, chat_id, oldest_visible_date);
+        }
+    }
 
     // Notifica l'utente rimosso di rimuovere la chat dalla sua lista
     info!("Sending RemoveChat signal to user {} for chat {}", user_id, chat_id);
@@ -645,7 +697,11 @@ pub async fn transfer_ownership(
     state
         .meta
         .transfer_ownership(&current_user.user_id, &new_owner_id, &chat_id)
-        .await?;
+        .await
+        .map_err(|e| {
+            error!("Failed to transfer ownership: {:?}", e);
+            AppError::internal_server_error("Failed to transfer ownership")
+        })?;
 
     let message_dto = MessageDTO {
         message_id: None,
@@ -681,21 +737,15 @@ pub async fn clean_chat(
     Extension(current_user): Extension<User>,
     Extension(_metadata): Extension<UserChatMetadata>, // ottenuto dal chat_membership_middleware
 ) -> Result<(), AppError> {
-    debug!("Cleaning private chat");
-    // 1. Verificare che la chat sia di tipo Private
-    // 2. Aggiornare messages_visible_from al momento corrente
-    // 3. Inviare segnale RemoveChat all'utente per nascondere la chat nel frontend
-    // 4. Ritornare OK
+    debug!("Cleaning chat for user");
+    // 1. Aggiornare messages_visible_from dell'utente corrente al momento attuale
+    // 2. Eliminare fisicamente i messaggi che nessun membro può più vedere
+    // 3. La chat rimane visibile ma senza i vecchi messaggi per questo utente
 
-    let chat = state.chat.read(&chat_id).await?.ok_or_else(|| {
+    let _chat = state.chat.read(&chat_id).await?.ok_or_else(|| {
         warn!("Chat not found: {}", chat_id);
         AppError::not_found("Chat not found")
     })?;
-
-    if chat.chat_type != ChatType::Private {
-        warn!("Attempted to clean non-private chat");
-        return Err(AppError::bad_request("Only private chats can be cleaned"));
-    }
 
     // Aggiorna messages_visible_from al momento corrente
     // Questo impedisce di ricevere i vecchi messaggi quando richiedi la lista
@@ -712,22 +762,24 @@ pub async fn clean_chat(
         .update(&(current_user.user_id, chat_id), &update_dto)
         .await?;
 
-    // Recupera tutti i metadata della chat per verificare la data più vecchia visibile
+    // Recupera tutti i metadata della chat per trovare la data più vecchia
+    // da cui un utente può ancora vedere i messaggi
     let all_metadata = state.meta.find_many_by_chat_id(&chat_id).await?;
     
     if !all_metadata.is_empty() {
-        // Trova il messages_visible_from più vecchio tra tutti i membri
+        // Trova il messages_visible_from PIÙ VECCHIO tra tutti i membri
+        // Possiamo eliminare fisicamente solo i messaggi antecedenti a questa data,
+        // perché i messaggi successivi potrebbero essere ancora visibili ad almeno un membro
         let oldest_visible_date = all_metadata
             .iter()
             .map(|m| m.messages_visible_from)
             .min()
             .unwrap_or(now);
         
-        debug!("Oldest visible date for chat {}: {:?}", chat_id, oldest_visible_date);
+        debug!("Oldest visible date across all members for chat {}: {:?}", chat_id, oldest_visible_date);
         
-        // Elimina fisicamente i messaggi più vecchi di quella data
-        // Se tutti i membri non possono vedere messaggi prima di questa data,
-        // non ha senso mantenerli nel database
+        // Elimina fisicamente solo i messaggi che NESSUN membro può più vedere
+        // (antecedenti alla data di cleanup più vecchia tra tutti i membri)
         let deleted_count = state
             .msg
             .delete_messages_before(&chat_id, &oldest_visible_date)
@@ -742,6 +794,6 @@ pub async fn clean_chat(
     // NON inviamo RemoveChat - il client gestisce la pulizia locale dei messaggi
     // La chat rimane visibile ma senza messaggi vecchi
 
-    info!("Private chat cleaned successfully");
+    info!("Chat cleaned successfully for user");
     Ok(())
 }

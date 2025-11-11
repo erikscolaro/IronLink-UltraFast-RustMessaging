@@ -52,6 +52,44 @@ impl UserChatMetadataRepository {
         // Start a transaction for atomicity
         let mut tx = self.connection_pool.begin().await?;
 
+        // Verify old owner exists and has correct role
+        let _old_owner = sqlx::query_as!(
+            UserChatMetadata,
+            r#"SELECT 
+                   user_id,
+                   chat_id,
+                   user_role as "user_role: UserRole",
+                   member_since,
+                   messages_visible_from,
+                   messages_received_until
+               FROM userchatmetadata 
+               WHERE user_id = ? AND chat_id = ?"#,
+            from_user_id,
+            chat_id
+        )
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or(Error::RowNotFound)?;
+
+        // Verify new owner exists
+        let _new_owner = sqlx::query_as!(
+            UserChatMetadata,
+            r#"SELECT 
+                   user_id,
+                   chat_id,
+                   user_role as "user_role: UserRole",
+                   member_since,
+                   messages_visible_from,
+                   messages_received_until
+               FROM userchatmetadata 
+               WHERE user_id = ? AND chat_id = ?"#,
+            to_user_id,
+            chat_id
+        )
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or(Error::RowNotFound)?;
+
         // Update the old owner to admin
         sqlx::query!(
             "UPDATE userchatmetadata SET user_role = 'ADMIN' WHERE user_id = ? AND chat_id = ?",
