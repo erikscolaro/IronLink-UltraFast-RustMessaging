@@ -76,7 +76,6 @@ export default function Sidebar({
   // Ascolta nuovi inviti via WebSocket
   useEffect(() => {
     const unsubscribe = onInvitation((invitation) => {
-      console.log('Nuovo invito ricevuto via WebSocket:', invitation);
       setPendingInvitations(prev => {
         // Verifica che l'invito non sia già presente
         const exists = prev.some(inv => inv.invite_id === invitation.invite_id);
@@ -133,7 +132,7 @@ export default function Sidebar({
   const handleSearch = async (query: string) => {
     setSearchQuery(query);
     
-    if (query.trim().length < 2) {
+    if (query.trim().length <= 3) {
       setSearchResults([]);
       return;
     }
@@ -171,7 +170,7 @@ export default function Sidebar({
   const handleSearchForInvite = async (query: string) => {
     setSearchQuery(query);
     
-    if (query.trim().length < 2) {
+    if (query.trim().length <= 3) {
       setSearchResults([]);
       return;
     }
@@ -232,9 +231,14 @@ export default function Sidebar({
       setPendingInvitations(prev => prev.filter(inv => inv.invite_id !== inviteId));
       // Ricarica le chat per vedere la nuova chat
       await onRefreshChats();
-    } catch (error) {
-      console.error('Errore accettazione invito:', error);
-      alert('Errore durante l\'accettazione dell\'invito');
+    } catch (error: any) {
+      // Se l'invito è già stato processato, rimuovilo comunque dalla lista
+      if (error.message && error.message.includes('already processed')) {
+        setPendingInvitations(prev => prev.filter(inv => inv.invite_id !== inviteId));
+        await onRefreshChats();
+      } else {
+        alert('Errore durante l\'accettazione dell\'invito');
+      }
     }
   };
 
@@ -244,9 +248,13 @@ export default function Sidebar({
       await api.respondToInvitation(inviteId, 'decline');
       // Rimuovi l'invito dalla lista
       setPendingInvitations(prev => prev.filter(inv => inv.invite_id !== inviteId));
-    } catch (error) {
-      console.error('Errore rifiuto invito:', error);
-      alert('Errore durante il rifiuto dell\'invito');
+    } catch (error: any) {
+      // Se l'invito è già stato processato, rimuovilo comunque dalla lista
+      if (error.message && error.message.includes('already processed')) {
+        setPendingInvitations(prev => prev.filter(inv => inv.invite_id !== inviteId));
+      } else {
+        alert('Errore durante il rifiuto dell\'invito');
+      }
     }
   };
 
