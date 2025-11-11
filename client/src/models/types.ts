@@ -61,6 +61,14 @@ export interface InvitationDTO {
   created_at: string;
 }
 
+export interface EnrichedInvitationDTO {
+  invite_id: number;
+  state: string;
+  created_at: string;
+  inviter?: UserDTO;
+  chat?: ChatDTO;
+}
+
 export interface UserChatMetadataDTO {
   user_id: number;
   chat_id: number;

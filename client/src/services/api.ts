@@ -1,5 +1,5 @@
 // API Service - Gestisce tutte le chiamate HTTP al backend
-import { ChatDTO, UserDTO, MessageDTO, InvitationDTO, UserChatMetadataDTO, ChatType, UserRole } from '../models/types';
+import { ChatDTO, UserDTO, MessageDTO, EnrichedInvitationDTO, UserChatMetadataDTO, ChatType, UserRole } from '../models/types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
@@ -228,7 +228,7 @@ export async function updateMemberRole(chatId: number, userId: number, role: Use
   const response = await fetch(`${API_BASE_URL}/chats/${chatId}/members/${userId}/role`, {
     method: 'PATCH',
     headers: getAuthHeaders(),
-    body: JSON.stringify({ role }),
+    body: JSON.stringify(role),
   });
   
   await handleResponse<void>(response);
@@ -273,16 +273,18 @@ export async function cleanChat(chatId: number): Promise<void> {
 
 // ==================== INVITATIONS ====================
 
-export async function listPendingInvitations(): Promise<InvitationDTO[]> {
+export async function listPendingInvitations(): Promise<EnrichedInvitationDTO[]> {
   const response = await fetch(`${API_BASE_URL}/invitations/pending`, {
     headers: getAuthHeaders(),
   });
   
-  return handleResponse<InvitationDTO[]>(response);
+  return handleResponse<EnrichedInvitationDTO[]>(response);
 }
 
 export async function respondToInvitation(inviteId: number, action: 'accept' | 'decline'): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/invitations/${inviteId}/${action}`, {
+  // Il backend si aspetta 'reject' invece di 'decline'
+  const backendAction = action === 'decline' ? 'reject' : action;
+  const response = await fetch(`${API_BASE_URL}/invitations/${inviteId}/${backendAction}`, {
     method: 'POST',
     headers: getAuthHeaders(),
   });

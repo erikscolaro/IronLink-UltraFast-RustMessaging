@@ -1,9 +1,10 @@
 // Sidebar - Pannello laterale con lista chat e azioni utente
 import styles from "./Sidebar.module.css";
 import { useState, useEffect } from "react";
-import { ChatDTO, ChatType, UserDTO, getUserId, InvitationDTO } from "../../models/types";
+import { ChatDTO, ChatType, UserDTO, getUserId, EnrichedInvitationDTO } from "../../models/types";
 import { Button, Form, InputGroup, Modal } from "react-bootstrap";
 import { useAuth } from "../../context/AuthContext";
+import { useWebSocket } from "../../context/WebSocketContext";
 import * as api from "../../services/api";
 
 interface SidebarProps {
@@ -18,6 +19,7 @@ interface SidebarProps {
     onInvite: (userId: number) => Promise<void>;
     onCancel: () => void;
   } | null;
+  chatsWithUnread: Set<number>;
 }
 
 type SidebarView = 'chats' | 'createPrivate' | 'createGroup' | 'inviteToGroup';
@@ -29,8 +31,10 @@ export default function Sidebar({
   onShowProfile,
   onRefreshChats,
   inviteMode,
+  chatsWithUnread,
 }: SidebarProps) {
   const { user } = useAuth();
+  const { onInvitation } = useWebSocket();
   const [currentView, setCurrentView] = useState<SidebarView>('chats');
   
   // Se inviteMode è attivo, passa automaticamente alla vista invito
@@ -49,9 +53,7 @@ export default function Sidebar({
   const [groupDescription, setGroupDescription] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [privateChatNames, setPrivateChatNames] = useState<Record<number, string>>({});
-  const [pendingInvitations, setPendingInvitations] = useState<InvitationDTO[]>([]);
-  const [inviterNames, setInviterNames] = useState<Record<number, string>>({});
-  const [chatNames, setChatNames] = useState<Record<number, string>>({});
+  const [pendingInvitations, setPendingInvitations] = useState<EnrichedInvitationDTO[]>([]);
   const [showInviteConfirm, setShowInviteConfirm] = useState(false);
   const [userToInvite, setUserToInvite] = useState<{ id: number; username: string } | null>(null);
 
@@ -61,58 +63,6 @@ export default function Sidebar({
       try {
         const invites = await api.listPendingInvitations();
         setPendingInvitations(invites);
-
-        // Carica i nomi degli inviter e delle chat in parallelo
-        const inviterPromises = invites.map(async (invite) => {
-          try {
-            const inviter = await api.getUserById(invite.inviter_id);
-            if (inviter && inviter.username) {
-              return { id: invite.inviter_id, name: inviter.username };
-            }
-          } catch (error) {
-            console.error(`Errore caricamento inviter ${invite.inviter_id}:`, error);
-          }
-          return null;
-        });
-
-        const chatPromises = invites.map(async (invite) => {
-          try {
-            // Prova a caricare i membri per verificare che la chat esista
-            await api.listChatMembers(invite.chat_id);
-            // Se la chat esiste nelle chat caricate, usa il suo titolo
-            const existingChat = chats.find(c => c.chat_id === invite.chat_id);
-            if (existingChat && existingChat.title) {
-              return { id: invite.chat_id, name: existingChat.title };
-            }
-            return { id: invite.chat_id, name: `Gruppo ${invite.chat_id}` };
-          } catch (error) {
-            // Se non riesci a caricare i membri, usa un nome generico
-            return { id: invite.chat_id, name: `Gruppo ${invite.chat_id}` };
-          }
-        });
-
-        const [inviterResults, chatResults] = await Promise.all([
-          Promise.all(inviterPromises),
-          Promise.all(chatPromises)
-        ]);
-
-        // Aggiorna gli stati con i risultati
-        const newInviterNames: Record<number, string> = {};
-        inviterResults.forEach(result => {
-          if (result) {
-            newInviterNames[result.id] = result.name;
-          }
-        });
-        setInviterNames(newInviterNames);
-
-        const newChatNames: Record<number, string> = {};
-        chatResults.forEach(result => {
-          if (result) {
-            newChatNames[result.id] = result.name;
-          }
-        });
-        setChatNames(newChatNames);
-
       } catch (error) {
         console.error('Errore caricamento inviti:', error);
       }
@@ -122,6 +72,23 @@ export default function Sidebar({
       loadInvitations();
     }
   }, [user]);
+
+  // Ascolta nuovi inviti via WebSocket
+  useEffect(() => {
+    const unsubscribe = onInvitation((invitation) => {
+      console.log('Nuovo invito ricevuto via WebSocket:', invitation);
+      setPendingInvitations(prev => {
+        // Verifica che l'invito non sia già presente
+        const exists = prev.some(inv => inv.invite_id === invitation.invite_id);
+        if (exists) {
+          return prev;
+        }
+        return [...prev, invitation];
+      });
+    });
+
+    return unsubscribe;
+  }, [onInvitation]);
 
   // Carica i nomi degli utenti per le chat private
   useEffect(() => {
@@ -262,7 +229,7 @@ export default function Sidebar({
     try {
       await api.respondToInvitation(inviteId, 'accept');
       // Rimuovi l'invito dalla lista
-      setPendingInvitations(prev => prev.filter(inv => inv.invitation_id !== inviteId));
+      setPendingInvitations(prev => prev.filter(inv => inv.invite_id !== inviteId));
       // Ricarica le chat per vedere la nuova chat
       await onRefreshChats();
     } catch (error) {
@@ -276,7 +243,7 @@ export default function Sidebar({
     try {
       await api.respondToInvitation(inviteId, 'decline');
       // Rimuovi l'invito dalla lista
-      setPendingInvitations(prev => prev.filter(inv => inv.invitation_id !== inviteId));
+      setPendingInvitations(prev => prev.filter(inv => inv.invite_id !== inviteId));
     } catch (error) {
       console.error('Errore rifiuto invito:', error);
       alert('Errore durante il rifiuto dell\'invito');
@@ -376,29 +343,29 @@ export default function Sidebar({
                     <small className="text-uppercase text-muted fw-bold">Inviti</small>
                   </div>
                   {pendingInvitations.map((invite) => (
-                    <div key={invite.invitation_id} className={styles.inviteItem}>
+                    <div key={invite.invite_id} className={styles.inviteItem}>
                       <div className="d-flex align-items-center gap-2 mb-2">
                         <i className="bi bi-envelope fs-5"></i>
                         <div className="flex-grow-1">
                           <div className="fw-bold">
-                            {chatNames[invite.chat_id] || `Gruppo ${invite.chat_id}`}
+                            {invite.chat?.title || `Gruppo ${invite.chat?.chat_id || '?'}`}
                           </div>
                           <small className="text-muted">
-                            da {inviterNames[invite.inviter_id] || `Utente ${invite.inviter_id}`}
+                            da {invite.inviter?.username || 'Utente sconosciuto'}
                           </small>
                         </div>
                       </div>
                       <div className={styles.inviteActions}>
                         <button
                           className={styles.acceptButton}
-                          onClick={() => handleAcceptInvite(invite.invitation_id)}
+                          onClick={() => handleAcceptInvite(invite.invite_id)}
                         >
                           <i className="bi bi-check-circle me-1"></i>
                           Accetta
                         </button>
                         <button
                           className={styles.declineButton}
-                          onClick={() => handleDeclineInvite(invite.invitation_id)}
+                          onClick={() => handleDeclineInvite(invite.invite_id)}
                         >
                           <i className="bi bi-x-circle me-1"></i>
                           Rifiuta
@@ -428,13 +395,15 @@ export default function Sidebar({
                       ? (privateChatNames[chat.chat_id] || `Chat ${chat.chat_id}`)
                       : (chat.title || `Gruppo ${chat.chat_id}`);
                     
+                    const hasUnread = chatsWithUnread.has(chat.chat_id);
+                    
                     return (
                       <div
                         key={chat.chat_id}
                         className={`${styles.chatItem} ${selectedChatId === chat.chat_id ? styles.selected : ''}`}
                         onClick={() => onSelectChat(chat.chat_id)}
                       >
-                        <div className="d-flex align-items-center gap-2">
+                        <div className="d-flex align-items-center gap-2 w-100">
                           <i className={`bi ${isPrivate ? 'bi-person' : 'bi-people'} fs-5`}></i>
                           <div className="flex-grow-1">
                             <div className="fw-bold">
@@ -446,6 +415,17 @@ export default function Sidebar({
                               </small>
                             )}
                           </div>
+                          {hasUnread && (
+                            <div 
+                              style={{
+                                width: '10px',
+                                height: '10px',
+                                borderRadius: '50%',
+                                backgroundColor: '#ff8c00',
+                                flexShrink: 0
+                              }}
+                            />
+                          )}
                         </div>
                       </div>
                     );
