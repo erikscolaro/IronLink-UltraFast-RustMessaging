@@ -18,7 +18,8 @@
     "react": "^19.1.0",
     "react-bootstrap": "^2.10.10",
     "react-dom": "^19.1.0",
-    "react-router-dom": "^7.9.5"
+    "react-router-dom": "^7.9.5",
+    "tauri": "^0.15.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.9.0",

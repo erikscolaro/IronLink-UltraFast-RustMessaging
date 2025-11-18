@@ -1,11 +1,13 @@
 mod core;
 mod dtos;
 mod entities;
+mod monitoring;
 mod repositories;
 mod services;
 mod ws;
 
 use crate::core::{AppState, Config, authentication_middleware, chat_membership_middleware};
+use crate::monitoring::{start_cpu_monitoring, CpuMonitorConfig};
 use crate::services::*;
 use crate::ws::ws_handler;
 use axum::{
@@ -125,6 +127,15 @@ async fn main() {
 
     // Creiamo lo stato dell'applicazione con i repository e la configurazione
     let state = Arc::new(AppState::new(connection_pool, config.jwt_secret.clone()));
+
+    // Avvio task di monitoraggio CPU in background
+    let cpu_monitor_config = CpuMonitorConfig {
+        interval_secs: 120, // 2 minuti
+        log_file_path: Some("cpu_stats.log".to_string()),
+        enable_realtime_logging: false,
+    };
+    tokio::spawn(start_cpu_monitoring(cpu_monitor_config));
+    println!("✓ CPU monitoring started (logging to cpu_stats.log)");
 
     // Definizione indirizzo del server
     let addr = SocketAddr::from((

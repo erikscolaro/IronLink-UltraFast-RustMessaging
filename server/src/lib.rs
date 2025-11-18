@@ -3,6 +3,7 @@
 pub mod core;
 pub mod dtos;
 pub mod entities;
+pub mod monitoring;
 pub mod repositories;
 pub mod services;
 pub mod ws;
