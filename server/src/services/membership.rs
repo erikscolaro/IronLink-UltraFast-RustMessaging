@@ -83,10 +83,10 @@ pub async fn list_pending_invitations(
     let mut enriched_invitations = Vec::new();
     
     for invitation in invitations {
-        // Recupera l'utente inviter completo
+        // Recupera l'utente inviter completo (campo invitee_id contiene l'inviter)
         let inviter = state
             .user
-            .read(&invitation.invited_id)
+            .read(&invitation.invitee_id)
             .await
             .ok()
             .flatten()
@@ -187,9 +187,10 @@ pub async fn invite_to_chat(
 
     // Inviare l'invitation via WebSocket all'utente invitato (se online)
     // Arricchire l'invito con i dati dell'inviter e della chat
+    // Recupera i dati dell'inviter correttamente: invitee_id è chi ha inviato l'invito
     let inviter = state
         .user
-        .read(&invitation.invited_id)
+        .read(&invitation.invitee_id)
         .await
         .ok()
         .flatten()
