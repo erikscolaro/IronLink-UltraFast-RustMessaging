@@ -43,6 +43,20 @@ pub async fn process_message(state: &Arc<AppState>, user_id: i32, msg: MessageDT
         return;
     }
 
+    // Verifica che il sender_id corrisponda all'utente autenticato
+    if input_message.sender_id != user_id {
+        warn!(
+            expected_sender_id = user_id,
+            actual_sender_id = input_message.sender_id,
+            "User attempted to spoof sender_id"
+        );
+        state.users_online.send_server_message_if_online(
+            &user_id,
+            InternalSignal::Error("Malformed message."),
+        );
+        return;
+    }
+
     // se la chat non esistesse, allora non esisterebbe neanche il metadata, quindi non controllo l'esistenza della chat.
     match state.meta.read(&(user_id, input_message.chat_id)).await {
         Ok(Some(val)) => val,

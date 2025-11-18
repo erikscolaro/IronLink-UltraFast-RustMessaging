@@ -69,6 +69,12 @@ impl ChatMap {
             Err(SendError(msg))
         }
     }
+
+    /// Check if a chat channel exists
+    #[allow(dead_code)]
+    pub fn has_chat_channel(&self, chat_id: &i32) -> bool {
+        self.channels.contains_key(chat_id)
+    }
 }
 
 /*

@@ -28,4 +28,5 @@ sysinfo = "0.32.1"
 
 [dev-dependencies]
 axum-test = "18.1.0"
+tokio-tungstenite = "0.24.0"
 

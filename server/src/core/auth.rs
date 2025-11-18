@@ -90,7 +90,17 @@ pub async fn authentication_middleware(
     };
     let mut header = auth_header.split_whitespace();
     let (_bearer, token) = (header.next(), header.next());
-    let token_data = match decode_jwt(&token.unwrap().to_string(), &state.jwt_secret) {
+    
+    // Safely handle the token extraction
+    let token = match token {
+        Some(t) => t.to_string(),
+        None => {
+            warn!("Malformed authorization header - missing token");
+            return Err(AppError::unauthorized("Authorization header must be 'Bearer <token>'"));
+        }
+    };
+    
+    let token_data = match decode_jwt(&token, &state.jwt_secret) {
         Ok(data) => data,
         Err(_) => {
             warn!("Failed to decode JWT token");

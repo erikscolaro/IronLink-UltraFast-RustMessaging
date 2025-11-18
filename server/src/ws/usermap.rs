@@ -66,5 +66,17 @@ impl UserMap {
             info!("User {} not online, {} message not sent", user_id, message_type);
         }
     }
+
+    /// Get the count of online users
+    #[allow(dead_code)]
+    pub fn online_count(&self) -> usize {
+        self.users_online.len()
+    }
+
+    /// Check if a specific user is online
+    #[allow(dead_code)]
+    pub fn is_user_online(&self, user_id: &i32) -> bool {
+        self.users_online.contains_key(user_id)
+    }
 }
 
