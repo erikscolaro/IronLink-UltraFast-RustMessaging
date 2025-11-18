@@ -14,23 +14,42 @@ use futures::future;
 use std::sync::Arc;
 use tracing::{debug, info, instrument, warn};
 
-#[instrument(skip(state), fields(search = %params.search))]
+#[instrument(skip(state, current_user), fields(search = %params.search, user_id = %current_user.user_id))]
 pub async fn search_user_with_username(
     State(state): State<Arc<AppState>>,
+    Extension(current_user): Extension<User>, // ottenuto dall'autenticazione JWT
     Query(params): Query<UserSearchQuery>, // query params /users/find?search=username
 ) -> Result<Json<Vec<UserDTO>>, AppError> {
     debug!("Searching users with partial username");
     // 1. Estrarre il parametro search dalla query string
     // 2. Cercare nel database tutti gli utenti con username che contiene parzialmente la query, cercando solo all'inizio dello username
-    // 3. Convertire ogni utente trovato in UserDTO
-    // 4. Ritornare la lista di UserDTO come risposta JSON
+    // 3. Filtrare l'utente corrente dai risultati
+    // 4. Convertire ogni utente trovato in UserDTO
+    // 5. Ritornare la lista di UserDTO come risposta JSON
     let users = state
         .user
         .search_by_username_partial(&(params.search))
         .await?;
-    info!("Found {} users matching search criteria", users.len());
-    let users_dto = users.into_iter().map(UserDTO::from).collect::<Vec<_>>();
-    Ok(Json::from(users_dto))
+    
+    // Filtra l'utente corrente dai risultati
+    let filtered_users: Vec<UserDTO> = users
+        .into_iter()
+        .filter(|u| u.user_id != current_user.user_id)
+        .map(UserDTO::from)
+        .collect();
+    
+    info!("Found {} users matching search criteria (excluding current user)", filtered_users.len());
+    Ok(Json::from(filtered_users))
+}
+
+#[instrument(skip(current_user), fields(user_id = %current_user.user_id))]
+pub async fn get_my_user(
+    Extension(current_user): Extension<User>, // ottenuto dall'autenticazione JWT
+) -> Result<Json<UserDTO>, AppError> {
+    debug!("Fetching current user information");
+    // Ritorna le informazioni dell'utente autenticato
+    info!("Returning current user information");
+    Ok(Json(UserDTO::from(current_user)))
 }
 
 #[instrument(skip(state), fields(user_id = %user_id))]

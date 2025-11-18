@@ -45,7 +45,7 @@ pub async fn list_chats(
 
     debug!("User is member of {} chats", chat_ids.len());
 
-    let chats: Vec<Chat> = try_join_all(chat_ids.into_iter().map(|cid| {
+    let chats: Vec<Chat> = try_join_all(chat_ids.clone().into_iter().map(|cid| {
         let state = state.clone();
         async move { state.chat.read(&cid).await }
     }))
@@ -54,7 +54,19 @@ pub async fn list_chats(
     .flatten()
     .collect();
 
-    let chats_dto: Vec<ChatDTO> = chats.into_iter().map(ChatDTO::from).collect();
+    // Popola user_list per ogni chat
+    let mut chats_dto: Vec<ChatDTO> = Vec::new();
+    for chat in chats {
+        let mut dto = ChatDTO::from(chat);
+        
+        // Recupera i membri della chat per popolare user_list
+        let chat_id = dto.chat_id.unwrap();
+        let members = state.meta.find_many_by_chat_id(&chat_id).await?;
+        debug!("Chat {} has {} members: {:?}", chat_id, members.len(), members.iter().map(|m| m.user_id).collect::<Vec<_>>());
+        dto.user_list = Some(members.into_iter().map(|m| m.user_id).collect());
+        
+        chats_dto.push(dto);
+    }
 
     info!("Successfully retrieved {} chats", chats_dto.len());
     Ok(Json(chats_dto))
@@ -167,6 +179,18 @@ pub async fn create_chat(
                 "Private chat created successfully between users {} and {}",
                 current_user.user_id, second_user_id
             );
+
+            // Notifica gli utenti online di aggiungere la chat al loro stream
+            info!("Attempting to send AddChat signal to user {}", current_user.user_id);
+            state.users_online.send_server_message_if_online(
+                &current_user.user_id,
+                crate::ws::usermap::InternalSignal::AddChat(chat.chat_id),
+            );
+            info!("Attempting to send AddChat signal to user {}", second_user_id);
+            state.users_online.send_server_message_if_online(
+                second_user_id,
+                crate::ws::usermap::InternalSignal::AddChat(chat.chat_id),
+            );
         }
 
         ChatType::Group => {
@@ -201,10 +225,21 @@ pub async fn create_chat(
                 chat.title.as_ref().unwrap_or(&String::from("Unnamed")),
                 current_user.user_id
             );
+
+            // Notifica l'utente online di aggiungere la chat al suo stream
+            state.users_online.send_server_message_if_online(
+                &current_user.user_id,
+                crate::ws::usermap::InternalSignal::AddChat(chat.chat_id),
+            );
         }
     }
 
-    let chat_dto = ChatDTO::from(chat);
+    let mut chat_dto = ChatDTO::from(chat);
+    
+    // Popola user_list prima di restituire
+    let members = state.meta.find_many_by_chat_id(&chat_dto.chat_id.unwrap()).await?;
+    chat_dto.user_list = Some(members.into_iter().map(|m| m.user_id).collect());
+    
     Ok(Json(chat_dto))
 }
 

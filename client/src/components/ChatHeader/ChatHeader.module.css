@@ -1,0 +1,84 @@
+/* ChatHeader Styles */
+
+.chatHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  background-color: #34495e;
+  color: white;
+  border-bottom: 2px solid #2c3e50;
+}
+
+.chatInfo {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.backButton {
+  color: white !important;
+  font-size: 1.5rem;
+  padding: 0 !important;
+  margin-right: 0.5rem;
+  text-decoration: none !important;
+}
+
+.backButton:hover {
+  color: #e74c3c !important;
+}
+
+.chatName {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0;
+  margin-bottom: 0.25rem;
+}
+
+@media (max-width: 768px) {
+  .chatName {
+    font-size: 1.2rem;
+  }
+}
+
+.chatDescription {
+  font-size: 0.9rem;
+  margin: 0;
+  color: #bdc3c7;
+}
+
+.actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.actionButton {
+  padding: 0.5rem 0.75rem;
+  background-color: transparent;
+  color: white;
+  border: 2px solid white;
+  border-radius: 6px;
+  font-size: 1.25rem;
+  cursor: pointer;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.actionButton:hover {
+  background-color: white;
+  color: #34495e;
+}
+
+.dangerButton {
+  border-color: #e74c3c;
+  color: #e74c3c;
+}
+
+.dangerButton:hover {
+  background-color: #e74c3c;
+  color: white;
+  border-color: #e74c3c;
+}

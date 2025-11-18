@@ -68,7 +68,7 @@ pub fn decode_jwt(jwt_token: &String, secret: &String) -> Result<TokenData<Claim
     })
 }
 
-#[instrument(skip(state, req, next))]
+#[instrument(skip(state, req, next), level = "debug")]
 pub async fn authentication_middleware(
     State(state): State<Arc<AppState>>,
     mut req: Request,
@@ -115,7 +115,7 @@ pub async fn authentication_middleware(
         .await?
     {
         Some(user) => {
-            info!("User authenticated: {}", user.username);
+            debug!("User authenticated: {}", user.username);
             user
         }
         None => {
@@ -130,7 +130,7 @@ pub async fn authentication_middleware(
 
 /// Middleware che verifica che l'utente corrente sia membro della chat specificata
 /// Estrae chat_id dal path, verifica la membership tramite metadata e inserisce il metadata nell'Extension
-#[instrument(skip(state, req, next))]
+#[instrument(skip(state, req, next), level = "debug")]
 pub async fn chat_membership_middleware(
     State(state): State<Arc<AppState>>,
     mut req: Request,

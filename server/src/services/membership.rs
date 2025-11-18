@@ -2,8 +2,8 @@
 
 use crate::core::{AppError, AppState, require_role};
 use crate::dtos::{
-    CreateInvitationDTO, CreateMessageDTO, CreateUserChatMetadataDTO, InvitationDTO, MessageDTO,
-    UpdateInvitationDTO, UserInChatDTO,
+    CreateInvitationDTO, CreateMessageDTO, CreateUserChatMetadataDTO, EnrichedInvitationDTO,
+    MessageDTO, UpdateInvitationDTO, UserInChatDTO,
 };
 use crate::entities::{ChatType, InvitationStatus, MessageType, User, UserChatMetadata, UserRole};
 use crate::repositories::{Create, Delete, Read, Update};
@@ -65,12 +65,12 @@ pub async fn list_chat_members(
 pub async fn list_pending_invitations(
     State(state): State<Arc<AppState>>,
     Extension(current_user): Extension<User>,
-) -> Result<Json<Vec<InvitationDTO>>, AppError> {
+) -> Result<Json<Vec<EnrichedInvitationDTO>>, AppError> {
     debug!("Listing pending invitations for user");
     // 1. Ottenere l'utente corrente dall'Extension (autenticato tramite JWT)
     // 2. Recuperare tutti gli inviti pending per l'utente corrente
-    // 3. Convertire ogni invito in InvitationDTO
-    // 4. Ritornare la lista di InvitationDTO come risposta JSON
+    // 3. Per ogni invito, arricchire con username dell'inviter e titolo della chat
+    // 4. Ritornare la lista di EnrichedInvitationDTO come risposta JSON
 
     let invitations = state
         .invitation
@@ -79,10 +79,38 @@ pub async fn list_pending_invitations(
 
     info!("Found {} pending invitations", invitations.len());
 
-    let invitations_dto: Vec<InvitationDTO> =
-        invitations.into_iter().map(InvitationDTO::from).collect();
+    // Arricchire ogni invito con i dati completi dell'inviter e della chat
+    let mut enriched_invitations = Vec::new();
+    
+    for invitation in invitations {
+        // Recupera l'utente inviter completo
+        let inviter = state
+            .user
+            .read(&invitation.invited_id)
+            .await
+            .ok()
+            .flatten()
+            .map(|user| user.into());
 
-    Ok(Json(invitations_dto))
+        // Recupera la chat completa
+        let chat = state
+            .chat
+            .read(&invitation.target_chat_id)
+            .await
+            .ok()
+            .flatten()
+            .map(|chat| chat.into());
+
+        enriched_invitations.push(EnrichedInvitationDTO {
+            invite_id: invitation.invite_id,
+            state: invitation.state,
+            created_at: invitation.created_at,
+            inviter,
+            chat,
+        });
+    }
+
+    Ok(Json(enriched_invitations))
 }
 
 #[instrument(skip(state, current_user, metadata), fields(chat_id = %chat_id, inviting_user = %current_user.user_id, target_user = %user_id))]
@@ -158,10 +186,34 @@ pub async fn invite_to_chat(
     debug!("Invitation created with id {}", invitation.invite_id);
 
     // Inviare l'invitation via WebSocket all'utente invitato (se online)
-    let invitation_dto = InvitationDTO::from(invitation);
+    // Arricchire l'invito con i dati dell'inviter e della chat
+    let inviter = state
+        .user
+        .read(&invitation.invited_id)
+        .await
+        .ok()
+        .flatten()
+        .map(|user| user.into());
+
+    let chat_dto = state
+        .chat
+        .read(&invitation.target_chat_id)
+        .await
+        .ok()
+        .flatten()
+        .map(|chat| chat.into());
+
+    let enriched_invitation = EnrichedInvitationDTO {
+        invite_id: invitation.invite_id,
+        state: invitation.state,
+        created_at: invitation.created_at,
+        inviter,
+        chat: chat_dto,
+    };
+
     state
         .users_online
-        .send_server_message_if_online(&user_id, InternalSignal::Invitation(invitation_dto));
+        .send_server_message_if_online(&user_id, InternalSignal::Invitation(enriched_invitation));
 
     // Creare e inviare un messaggio di sistema a tutti i membri della chat
     // per notificarli dell'invito
@@ -349,15 +401,48 @@ pub async fn leave_chat(
     // 8. Inviare il messaggio tramite WebSocket a tutti i membri online (operazione non bloccante)
     // 9. Ritornare StatusCode::OK
 
-    // L'Owner non può lasciare la chat
+    // L'Owner non può lasciare la chat, a meno che non sia l'unico membro
     if matches!(metadata.user_role, Some(UserRole::Owner)) {
-        warn!("Owner attempted to leave chat");
-        return Err(AppError::conflict(
-            "The owner cannot leave the chat. Transfer ownership or delete the chat.",
-        ));
+        // Contare i membri della chat
+        let members = state.meta.find_many_by_chat_id(&chat_id).await?;
+        
+        if members.len() > 1 {
+            warn!("Owner attempted to leave chat with other members present");
+            return Err(AppError::conflict(
+                "The owner cannot leave the chat. Transfer ownership or delete the chat.",
+            ));
+        }
+        // Se è l'unico membro, può uscire (la chat verrà eliminata)
+        debug!("Owner is the only member, allowing exit");
     }
 
     state.meta.delete(&(current_user.user_id, chat_id)).await?;
+
+    // Dopo che l'utente esce, controllare se ci sono messaggi da eliminare fisicamente
+    // Recupera tutti i metadata rimanenti della chat
+    let remaining_metadata = state.meta.find_many_by_chat_id(&chat_id).await?;
+    
+    if !remaining_metadata.is_empty() {
+        // Trova il messages_visible_from più vecchio tra i membri rimasti
+        let oldest_visible_date = remaining_metadata
+            .iter()
+            .map(|m| m.messages_visible_from)
+            .min()
+            .unwrap();
+        
+        debug!("After user exit, oldest visible date for chat {}: {:?}", chat_id, oldest_visible_date);
+        
+        // Elimina fisicamente i messaggi che nessun membro rimasto può più vedere
+        let deleted_count = state
+            .msg
+            .delete_messages_before(&chat_id, &oldest_visible_date)
+            .await?;
+        
+        if deleted_count > 0 {
+            info!("Deleted {} old messages from chat {} after user exit (before {:?})", 
+                deleted_count, chat_id, oldest_visible_date);
+        }
+    }
 
     // Se l'utente è online, inviare segnale RemoveChat per disiscriversi dai messaggi della chat
     state
@@ -425,6 +510,39 @@ pub async fn remove_member(
     }
 
     state.meta.delete(&(user_id, chat_id)).await?;
+
+    // Dopo la rimozione del membro, controllare se ci sono messaggi da eliminare fisicamente
+    // Recupera tutti i metadata rimanenti della chat
+    let remaining_metadata = state.meta.find_many_by_chat_id(&chat_id).await?;
+    
+    if !remaining_metadata.is_empty() {
+        // Trova il messages_visible_from più vecchio tra i membri rimasti
+        let oldest_visible_date = remaining_metadata
+            .iter()
+            .map(|m| m.messages_visible_from)
+            .min()
+            .unwrap();
+        
+        debug!("After member removal, oldest visible date for chat {}: {:?}", chat_id, oldest_visible_date);
+        
+        // Elimina fisicamente i messaggi che nessun membro rimasto può più vedere
+        let deleted_count = state
+            .msg
+            .delete_messages_before(&chat_id, &oldest_visible_date)
+            .await?;
+        
+        if deleted_count > 0 {
+            info!("Deleted {} old messages from chat {} after member removal (before {:?})", 
+                deleted_count, chat_id, oldest_visible_date);
+        }
+    }
+
+    // Notifica l'utente rimosso di rimuovere la chat dalla sua lista
+    info!("Sending RemoveChat signal to user {} for chat {}", user_id, chat_id);
+    state.users_online.send_server_message_if_online(
+        &user_id,
+        crate::ws::usermap::InternalSignal::RemoveChat(chat_id),
+    );
 
     let target_user_opt = state.user.read(&user_id).await?;
 
@@ -620,7 +738,11 @@ pub async fn transfer_ownership(
     state
         .meta
         .transfer_ownership(&current_user.user_id, &new_owner_id, &chat_id)
-        .await?;
+        .await
+        .map_err(|e| {
+            error!("Failed to transfer ownership: {:?}", e);
+            AppError::internal_server_error("Failed to transfer ownership")
+        })?;
 
     let message_dto = MessageDTO {
         message_id: None,
@@ -646,5 +768,73 @@ pub async fn transfer_ownership(
 
     let _ = state.chats_online.send(&chat_id, Arc::new(message_dto));
     info!("Ownership transferred successfully");
+    Ok(())
+}
+
+#[instrument(skip(state, current_user, _metadata), fields(user_id = %current_user.user_id, chat_id = %chat_id))]
+pub async fn clean_chat(
+    State(state): State<Arc<AppState>>,
+    Path(chat_id): Path<i32>,
+    Extension(current_user): Extension<User>,
+    Extension(_metadata): Extension<UserChatMetadata>, // ottenuto dal chat_membership_middleware
+) -> Result<(), AppError> {
+    debug!("Cleaning chat for user");
+    // 1. Aggiornare messages_visible_from dell'utente corrente al momento attuale
+    // 2. Eliminare fisicamente i messaggi che nessun membro può più vedere
+    // 3. La chat rimane visibile ma senza i vecchi messaggi per questo utente
+
+    let _chat = state.chat.read(&chat_id).await?.ok_or_else(|| {
+        warn!("Chat not found: {}", chat_id);
+        AppError::not_found("Chat not found")
+    })?;
+
+    // Aggiorna messages_visible_from al momento corrente
+    // Questo impedisce di ricevere i vecchi messaggi quando richiedi la lista
+    // I metadata rimangono (necessari per controllare se la chat esiste già)
+    let now = Utc::now();
+    let update_dto = crate::dtos::UpdateUserChatMetadataDTO {
+        user_role: None,
+        messages_visible_from: Some(now),
+        messages_received_until: Some(now),
+    };
+
+    state
+        .meta
+        .update(&(current_user.user_id, chat_id), &update_dto)
+        .await?;
+
+    // Recupera tutti i metadata della chat per trovare la data più vecchia
+    // da cui un utente può ancora vedere i messaggi
+    let all_metadata = state.meta.find_many_by_chat_id(&chat_id).await?;
+    
+    if !all_metadata.is_empty() {
+        // Trova il messages_visible_from PIÙ VECCHIO tra tutti i membri
+        // Possiamo eliminare fisicamente solo i messaggi antecedenti a questa data,
+        // perché i messaggi successivi potrebbero essere ancora visibili ad almeno un membro
+        let oldest_visible_date = all_metadata
+            .iter()
+            .map(|m| m.messages_visible_from)
+            .min()
+            .unwrap_or(now);
+        
+        debug!("Oldest visible date across all members for chat {}: {:?}", chat_id, oldest_visible_date);
+        
+        // Elimina fisicamente solo i messaggi che NESSUN membro può più vedere
+        // (antecedenti alla data di cleanup più vecchia tra tutti i membri)
+        let deleted_count = state
+            .msg
+            .delete_messages_before(&chat_id, &oldest_visible_date)
+            .await?;
+        
+        if deleted_count > 0 {
+            info!("Deleted {} old messages from chat {} (before {:?})", 
+                deleted_count, chat_id, oldest_visible_date);
+        }
+    }
+
+    // NON inviamo RemoveChat - il client gestisce la pulizia locale dei messaggi
+    // La chat rimane visibile ma senza messaggi vecchi
+
+    info!("Chat cleaned successfully for user");
     Ok(())
 }

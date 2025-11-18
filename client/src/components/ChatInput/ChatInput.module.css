@@ -1,0 +1,59 @@
+/* ChatInput Styles */
+
+.chatInputContainer {
+  padding: 1rem;
+  background-color: #ecf0f1;
+  border-top: 2px solid #bdc3c7;
+}
+
+.inputForm {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+.textarea {
+  flex: 1;
+  padding: 0.75rem;
+  border: 2px solid #bdc3c7;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-family: inherit;
+  resize: none;
+  max-height: 120px;
+  min-height: 42px;
+  transition: border-color 0.3s;
+}
+
+.textarea:focus {
+  outline: none;
+  border-color: #e74c3c;
+}
+
+.textarea:disabled {
+  background-color: #d5dbdb;
+  cursor: not-allowed;
+}
+
+.sendButton {
+  padding: 0.75rem 1.25rem;
+  background-color: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1.25rem;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sendButton:hover:not(:disabled) {
+  background-color: #c0392b;
+}
+
+.sendButton:disabled {
+  background-color: #95a5a6;
+  cursor: not-allowed;
+}

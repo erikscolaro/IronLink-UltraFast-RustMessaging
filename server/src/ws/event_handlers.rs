@@ -82,19 +82,26 @@ pub async fn process_message(state: &Arc<AppState>, user_id: i32, msg: MessageDT
     };
 
     // bene, l'utente appartiene alla chat, quindi può inviare il messaggio
-    // invio prima ad utenti online
-    if let Err(e) = state
+    // invio prima ad utenti online (sia per chat private che di gruppo)
+    match state
         .chats_online
         .send(&input_message.chat_id, Arc::from(msg))
     {
-        error!(
-            chat_id = input_message.chat_id,
-            "Failed to broadcast message to online users: {:?}", e
-        );
-        state.users_online.send_server_message_if_online(
-            &user_id,
-            InternalSignal::Error("Internal server error."),
-        );
+        Ok(n) => {
+            info!(
+                chat_id = input_message.chat_id,
+                receivers = n,
+                "Message broadcast to {} receivers", n
+            );
+        }
+        Err(_) => {
+            // Nessun ricevitore online per questa chat (canale non esiste o nessuno iscritto)
+            // Questo è normale per chat nuove o quando tutti gli utenti sono offline
+            warn!(
+                chat_id = input_message.chat_id,
+                "No online receivers for this chat, message will be stored for later delivery"
+            );
+        }
     }
 
     // salvo in db per utenti offline

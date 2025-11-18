@@ -1,6 +1,6 @@
 //! Invitation DTOs - Data Transfer Objects per inviti
 
-use crate::entities::{Invitation, InvitationStatus};
+use crate::{dtos::{ChatDTO, UserDTO}, entities::{Invitation, InvitationStatus}};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -40,4 +40,14 @@ pub struct CreateInvitationDTO {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct UpdateInvitationDTO {
     pub state: Option<InvitationStatus>,
+}
+
+/// DTO arricchito con informazioni complete dell'inviter e della chat
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct EnrichedInvitationDTO {
+    pub invite_id: i32,
+    pub state: InvitationStatus,
+    pub created_at: DateTime<Utc>,
+    pub inviter: Option<UserDTO>,
+    pub chat: Option<ChatDTO>,
 }

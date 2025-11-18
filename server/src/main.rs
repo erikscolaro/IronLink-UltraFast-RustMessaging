@@ -1,11 +1,13 @@
 mod core;
 mod dtos;
 mod entities;
+mod monitoring;
 mod repositories;
 mod services;
 mod ws;
 
 use crate::core::{AppState, Config, authentication_middleware, chat_membership_middleware};
+use crate::monitoring::{start_cpu_monitoring, CpuMonitorConfig};
 use crate::services::*;
 use crate::ws::ws_handler;
 use axum::{
@@ -15,6 +17,7 @@ use axum::{
 use sqlx::mysql::MySqlPoolOptions;
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 use tokio::net::TcpListener;
+use tower_http::cors::{CorsLayer, Any};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 /// Configura le routes di autenticazione (login, register)
@@ -28,8 +31,8 @@ fn configure_auth_routes() -> Router<Arc<AppState>> {
 fn configure_user_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
     Router::new()
         .route("/", get(search_user_with_username))
+        .route("/me", get(get_my_user).delete(delete_my_account))
         .route("/{user_id}", get(get_user_by_id))
-        .route("/me", delete(delete_my_account))
         .layer(middleware::from_fn_with_state(
             state,
             authentication_middleware,
@@ -55,9 +58,10 @@ fn configure_chat_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/{chat_id}/members/{user_id}/role",
             patch(update_member_role),
         )
-        .route("/{chat_id}/transfer_ownership", patch(transfer_ownership))
+        .route("/{chat_id}/transfer_ownership/{new_owner_id}", patch(transfer_ownership))
         .route("/{chat_id}/members/{user_id}", delete(remove_member))
         .route("/{chat_id}/leave", post(leave_chat))
+        .route("/{chat_id}/clean", post(clean_chat))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             chat_membership_middleware,
@@ -124,6 +128,15 @@ async fn main() {
     // Creiamo lo stato dell'applicazione con i repository e la configurazione
     let state = Arc::new(AppState::new(connection_pool, config.jwt_secret.clone()));
 
+    // Avvio task di monitoraggio CPU in background
+    let cpu_monitor_config = CpuMonitorConfig {
+        interval_secs: 120, // 2 minuti
+        log_file_path: Some("cpu_stats.log".to_string()),
+        enable_realtime_logging: false,
+    };
+    tokio::spawn(start_cpu_monitoring(cpu_monitor_config));
+    println!("✓ CPU monitoring started (logging to cpu_stats.log)");
+
     // Definizione indirizzo del server
     let addr = SocketAddr::from((
         config
@@ -139,6 +152,16 @@ async fn main() {
         .await
         .expect("Unable to start TCP listener.");
 
+    // Configurazione CORS per permettere richieste dal frontend
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any)
+        .expose_headers([
+            axum::http::header::AUTHORIZATION,
+            axum::http::header::SET_COOKIE,
+        ]);
+
     // Costruzione del router principale con tutte le routes
     let app = Router::new()
         .route("/", get(root))
@@ -153,6 +176,7 @@ async fn main() {
                 authentication_middleware,
             )),
         )
+        .layer(cors)
         .with_state(state);
 
     // Avvia il server
