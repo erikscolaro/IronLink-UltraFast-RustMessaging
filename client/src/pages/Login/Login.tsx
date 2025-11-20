@@ -9,16 +9,40 @@ export default function Login() {
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [confpassword, setConfPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const { login, register } = useAuth();
   const navigate = useNavigate();
 
+  function validatePassword(password: string) {
+    const minLength = /.{8,}/;
+    const hasUpper = /[A-Z]/;
+    const hasLower = /[a-z]/;
+    const hasNumber = /[0-9]/;
+    const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/;
+
+    if (!minLength.test(password)) return "La password deve avere almeno 8 caratteri";
+    if (!hasUpper.test(password)) return "La password deve contenere almeno una lettera maiuscola";
+    if (!hasLower.test(password)) return "La password deve contenere almeno una lettera minuscola";
+    if (!hasNumber.test(password)) return "La password deve contenere almeno un numero";
+    if (!hasSpecial.test(password)) return "La password deve contenere almeno un carattere speciale";
+
+  return null; // password valida
+}
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
+
+    const result = validatePassword(password);
+    if (result != null) {
+      setError(result);
+      setIsLoading(false);
+      return;
+    }
 
     try {
       if (isLogin) {
@@ -38,20 +62,17 @@ export default function Login() {
     <Container fluid className={styles.loginContainer}>
       <Row className="h-100">
         {/* Lato sinistro - Frase ad effetto */}
-        <Col md={6} className={styles.leftPanel}>
+        <Col md={6} className={styles.leftPanel+ ' blur-1 shadow'}>
           <div className={styles.brandSection}>
             <h1 className={styles.brandTitle}>Ruggine</h1>
             <p className={styles.brandSubtitle}>Comunicazione forte come il ferro</p>
-            <div className={styles.brandDescription}>
-              <p>Connessioni solide, messaggi istantanei.</p>
-              <p>Temprato dal tempo, plasmato per durare.</p>
-            </div>
           </div>
         </Col>
 
         {/* Lato destro - Form */}
         <Col md={6} className={styles.rightPanel}>
-          <div className={styles.formContainer}>
+          <div className={styles.formContainer+ ' blur-1 shadow'}>
+          
             <h2 className={styles.formTitle}>
               {isLogin ? 'Accedi' : 'Registrati'}
             </h2>
@@ -66,6 +87,7 @@ export default function Login() {
                   placeholder="Inserisci username"
                   required
                   disabled={isLoading}
+                  className={styles.input}
                 />
               </Form.Group>
 
@@ -78,8 +100,25 @@ export default function Login() {
                   placeholder="Inserisci password"
                   required
                   disabled={isLoading}
+                  className={styles.input}
                 />
               </Form.Group>
+
+              {
+                isLogin?null:             
+                <Form.Group className="mb-3" controlId="confirm-password">
+                <Form.Label>Ripeti password</Form.Label>
+                <Form.Control
+                  type="password"
+                  value={confpassword}
+                  onChange={(e) => setConfPassword(e.target.value)}
+                  placeholder="Inserisci password"
+                  required
+                  disabled={isLoading}
+                  className={styles.input}
+                />
+              </Form.Group>
+              }
 
               {error && (
                 <Alert variant="danger">
@@ -90,7 +129,7 @@ export default function Login() {
               <Button
                 variant="danger"
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading||(!isLogin&&(password!=confpassword))||(password.length==0)||username.length==0}
                 className="w-100 mb-3"
               >
                 {isLoading ? 'Caricamento...' : (isLogin ? 'Accedi' : 'Registrati')}
@@ -105,6 +144,7 @@ export default function Login() {
                   setError('');
                 }}
                 disabled={isLoading}
+                className='text-white'
               >
                 {isLogin ? 'Non hai un account? Registrati' : 'Hai già un account? Accedi'}
               </Button>

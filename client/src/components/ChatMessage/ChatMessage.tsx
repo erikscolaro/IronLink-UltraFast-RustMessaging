@@ -22,16 +22,22 @@ export default function ChatMessage({ message, senderUsername, isOwnMessage, sta
 
   if (isSystemMessage) {
     return (
-      <div className="d-flex justify-content-center my-3">
-        <Badge bg="secondary" className="py-2 px-3">
-          {message.content}
-        </Badge>
+      <div
+        className={`d-flex ${styles.systemContainer}`}
+      >
+        <div
+          className={`${styles.messageCard} ${styles.systemMessage}`}
+          style={{ margin: 0 }} // rimuove margin ereditato
+        >
+          <span className={styles.messageContent}>{message.content}</span>
+        </div>
       </div>
     );
   }
 
+
   return (
-    <div className={`d-flex mb-3 px-3 ${isOwnMessage ? 'justify-content-end' : 'justify-content-start'}`}>
+    <div className={`d-flex mb-1 ${isOwnMessage ? 'justify-content-end' : 'justify-content-start'}`}>
       <div className={`${styles.messageCard} ${isOwnMessage ? styles.ownMessage : styles.otherMessage}`}>
         {!isOwnMessage && senderUsername && (
           <div className={styles.senderName}>{senderUsername}</div>

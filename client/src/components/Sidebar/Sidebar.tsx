@@ -36,7 +36,7 @@ export default function Sidebar({
   const { user } = useAuth();
   const { onInvitation } = useWebSocket();
   const [currentView, setCurrentView] = useState<SidebarView>('chats');
-  
+
   // Se inviteMode è attivo, passa automaticamente alla vista invito
   useEffect(() => {
     if (inviteMode) {
@@ -93,24 +93,24 @@ export default function Sidebar({
   useEffect(() => {
     const loadPrivateChatNames = async () => {
       if (!user) return;
-      
+
       const currentUserId = getUserId(user);
-      const privateChats = chats.filter(chat => 
+      const privateChats = chats.filter(chat =>
         chat.chat_type === ChatType.Private && chat.user_list && chat.user_list.length === 2
       );
 
       for (const chat of privateChats) {
         if (!chat.user_list) continue;
-        
+
         // Trova l'ID dell'altro utente (non quello corrente)
         const otherUserId = chat.user_list.find(id => id !== currentUserId);
-        
+
         if (!otherUserId || privateChatNames[chat.chat_id]) continue;
 
         try {
           const members = await api.listChatMembers(chat.chat_id);
           const otherUser = members.find((m) => m.user_id !== currentUserId);
-          
+
           if (otherUser && otherUser.username) {
             setPrivateChatNames(prev => ({
               ...prev,
@@ -131,7 +131,7 @@ export default function Sidebar({
   // Ricerca utenti per chat privata
   const handleSearch = async (query: string) => {
     setSearchQuery(query);
-    
+
     if (query.trim().length <= 3) {
       setSearchResults([]);
       return;
@@ -140,16 +140,16 @@ export default function Sidebar({
     setIsSearching(true);
     try {
       if (!user) return;
-      
+
       const currentUserId = getUserId(user);
       const results = await api.searchUserByUsername(query);
-      
+
       // Trova tutti gli utenti con cui ho già una chat privata
       const existingPrivateChatUserIds = chats
         .filter(chat => chat.chat_type === ChatType.Private && chat.user_list && chat.user_list.length > 0)
         .flatMap(chat => chat.user_list!)
         .filter(id => id !== currentUserId); // Escludi me stesso
-      
+
       // Filtra risultati:
       // 1. Escludi l'utente corrente
       // 2. Escludi utenti con cui esiste già una chat privata
@@ -157,7 +157,7 @@ export default function Sidebar({
         const userId = getUserId(foundUser);
         return userId !== currentUserId && !existingPrivateChatUserIds.includes(userId);
       });
-      
+
       setSearchResults(filteredResults);
     } catch (error) {
       console.error('Errore ricerca utenti:', error);
@@ -169,7 +169,7 @@ export default function Sidebar({
   // Ricerca utenti per invito a gruppo (filtrata per membri esistenti)
   const handleSearchForInvite = async (query: string) => {
     setSearchQuery(query);
-    
+
     if (query.trim().length <= 3) {
       setSearchResults([]);
       return;
@@ -178,13 +178,13 @@ export default function Sidebar({
     setIsSearching(true);
     try {
       const results = await api.searchUserByUsername(query);
-      
+
       // Filtra risultati escludendo membri esistenti
       const filteredResults = results.filter((foundUser) => {
         const userId = getUserId(foundUser);
         return !inviteMode?.existingMemberIds.includes(userId);
       });
-      
+
       setSearchResults(filteredResults);
     } catch (error) {
       console.error('Errore ricerca utenti:', error);
@@ -203,7 +203,7 @@ export default function Sidebar({
   // Conferma invito utente al gruppo
   const handleConfirmInvite = async () => {
     if (!inviteMode || !userToInvite) return;
-    
+
     try {
       await inviteMode.onInvite(userToInvite.id);
       setSearchQuery('');
@@ -276,10 +276,10 @@ export default function Sidebar({
         chat_type: ChatType.Private,
         user_list: [currentUserId, userId] // Include entrambi gli utenti
       });
-      
+
       // Ricarica la lista per vedere la nuova chat
       await onRefreshChats();
-      
+
       onSelectChat(newChat.chat_id);
       setCurrentView('chats');
       setSearchQuery('');
@@ -304,10 +304,10 @@ export default function Sidebar({
         title: groupName,
         description: groupDescription || undefined
       });
-      
+
       // Ricarica la lista per vedere il nuovo gruppo
       await onRefreshChats();
-      
+
       onSelectChat(newChat.chat_id);
       setCurrentView('chats');
       setGroupName('');
@@ -329,7 +329,6 @@ export default function Sidebar({
           <span className="fw-bold">{user?.username || 'Utente'}</span>
         </div>
         <Button
-          variant="link"
           onClick={onShowProfile}
           title="Profilo e impostazioni"
           className="text-white p-1"
@@ -342,14 +341,13 @@ export default function Sidebar({
       <div className={styles.content}>
         {currentView === 'chats' && (
           <>
-            {/* Lista chat */}
-            <div className={styles.listContainer}>
-              {/* Inviti pending */}
-              {pendingInvitations.length > 0 && (
-                <>
-                  <div className="px-3 py-2 mb-2">
-                    <small className="text-uppercase text-muted fw-bold">Inviti</small>
-                  </div>
+            {/* Inviti pending */}
+            {pendingInvitations.length > 0 && (
+              <>
+                <div className="px-3 py-2 mb-2">
+                  <small className="text-uppercase fw-bold">Inviti</small>
+                </div>
+                <div className={styles.listContainer}>
                   {pendingInvitations.map((invite) => (
                     <div key={invite.invite_id} className={styles.inviteItem}>
                       <div className="d-flex align-items-center gap-2 mb-2">
@@ -365,14 +363,14 @@ export default function Sidebar({
                       </div>
                       <div className={styles.inviteActions}>
                         <button
-                          className={styles.acceptButton}
+                          className="btn-success fill"
                           onClick={() => handleAcceptInvite(invite.invite_id)}
                         >
                           <i className="bi bi-check-circle me-1"></i>
                           Accetta
                         </button>
                         <button
-                          className={styles.declineButton}
+                          className="btn-danger fill"
                           onClick={() => handleDeclineInvite(invite.invite_id)}
                         >
                           <i className="bi bi-x-circle me-1"></i>
@@ -381,75 +379,78 @@ export default function Sidebar({
                       </div>
                     </div>
                   ))}
-                </>
-              )}
-
-              {/* Sezione Chat */}
-              <div className="px-3 py-2 mb-2">
-                <small className="text-uppercase text-muted fw-bold">Chats</small>
-              </div>
-
-              {chats.length === 0 ? (
-                <div className="text-center py-5 text-muted">
-                  <i className="bi bi-chat-dots mb-3" style={{ fontSize: '3rem' }}></i>
-                  <p>Nessuna chat disponibile</p>
-                  <small>Crea una nuova chat per iniziare</small>
                 </div>
-              ) : (
-                <>
-                  {chats.map((chat) => {
-                    const isPrivate = chat.chat_type === ChatType.Private;
-                    const displayName = isPrivate 
-                      ? (privateChatNames[chat.chat_id] || `Chat ${chat.chat_id}`)
-                      : (chat.title || `Gruppo ${chat.chat_id}`);
-                    
-                    const hasUnread = chatsWithUnread.has(chat.chat_id);
-                    
-                    return (
-                      <div
-                        key={chat.chat_id}
-                        className={`${styles.chatItem} ${selectedChatId === chat.chat_id ? styles.selected : ''}`}
-                        onClick={() => onSelectChat(chat.chat_id)}
-                      >
-                        <div className="d-flex align-items-center gap-2 w-100">
-                          <i className={`bi ${isPrivate ? 'bi-person' : 'bi-people'} fs-5`}></i>
-                          <div className="flex-grow-1">
-                            <div className="fw-bold">
-                              {displayName}
-                            </div>
-                            {chat.description && !isPrivate && (
-                              <small className="text-muted text-truncate d-block">
-                                {chat.description}
-                              </small>
-                            )}
+              </>
+            )}
+
+            {/* Sezione Chat */}
+            <div className="px-3 py-2 mb-2">
+              <small className="text-uppercase fw-bold">Chats</small>
+            </div>
+
+            {chats.length === 0 ? (
+              <div className="text-center py-5 text-muted">
+                <i className="bi bi-chat-dots mb-3" style={{ fontSize: '3rem' }}></i>
+                <p>Nessuna chat disponibile</p>
+                <small>Crea una nuova chat per iniziare</small>
+              </div>
+            ) : (
+              <div className={styles.listContainer}>
+
+                {chats.sort((a, b) =>
+                  (a.title ?? '').localeCompare(b.title ?? '')
+                ).map((chat) => {
+                  const isPrivate = chat.chat_type === ChatType.Private;
+                  const displayName = isPrivate
+                    ? (privateChatNames[chat.chat_id] || `Chat ${chat.chat_id}`)
+                    : (chat.title || `Gruppo ${chat.chat_id}`);
+
+                  const hasUnread = chatsWithUnread.has(chat.chat_id);
+
+                  return (
+                    <div
+                      key={chat.chat_id}
+                      className={`${styles.chatItem} ${selectedChatId === chat.chat_id ? styles.selected : ''}`}
+                      onClick={() => onSelectChat(chat.chat_id)}
+                    >
+                      <div className="d-flex align-items-center gap-2 w-100">
+                        <i className={`bi ${isPrivate ? 'bi-person' : 'bi-people'} fs-5`}></i>
+                        <div className="flex-grow-1">
+                          <div className="fw-bold">
+                            {displayName}
                           </div>
-                          {hasUnread && (
-                            <div 
-                              style={{
-                                width: '10px',
-                                height: '10px',
-                                borderRadius: '50%',
-                                backgroundColor: '#ff8c00',
-                                flexShrink: 0
-                              }}
-                            />
+                          {chat.description && !isPrivate && (
+                            <small className="text-muted text-truncate d-block">
+                              {chat.description}
+                            </small>
                           )}
                         </div>
+                        {hasUnread && (
+                          <div
+                            style={{
+                              width: '10px',
+                              height: '10px',
+                              borderRadius: '50%',
+                              backgroundColor: '#ff8c00',
+                              flexShrink: 0
+                            }}
+                          />
+                        )}
                       </div>
-                    );
-                  })}
-                </>
-              )}
-            </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </>
         )}
 
         {currentView === 'createPrivate' && (
           <div className={styles.createContainer}>
             <div className="d-flex align-items-center justify-content-between mb-3">
-              <h5 className="mb-0">Nuova Chat Privata</h5>
-              <Button 
-                variant="link" 
+              <h5 className="mb-0">Nuova chat privata</h5>
+              <Button
+                variant="link"
                 onClick={() => {
                   setCurrentView('chats');
                   setSearchQuery('');
@@ -492,8 +493,8 @@ export default function Sidebar({
           <div className={styles.createContainer}>
             <div className="d-flex align-items-center justify-content-between mb-3">
               <h5 className="mb-0">Nuovo Gruppo</h5>
-              <Button 
-                variant="link" 
+              <Button
+                variant="link"
                 onClick={() => {
                   setCurrentView('chats');
                   setGroupName('');
@@ -525,8 +526,8 @@ export default function Sidebar({
               />
             </Form.Group>
 
-            <Button 
-              variant="danger" 
+            <Button
+              variant="danger"
               className="w-100"
               onClick={handleCreateGroup}
               disabled={isCreating || !groupName.trim()}
@@ -540,8 +541,8 @@ export default function Sidebar({
           <div className={styles.createContainer}>
             <div className="d-flex align-items-center justify-content-between mb-3">
               <h5 className="mb-0">Invita Utente</h5>
-              <Button 
-                variant="link" 
+              <Button
+                variant="link"
                 onClick={() => {
                   inviteMode.onCancel();
                   setSearchQuery('');
@@ -586,15 +587,15 @@ export default function Sidebar({
         <div className={styles.createButtons}>
           <Button
             variant="outline-light"
-            className="w-100 mb-2"
+            className={styles.createButton}
             onClick={() => setCurrentView('createPrivate')}
           >
             <i className="bi bi-person-plus me-2"></i>
-            Nuova Chat Privata
+            Nuova Privata
           </Button>
           <Button
             variant="outline-light"
-            className="w-100"
+            className={styles.createButton}
             onClick={() => setCurrentView('createGroup')}
           >
             <i className="bi bi-people me-2"></i>
@@ -604,8 +605,8 @@ export default function Sidebar({
       )}
 
       {/* Modale conferma invito */}
-      <Modal 
-        show={showInviteConfirm} 
+      <Modal
+        show={showInviteConfirm}
         onHide={handleCancelInvite}
         centered
         contentClassName="bg-dark text-white"

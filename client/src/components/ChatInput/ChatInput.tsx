@@ -1,6 +1,6 @@
 // ChatInput - Componente per l'invio di messaggi
 import { useState } from 'react';
-import { Form, Button, InputGroup } from 'react-bootstrap';
+import { Form, Button, InputGroup, Container } from 'react-bootstrap';
 import styles from './ChatInput.module.css';
 
 interface ChatInputProps {
@@ -27,28 +27,33 @@ export default function ChatInput({ onSendMessage, disabled = false }: ChatInput
   };
 
   return (
-    <div className={styles.chatInputContainer}>
-      <Form onSubmit={handleSubmit}>
-        <InputGroup>
-          <Form.Control
-            as="textarea"
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={handleKeyPress}
-            placeholder="Scrivi un messaggio..."
-            disabled={disabled}
-            rows={1}
-            style={{ resize: 'none', maxHeight: '120px' }}
-          />
-          <Button
-            variant="danger"
-            type="submit"
-            disabled={disabled || !message.trim()}
-          >
-            <i className="bi bi-send-fill"></i>
-          </Button>
-        </InputGroup>
-      </Form>
-    </div>
+    <Form onSubmit={handleSubmit}>
+      <div className={styles.chatInputContainer}>
+        <Form.Control
+          as="textarea"
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          onKeyDown={handleKeyPress}
+          placeholder="Scrivi un messaggio..."
+          disabled={disabled}
+          rows={1}
+          className={styles.inputForm}
+          ref={el => {
+            if (el) {
+              el.style.height = 'auto';
+              el.style.height = el.scrollHeight + 'px';
+            }
+          }}
+        />
+        <Button
+          variant="danger"
+          type="submit"
+          disabled={disabled || !message.trim()}
+          className={styles.sendButton}
+        >
+          <i className="bi bi-send-fill"></i>
+        </Button>
+      </div>
+    </Form>
   );
 }

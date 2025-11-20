@@ -16,20 +16,30 @@
 
 .messageCard {
   max-width: 60%;
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
   word-wrap: break-word;
 }
 
-.messageCard.ownMessage {
-  background-color: #e74c3c;
+.messageCard.systemMessage {
   color: white;
+  background-color: rgb(51, 51, 51) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.messageCard.ownMessage {
+  color: white;
+  background-color: rgba(231, 76, 60, 0.5) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
 .messageCard.otherMessage {
-  background-color: #34495e;
   color: white;
+  background-color: rgba(0, 0, 0, 0.2) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
@@ -89,4 +99,16 @@
   font-style: italic;
   text-align: center;
   border: 1px solid rgba(52, 73, 94, 0.2);
+}
+
+
+.systemContainer {
+  display: flex;
+  flex-direction: column;       
+  justify-content: center;    
+  align-items: center;          
+  width: 100%;                  
+  box-sizing: border-box;       
+  overflow-y: auto;   
+  margin-bottom: 5px;          
 }

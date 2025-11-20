@@ -4,10 +4,12 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.5rem;
-  background-color: #34495e;
+  padding: 1rem;
+  background-color: rgba(0, 0, 0, 0.4) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 10rem;
   color: white;
-  border-bottom: 2px solid #2c3e50;
 }
 
 .chatInfo {
@@ -58,7 +60,6 @@
   background-color: transparent;
   color: white;
   border: 2px solid white;
-  border-radius: 6px;
   font-size: 1.25rem;
   cursor: pointer;
   transition: all 0.3s;

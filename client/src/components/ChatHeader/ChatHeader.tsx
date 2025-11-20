@@ -20,7 +20,7 @@ export default function ChatHeader({ chat, otherUsername, onShowInfo, onBack }: 
         {/* Pulsante Back per mobile */}
         {onBack && (
           <Button
-            variant="link"
+            variant='primary'
             className={`${styles.backButton} d-md-none`}
             onClick={onBack}
             title="Torna alle chat"
@@ -35,11 +35,10 @@ export default function ChatHeader({ chat, otherUsername, onShowInfo, onBack }: 
       </div>
       
       <Button
-        variant="outline-light"
         onClick={onShowInfo}
         title="Informazioni chat"
       >
-        <i className="bi bi-info-circle"></i>
+        <i className="bi bi-three-dots-vertical"></i>
       </Button>
     </div>
   );

@@ -12,16 +12,21 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
   color: #ecf0f1;
   padding: 3rem 2rem;
   height: 100%;
+  border-radius:0 2em 2em;
 }
 
 @media (max-width: 768px) {
   .leftPanel {
     padding: 2rem 1rem;
-    min-height: 200px;
+    max-height: fit-content;
+    flex-direction: column !important;
+  }
+  .loginContainer {
+    overflow-y: scroll;
+    height: auto;
   }
 }
 
@@ -63,27 +68,10 @@
   }
 }
 
-.brandDescription {
-  font-size: 1.1rem;
-  line-height: 1.8;
-  color: #95a5a6;
-}
-
-@media (max-width: 768px) {
-  .brandDescription {
-    font-size: 0.95rem;
-  }
-}
-
-.brandDescription p {
-  margin-bottom: 0.5rem;
-}
-
 .rightPanel {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #ecf0f1;
   padding: 3rem 2rem;
   height: 100%;
 }
@@ -98,16 +86,14 @@
 .formContainer {
   width: 100%;
   max-width: 400px;
-  background: white;
   padding: 2.5rem;
-  border-radius: 8px;
+  border-radius: 2rem;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 .formTitle {
   font-size: 2rem;
   font-weight: 600;
-  color: #2c3e50;
   margin-bottom: 2rem;
   text-align: center;
 }
@@ -128,76 +114,4 @@
   font-size: 0.95rem;
   font-weight: 500;
   color: #34495e;
-}
-
-.input {
-  padding: 0.75rem;
-  border: 2px solid #bdc3c7;
-  border-radius: 4px;
-  font-size: 1rem;
-  transition: border-color 0.3s;
-}
-
-.input:focus {
-  outline: none;
-  border-color: #e74c3c;
-}
-
-.input:disabled {
-  background-color: #ecf0f1;
-  cursor: not-allowed;
-}
-
-.error {
-  padding: 0.75rem;
-  background-color: #fadbd8;
-  color: #c0392b;
-  border-radius: 4px;
-  font-size: 0.9rem;
-  text-align: center;
-}
-
-.submitButton {
-  padding: 0.875rem;
-  background-color: #e74c3c;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.3s;
-}
-
-.submitButton:hover:not(:disabled) {
-  background-color: #c0392b;
-}
-
-.submitButton:disabled {
-  background-color: #95a5a6;
-  cursor: not-allowed;
-}
-
-.toggleContainer {
-  margin-top: 1rem;
-  text-align: center;
-}
-
-.toggleButton {
-  background: none;
-  border: none;
-  color: #3498db;
-  font-size: 0.9rem;
-  cursor: pointer;
-  text-decoration: underline;
-  transition: color 0.3s;
-}
-
-.toggleButton:hover:not(:disabled) {
-  color: #2980b9;
-}
-
-.toggleButton:disabled {
-  color: #95a5a6;
-  cursor: not-allowed;
 }

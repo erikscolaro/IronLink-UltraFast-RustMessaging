@@ -95,7 +95,7 @@ export default function Home() {
 
   if (isLoading) {
     return (
-      <Container fluid className="d-flex align-items-center justify-content-center vh-100 bg-light">
+      <Container fluid className="d-flex align-items-center justify-content-center vh-100">
         <div className="text-center">
           <Spinner animation="border" variant="secondary" />
           <p className="mt-2">Caricamento...</p>
@@ -106,11 +106,11 @@ export default function Home() {
 
   return (
     <Container fluid className={styles.homeContainer}>
-      <Row className="h-100 g-0">
+      <Row className="h-100 g-3">
         {/* Sidebar sinistra - nascosta su mobile quando c'è una chat selezionata */}
-        <Col 
-          xs={12} 
-          md={3} 
+        <Col
+          xs={12}
+          md={4}
           className={`h-100 ${selectedChat ? 'd-none d-md-block' : ''}`}
         >
           <Sidebar
@@ -134,9 +134,9 @@ export default function Home() {
         </Col>
 
         {/* Area centrale della chat */}
-        <Col 
+        <Col
           xs={12}
-          md={showChatInfo ? 6 : 9} 
+          md={showChatInfo ? 4 : 8}
           className={`h-100 ${!selectedChat ? 'd-none d-md-block' : ''}`}
         >
           {selectedChat ? (
@@ -147,7 +147,7 @@ export default function Home() {
               cleanChatTrigger={cleanChatTrigger}
             />
           ) : (
-            <div className="d-none d-md-flex flex-column align-items-center justify-content-center h-100 text-muted">
+            <div className="d-none d-md-flex flex-column align-items-center justify-content-center h-100">
               <i className="bi bi-chat-dots mb-3" style={{ fontSize: '4rem' }}></i>
               <h2>Seleziona una chat per iniziare</h2>
               <p>Scegli una chat dalla lista a sinistra per vedere i messaggi</p>
@@ -157,7 +157,7 @@ export default function Home() {
 
         {/* Pannello info chat (se visibile) - hidden su mobile */}
         {selectedChat && showChatInfo && (
-          <Col xs={12} md={3} className="h-100 d-none d-md-block">
+          <Col xs={12} md={4} className="h-100 d-none d-md-block">
             <ChatInfo
               chat={selectedChat}
               isVisible={showChatInfo}
@@ -186,9 +186,9 @@ export default function Home() {
       </Row>
 
       {/* Modale profilo */}
-      <ProfileModal 
-        show={showProfile} 
-        onHide={() => setShowProfile(false)} 
+      <ProfileModal
+        show={showProfile}
+        onHide={() => setShowProfile(false)}
       />
     </Container>
   );
