@@ -49,8 +49,11 @@ export default function ProfileModal({ show, onHide }: ProfileModalProps) {
       setError(err instanceof Error ? err.message : 'Errore durante l\'eliminazione dell\'account');
     } finally {
       setIsDeleting(false);
+      logout();
     }
   };
+
+
 
   return (
     <Modal
@@ -105,20 +108,6 @@ export default function ProfileModal({ show, onHide }: ProfileModalProps) {
           <div className="small text-secondary">Termina la sessione corrente</div>
         </div>
         <div className="text-secondary small">&rsaquo;</div>
-        </ListGroup.Item>
-
-        <ListGroup.Item
-        className="d-flex align-items-start bg-dark border-bottom border-secondary"
-        disabled
-        >
-        <div className="me-3 text-secondary">
-          <i className="bi bi-key fs-5 text-secondary"></i>
-        </div>
-        <div>
-          <div className="fw-semibold text-light">Modifica password</div>
-          <div className="small text-secondary">Funzionalità non ancora disponibile</div>
-        </div>
-        <div className="ms-auto small text-secondary">Prossimamente</div>
         </ListGroup.Item>
 
         <ListGroup.Item

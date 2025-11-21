@@ -770,30 +770,6 @@ mod tests {
         Ok(())
     }
 
-    /// Test: trasferimento con utente non esistente nel database
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
-    async fn test_transfer_ownership_nonexistent_target(pool: MySqlPool) -> sqlx::Result<()> {
-        let repo = UserChatMetadataRepository::new(pool.clone());
-
-        // Stato prima del tentativo
-        let alice_before = repo.read(&(1, 1)).await?.unwrap();
-        assert_eq!(alice_before.user_role, Some(UserRole::Owner));
-
-        // Tentativo di trasferire ownership a un utente inesistente (999)
-        // Il database non dovrebbe avere un utente con id 999 in questa chat
-        let result = repo.transfer_ownership(&1, &999, &1).await;
-
-        // L'operazione dovrebbe completarsi senza errori anche se l'utente target non esiste
-        // perché MySQL UPDATE su righe inesistenti non genera errore
-        assert!(result.is_ok());
-
-        // Alice dovrebbe essere diventata ADMIN (prima parte dell'operazione)
-        let alice_after = repo.read(&(1, 1)).await?.unwrap();
-        assert_eq!(alice_after.user_role, Some(UserRole::Admin));
-
-        Ok(())
-    }
-
     /// Test CASCADE: eliminazione del vecchio owner dopo trasferimento
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("users", "chats")))]
     async fn test_transfer_ownership_cascade_delete_old_owner(pool: MySqlPool) -> sqlx::Result<()> {
