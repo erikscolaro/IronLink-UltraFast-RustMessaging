@@ -1,27 +1,27 @@
-# CPU Monitoring
+# CPU Monitoring (Process)
 
-Il server include un sistema di monitoraggio delle statistiche della CPU che registra automaticamente i dati su file.
+Il server include un sistema di monitoraggio che registra il consumo di CPU del
+processo server (il binario in esecuzione). Per scelta progettuale questo file
+mostra come il monitor misuri esclusivamente l'utilizzo del processo.
 
 ## Funzionalità
 
-- **Logging automatico**: Le statistiche vengono raccolte ogni 2 minuti
+- **Logging automatico**: Le statistiche del processo vengono raccolte ogni 2 minuti 
 - **File di log**: I dati vengono scritti in `cpu_stats.log` nella directory del server
 - **Statistiche raccolte**:
-  - Utilizzo globale della CPU (percentuale media)
-  - Numero di core CPU
-  - Utilizzo per ogni singolo core
+    - Utilizzo della CPU del processo (percentuale)
 
 ## Formato del log
 
-Il file `cpu_stats.log` contiene:
+Il file `cpu_stats.log` contiene righe come la seguente (una per intervallo):
 
 ```
-=== CPU Statistics Log ===
+=== CPU Statistics Log (Process) ===
 Started: 2025-11-18 10:30:45
 ========================================
 
-[2025-11-18 10:32:45] Global CPU Usage: 23.45% | Cores: 8 | Per-core: [CPU0: 20.00%, CPU1: 25.00%, CPU2: 22.00%, CPU3: 24.00%, CPU4: 21.00%, CPU5: 26.00%, CPU6: 23.00%, CPU7: 27.00%]
-[2025-11-18 10:34:45] Global CPU Usage: 18.32% | Cores: 8 | Per-core: [CPU0: 15.00%, CPU1: 20.00%, ...]
+[2025-11-18 10:32:45] Process CPU Usage: 3.45%
+[2025-11-18 10:34:45] Process CPU Usage: 1.12%
 ```
 
 ## Configurazione
@@ -44,7 +44,7 @@ let cpu_monitor_config = CpuMonitorConfig {
 
 ## Abilitare il logging in tempo reale
 
-Per vedere le statistiche CPU anche nei log del server in tempo reale, modifica:
+Per vedere l'utilizzo del processo nei log del server in tempo reale, imposta:
 
 ```rust
 enable_realtime_logging: true,
@@ -53,7 +53,7 @@ enable_realtime_logging: true,
 Con questa opzione attiva, vedrai messaggi come:
 
 ```
-2025-11-18T10:32:45.123Z INFO server: CPU Stats - Global: 23.45%, Cores: 8, Per-core: ["20.00%", "25.00%", ...]
+2025-11-18T10:32:45.123Z INFO server: Process CPU Stats - Usage: 3.45%
 ```
 
 ## Utilizzo del modulo
@@ -83,5 +83,9 @@ async fn main() {
 
 - Il monitoraggio viene eseguito in un task tokio separato e non blocca il server
 - Il file di log viene aperto in modalità append, quindi i dati si accumulano tra un riavvio e l'altro
-- Le statistiche per core sono particolarmente utili per identificare squilibri nel carico di lavoro
 - Il sistema usa la libreria `sysinfo` per raccogliere i dati in modo cross-platform
+
+### Limitazioni e comportamento
+
+- Il monitor misura solo l'utilizzo CPU del processo server. Non fornisce metriche di sistema (globali) né per-core.
+- L'accuratezza del valore dipende dall'implementazione di `sysinfo` sulla piattaforma target; i valori sono percentuali (0.0 - 100.0).

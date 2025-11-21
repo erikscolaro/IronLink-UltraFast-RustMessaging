@@ -1,12 +1,14 @@
-//! Modulo per il monitoraggio delle statistiche della CPU
+//! Modulo per il monitoraggio delle statistiche della CPU del processo server
 //!
-//! Questo modulo fornisce funzionalità per raccogliere e loggare
-//! le statistiche di utilizzo della CPU del server.
+//! Questo modulo raccoglie e logga l'utilizzo **del processo corrente** (il
+//! binario del server) a intervalli configurabili. La misurazione è basata su
+//! `sysinfo` e non raccoglie più la media globale della macchina né l'utilizzo
+//! per core (scopo: isolare il consumo del processo dell'applicazione).
 
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::time::Duration;
-use sysinfo::System;
+use sysinfo::{System, Pid};
 use tokio::time;
 use tracing::{info, error};
 
@@ -30,42 +32,22 @@ impl Default for CpuMonitorConfig {
     }
 }
 
-/// Statistiche della CPU raccolte in un dato momento
+/// Statistiche della CPU del processo raccolte in un dato momento
 #[derive(Debug, Clone)]
 pub struct CpuStats {
     /// Timestamp della raccolta
     pub timestamp: chrono::DateTime<chrono::Utc>,
-    /// Utilizzo globale della CPU in percentuale
-    pub global_cpu_usage: f32,
-    /// Numero di core CPU
-    pub cpu_count: usize,
-    /// Utilizzo per core (opzionale)
-    pub per_core_usage: Vec<f32>,
+    /// Utilizzo della CPU del processo corrente (percentuale)
+    pub process_cpu_usage: f32,
 }
 
 impl CpuStats {
     /// Formatta le statistiche come stringa per il logging
     pub fn format_for_log(&self) -> String {
-        let per_core = if !self.per_core_usage.is_empty() {
-            format!(
-                " | Per-core: [{}]",
-                self.per_core_usage
-                    .iter()
-                    .enumerate()
-                    .map(|(i, usage)| format!("CPU{}: {:.2}%", i, usage))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
-        } else {
-            String::new()
-        };
-
         format!(
-            "[{}] Global CPU Usage: {:.2}% | Cores: {}{}",
+            "[{}] Process CPU Usage: {:.2}%",
             self.timestamp.format("%Y-%m-%d %H:%M:%S"),
-            self.global_cpu_usage,
-            self.cpu_count,
-            per_core
+            self.process_cpu_usage
         )
     }
 }
@@ -98,15 +80,10 @@ impl CpuStats {
 /// }
 /// ```
 pub async fn start_cpu_monitoring(config: CpuMonitorConfig) {
-    info!(
-        "Starting CPU monitoring with interval: {} seconds",
-        config.interval_secs
-    );
+    info!("Starting process CPU monitoring with interval: {} seconds", config.interval_secs);
 
     if let Some(ref path) = config.log_file_path {
-        info!("CPU stats will be logged to: {}", path);
-        
-        // Crea il file se non esiste e scrivi l'header
+        info!("Process CPU stats will be logged to: {}", path);
         if let Err(e) = initialize_log_file(path) {
             error!("Failed to initialize CPU log file: {}", e);
         }
@@ -118,18 +95,30 @@ pub async fn start_cpu_monitoring(config: CpuMonitorConfig) {
     // Salta il primo tick che avviene immediatamente
     interval.tick().await;
 
+    // Recupera il pid del processo corrente (se disponibile)
+    let maybe_pid: Option<Pid> = sysinfo::get_current_pid().ok();
+
     loop {
         interval.tick().await;
 
-        // Aggiorna le informazioni di sistema
-        sys.refresh_cpu_usage();
-        
-        // Aspetta un po' per avere letture accurate (raccomandazione di sysinfo)
+        // Per ottenere valori affidabili aggiorniamo le informazioni di sistema
+        sys.refresh_all();
+
+        // Breve attesa per stabilizzare le letture
         tokio::time::sleep(Duration::from_millis(200)).await;
-        sys.refresh_cpu_usage();
-        
-        // Raccoglie le statistiche
-        let stats = collect_cpu_stats(&sys);
+        sys.refresh_all();
+
+        // Raccoglie l'utilizzo CPU del processo corrente
+        let process_cpu = if let Some(pid) = maybe_pid {
+            sys.process(pid).map(|p| p.cpu_usage()).unwrap_or(0.0)
+        } else {
+            0.0
+        };
+
+        let stats = CpuStats {
+            timestamp: chrono::Utc::now(),
+            process_cpu_usage: process_cpu,
+        };
 
         // Log su file
         if let Some(ref path) = config.log_file_path {
@@ -140,39 +129,18 @@ pub async fn start_cpu_monitoring(config: CpuMonitorConfig) {
 
         // Log in tempo reale tramite tracing
         if config.enable_realtime_logging {
-            info!(
-                "CPU Stats - Global: {:.2}%, Cores: {}, Per-core: {:?}",
-                stats.global_cpu_usage,
-                stats.cpu_count,
-                stats.per_core_usage
-                    .iter()
-                    .map(|u| format!("{:.2}%", u))
-                    .collect::<Vec<_>>()
-            );
+            info!("Process CPU Stats - Usage: {:.2}%", stats.process_cpu_usage);
         }
     }
 }
 
 /// Raccoglie le statistiche correnti della CPU
-fn collect_cpu_stats(sys: &System) -> CpuStats {
-    let cpus = sys.cpus();
-    let cpu_count = cpus.len();
-    
-    // Calcola l'utilizzo medio globale
-    let global_cpu_usage = if cpu_count > 0 {
-        cpus.iter().map(|cpu| cpu.cpu_usage()).sum::<f32>() / cpu_count as f32
-    } else {
-        0.0
-    };
 
-    // Raccoglie l'utilizzo per ogni core
-    let per_core_usage: Vec<f32> = cpus.iter().map(|cpu| cpu.cpu_usage()).collect();
-
+fn _collect_cpu_stats(_sys: &System) -> CpuStats {
+    // funzione usata come placeholder
     CpuStats {
         timestamp: chrono::Utc::now(),
-        global_cpu_usage,
-        cpu_count,
-        per_core_usage,
+        process_cpu_usage: 0.0,
     }
 }
 
@@ -186,7 +154,7 @@ fn initialize_log_file(path: &str) -> std::io::Result<()> {
         .truncate(true)  // Resetta il file ad ogni avvio
         .open(path)?;
 
-    writeln!(file, "=== CPU Statistics Log ===")?;
+    writeln!(file, "=== CPU Statistics Log (Process) ===")?;
     writeln!(file, "Started: {} (UTC Time)", chrono::Utc::now().format("%Y-%m-%d %H:%M:%S"))?;
     writeln!(file, "========================================\n")?;
     file.flush()?;
@@ -216,15 +184,11 @@ mod tests {
     fn test_cpu_stats_format() {
         let stats = CpuStats {
             timestamp: chrono::Utc::now(),
-            global_cpu_usage: 45.67,
-            cpu_count: 4,
-            per_core_usage: vec![40.0, 50.0, 45.0, 48.0],
+            process_cpu_usage: 45.67,
         };
 
         let formatted = stats.format_for_log();
         assert!(formatted.contains("45.67%"));
-        assert!(formatted.contains("Cores: 4"));
-        assert!(formatted.contains("CPU0: 40.00%"));
     }
 
     #[test]
