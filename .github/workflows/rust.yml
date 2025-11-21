@@ -24,6 +24,7 @@ jobs:
       - name: Build Server Release
         run: |
           cd server
+          export SQLX_OFFLINE=true
           RUSTFLAGS="-C opt-level=z -C lto -C codegen-units=1 -C panic=abort" \
           cargo build --release --target x86_64-unknown-linux-gnu
 
