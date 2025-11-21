@@ -79,7 +79,9 @@ export default function Sidebar({
       setPendingInvitations(prev => {
         // Verifica che l'invito non sia già presente
         const exists = prev.some(inv => inv.invite_id === invitation.invite_id);
-        if (exists) {
+        // Verifica che il target dell'invito non sia io
+        const itsme = invitation.inviter?.id === user?.id;
+        if (exists || itsme) {
           return prev;
         }
         return [...prev, invitation];

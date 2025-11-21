@@ -99,4 +99,5 @@ client/target
 **/mutants.out*/
 
 # CPU monitoring logs
-cpu_stats.log
+# Ignore all files ending with .log
+**/*.log

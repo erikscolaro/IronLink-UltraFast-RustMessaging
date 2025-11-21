@@ -30,8 +30,6 @@
   width: 100%;
   height: fit-content;
   z-index: 10;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(5px);
   background-color: rgba(0, 0, 0, 0.4) !important;
   display: flex;
   justify-content: space-between;
@@ -93,7 +91,7 @@
 
 .activeTab {
   color: white;
-  border-bottom-color: #e74c3c;
+  border-bottom-color: rgb(231 76 60);
 
   background-color: #c9d2db;
 }

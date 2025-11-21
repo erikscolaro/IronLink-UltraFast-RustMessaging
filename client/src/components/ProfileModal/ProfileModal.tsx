@@ -18,11 +18,10 @@ export default function ProfileModal({ show, onHide }: ProfileModalProps) {
   const [error, setError] = useState<string | null>(null);
 
   const handleLogout = () => {
-    if (confirm('Sei sicuro di voler uscire?')) {
       logout();
       onHide();
       navigate('/login');
-    }
+    
   };
 
   const handleDeleteAccount = async () => {
@@ -34,11 +33,6 @@ export default function ProfileModal({ show, onHide }: ProfileModalProps) {
       'Sei assolutamente sicuro di voler procedere?';
     
     if (!confirm(confirmMessage)) {
-      return;
-    }
-
-    // Seconda conferma
-    if (!confirm('Ultima conferma: eliminare definitivamente l\'account?')) {
       return;
     }
 
@@ -59,70 +53,107 @@ export default function ProfileModal({ show, onHide }: ProfileModalProps) {
   };
 
   return (
-    <Modal show={show} onHide={onHide} centered>
-      <Modal.Header closeButton className={styles.modalHeader}>
-        <Modal.Title>
-          <i className="bi bi-person-circle me-2"></i>
-          Profilo
+    <Modal
+      className={styles.modal}
+      show={show}
+      onHide={onHide}
+      centered
+      contentClassName={`${styles.modalContent} bg-dark text-light`}
+    >
+      <Modal.Header closeButton className={`${styles.modalHeader} border-0 bg-dark text-light`}>
+      <div className="d-flex align-items-center">
+        <div
+        className={`${styles.userAvatar} rounded-circle bg-secondary d-flex justify-content-center align-items-center me-3`}
+        style={{ width: 56, height: 56 }}
+        >
+        <i className="bi bi-person-fill fs-3 text-light"></i>
+        </div>
+        <div>
+        <Modal.Title className="mb-0 text-light">
+          {user?.username || 'Utente'}
         </Modal.Title>
+        <div className="small text-secondary">
+          ID: <span className="badge bg-dark text-light align-middle">{user?.user_id}</span>
+        </div>
+        </div>
+      </div>
       </Modal.Header>
 
-      <Modal.Body>
-        {/* Informazioni utente */}
-        <div className={styles.userInfo}>
-          <div className={styles.userAvatar}>
-            <i className="bi bi-person-circle"></i>
-          </div>
-          <h4 className="mb-0">{user?.username}</h4>
-          <p className="text-muted small">ID: {user?.user_id}</p>
+      <Modal.Body className={`${styles.modalBody} pt-0 bg-dark text-light`}>
+      {error && (
+        <Alert
+        variant="danger"
+        dismissible
+        onClose={() => setError(null)}
+        className="bg-danger text-light border-0"
+        >
+        {error}
+        </Alert>
+      )}
+
+      <ListGroup variant="flush" className="mb-3">
+        <ListGroup.Item
+        action
+        onClick={handleLogout}
+        className="d-flex align-items-center bg-dark border-bottom border-secondary"
+        >
+        <div className="me-3 text-primary">
+          <i className="bi bi-box-arrow-right fs-5 text-light"></i>
         </div>
+        <div className="flex-grow-1">
+          <div className="fw-semibold text-light">Esci dall'app</div>
+          <div className="small text-secondary">Termina la sessione corrente</div>
+        </div>
+        <div className="text-secondary small">&rsaquo;</div>
+        </ListGroup.Item>
 
-        {error && (
-          <Alert variant="danger" dismissible onClose={() => setError(null)}>
-            {error}
-          </Alert>
-        )}
+        <ListGroup.Item
+        className="d-flex align-items-start bg-dark border-bottom border-secondary"
+        disabled
+        >
+        <div className="me-3 text-secondary">
+          <i className="bi bi-key fs-5 text-secondary"></i>
+        </div>
+        <div>
+          <div className="fw-semibold text-light">Modifica password</div>
+          <div className="small text-secondary">Funzionalità non ancora disponibile</div>
+        </div>
+        <div className="ms-auto small text-secondary">Prossimamente</div>
+        </ListGroup.Item>
 
-        {/* Azioni */}
-        <ListGroup variant="flush" className="mt-3">
-          <ListGroup.Item 
-            action 
-            onClick={handleLogout}
-            className={styles.actionItem}
-          >
-            <i className="bi bi-box-arrow-right me-2"></i>
-            Esci dall'app
-          </ListGroup.Item>
+        <ListGroup.Item
+        action
+        onClick={() => { if (!isDeleting) handleDeleteAccount(); }}
+        className="d-flex align-items-center bg-dark border-bottom border-secondary"
+        aria-disabled={isDeleting}
+        >
+        <div className="me-3">
+          <i className="bi bi-trash-fill fs-5 text-danger"></i>
+        </div>
+        <div className="flex-grow-1">
+          <div className="fw-semibold text-light">
+          {isDeleting ? (
+            <>
+            <span className="spinner-border spinner-border-sm me-2 text-light" role="status" aria-hidden="true"></span>
+            Eliminazione in corso...
+            </>
+          ) : 'Elimina account'}
+          </div>
+          <div className="small text-secondary">Questa azione è irreversibile</div>
+        </div>
+        <div className="small text-secondary">&rsaquo;</div>
+        </ListGroup.Item>
+      </ListGroup>
 
-          <ListGroup.Item 
-            action 
-            disabled
-            className={`${styles.actionItem} ${styles.disabled}`}
-          >
-            <i className="bi bi-key me-2"></i>
-            Modifica password
-            <small className="text-muted d-block">Funzionalità non ancora disponibile</small>
-          </ListGroup.Item>
-
-          <ListGroup.Item 
-            action 
-            onClick={handleDeleteAccount}
-            className={`${styles.actionItem} ${styles.danger}`}
-            disabled={isDeleting}
-          >
-            <i className="bi bi-trash me-2"></i>
-            {isDeleting ? 'Eliminazione in corso...' : 'Elimina account'}
-            <small className="text-muted d-block">
-              Questa azione è irreversibile
-            </small>
-          </ListGroup.Item>
-        </ListGroup>
+      <div className="text-center small text-secondary">
+        I tuoi messaggi rimarranno visibili come "Deleted User". 
+      </div>
       </Modal.Body>
 
-      <Modal.Footer>
-        <Button variant="secondary" onClick={onHide}>
-          Chiudi
-        </Button>
+      <Modal.Footer className="border-0 bg-dark">
+      <Button variant="outline-light" onClick={onHide}>
+        Chiudi
+      </Button>
       </Modal.Footer>
     </Modal>
   );

@@ -29,7 +29,7 @@
 
 .messageCard.ownMessage {
   color: white;
-  background-color: rgba(231, 76, 60, 0.5) !important;
+  background-color: rgba(208, 55, 38, 0.8);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);

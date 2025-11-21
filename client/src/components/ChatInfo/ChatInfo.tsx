@@ -1,7 +1,7 @@
 // ChatInfo - Pannello laterale con informazioni sulla chat
 import { useEffect, useState } from 'react';
 import { ChatDTO, ChatType, UserChatMetadataDTO, UserRole, getUserId } from '../../models/types';
-import { Button, ListGroup, Badge, Spinner, Form } from 'react-bootstrap';
+import { Button, ListGroup, Badge, Spinner, Form, Dropdown, DropdownButton, ButtonGroup } from 'react-bootstrap';
 import { useAuth } from '../../context/AuthContext';
 import * as api from '../../services/api';
 import styles from './ChatInfo.module.css';
@@ -21,10 +21,9 @@ export default function ChatInfo({ chat, isVisible, onClose, onStartInvite, onCh
   const [memberNames, setMemberNames] = useState<Map<number, string>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [showTransferOwnership, setShowTransferOwnership] = useState(false);
-  const [selectedAdminForTransfer, setSelectedAdminForTransfer] = useState<number | null>(null);
-  
+
   const isPrivate = chat.chat_type === ChatType.Private;
-  
+
   // Trova il ruolo dell'utente corrente
   const currentUserId = user ? getUserId(user) : undefined;
   const currentUserMember = members.find(m => m.user_id === currentUserId);
@@ -74,7 +73,6 @@ export default function ChatInfo({ chat, isVisible, onClose, onStartInvite, onCh
       try {
         await api.cleanChat(chat.chat_id);
         if (onChatCleaned) onChatCleaned(); // Notifica che la chat è stata pulita
-        alert('Chat pulita con successo');
       } catch (error) {
         console.error('Errore pulizia chat:', error);
         alert('Errore durante la pulizia della chat');
@@ -104,7 +102,6 @@ export default function ChatInfo({ chat, isVisible, onClose, onStartInvite, onCh
     const memberIds = members.map(m => m.user_id);
     onStartInvite(chat.chat_id, memberIds, async (userId: number) => {
       await api.inviteToChat(chat.chat_id, userId);
-      alert('Invito inviato con successo!');
       // Ricarica membri per aggiornare la lista
       loadMembers();
     });
@@ -130,7 +127,6 @@ export default function ChatInfo({ chat, isVisible, onClose, onStartInvite, onCh
     if (confirm(`Sei sicuro di voler rimuovere ${memberName} dal gruppo?`)) {
       try {
         await api.removeMember(chat.chat_id, userId);
-        alert(`${memberName} è stato rimosso dal gruppo`);
         loadMembers();
       } catch (error) {
         console.error('Errore rimozione membro:', error);
@@ -147,16 +143,14 @@ export default function ChatInfo({ chat, isVisible, onClose, onStartInvite, onCh
     }
 
     const memberName = memberNames.get(userId) || 'questo utente';
-    if (confirm(`Vuoi promuovere ${memberName} ad Admin?`)) {
-      try {
-        await api.updateMemberRole(chat.chat_id, userId, UserRole.Admin);
-        alert(`${memberName} è stato promosso ad Admin`);
-        loadMembers();
-      } catch (error) {
-        console.error('Errore promozione membro:', error);
-        alert('Errore durante la promozione del membro');
-      }
+    try {
+      await api.updateMemberRole(chat.chat_id, userId, UserRole.Admin);
+      loadMembers();
+    } catch (error) {
+      console.error('Errore promozione membro:', error);
+      alert('Errore durante la promozione del membro');
     }
+
   };
 
   // Retrocedi admin a membro
@@ -167,47 +161,24 @@ export default function ChatInfo({ chat, isVisible, onClose, onStartInvite, onCh
     }
 
     const memberName = memberNames.get(userId) || 'questo utente';
-    if (confirm(`Vuoi retrocedere ${memberName} a Member?`)) {
-      try {
-        await api.updateMemberRole(chat.chat_id, userId, UserRole.Member);
-        alert(`${memberName} è stato retrocesso a Member`);
-        loadMembers();
-      } catch (error) {
-        console.error('Errore retrocessione membro:', error);
-        alert('Errore durante la retrocessione del membro');
-      }
-    }
-  };
-
-  // Trasferisci ownership
-  const handleTransferOwnership = async () => {
-    if (!selectedAdminForTransfer) {
-      alert('Seleziona un admin a cui trasferire la proprietà');
-      return;
+    try {
+      await api.updateMemberRole(chat.chat_id, userId, UserRole.Member);
+      loadMembers();
+    } catch (error) {
+      console.error('Errore retrocessione membro:', error);
+      alert('Errore durante la retrocessione del membro');
     }
 
-    const newOwnerName = memberNames.get(selectedAdminForTransfer) || 'l\'utente selezionato';
-    if (confirm(`Sei sicuro di voler trasferire la proprietà del gruppo a ${newOwnerName}? Diventerai admin.`)) {
-      try {
-        await api.transferOwnership(chat.chat_id, selectedAdminForTransfer);
-        alert(`La proprietà è stata trasferita a ${newOwnerName}`);
-        setShowTransferOwnership(false);
-        setSelectedAdminForTransfer(null);
-        loadMembers();
-      } catch (error) {
-        console.error('Errore trasferimento ownership:', error);
-        alert('Errore durante il trasferimento della proprietà');
-      }
-    }
   };
+
 
   if (!isVisible) return null;
 
   return (
     <div className={styles.chatInfo}>
       <div className={styles.header}>
-        <h3 className={styles.title}>Informazioni Chat</h3>
-        <Button variant="link" onClick={onClose} className="text-white">
+        <span className={styles.title}>Informazioni Chat</span>
+        <Button variant="primary" onClick={onClose} className="text-white">
           <i className="bi bi-x-lg"></i>
         </Button>
       </div>
@@ -222,16 +193,15 @@ export default function ChatInfo({ chat, isVisible, onClose, onStartInvite, onCh
           <>
             {/* Titolo e Descrizione (solo per gruppi) */}
             {!isPrivate && (
-              <div className="mb-4">
-                <h5 className="text-uppercase text-muted mb-3">Dettagli</h5>
-                <div className="mb-2">
-                  <small className="text-muted">Nome:</small>
-                  <p className="mb-0">{chat.title || 'Senza nome'}</p>
-                </div>
-                {chat.description && (
-                  <div className="mb-2">
-                    <small className="text-muted">Descrizione:</small>
-                    <p className="mb-0">{chat.description}</p>
+              <div className='mb-3'>
+                <h3 className="text-uppercase text-muted">Dettagli</h3>
+                <div>
+                  <span className="text-medium text-muted me-3">Nome:</span>
+                  <span className="text-medium">{chat.title || 'Senza nome'}</span>
+                </div>{chat.description && (
+                  <div className="">
+                    <span className="text-medium text-muted me-3">Descrizione:</span>
+                    <span className="text-medium">{chat.description}</span>
                   </div>
                 )}
               </div>
@@ -239,14 +209,14 @@ export default function ChatInfo({ chat, isVisible, onClose, onStartInvite, onCh
 
             {/* Lista membri (solo per gruppi) */}
             {!isPrivate && (
-              <div className="mb-4">
+              <div className="mb-3">
                 <div className="d-flex justify-content-between align-items-center mb-3">
-                  <h5 className="text-uppercase text-muted mb-0">
+                  <h3 className="text-uppercase text-muted mb-0">
                     Membri ({members.length})
-                  </h5>
+                  </h3>
                   {canInvite && (
                     <Button
-                      variant="outline-light"
+                      variant="primary"
                       size="sm"
                       onClick={handleStartInvite}
                     >
@@ -255,7 +225,7 @@ export default function ChatInfo({ chat, isVisible, onClose, onStartInvite, onCh
                     </Button>
                   )}
                 </div>
-                <ListGroup variant="flush">
+                <div className={styles.listContainer}>
                   {/* Mostra prima l'utente corrente */}
                   {members
                     .sort((a, b) => {
@@ -265,162 +235,124 @@ export default function ChatInfo({ chat, isVisible, onClose, onStartInvite, onCh
                     })
                     .map((member) => {
                       const isCurrentUser = member.user_id === currentUserId;
-                      const canRemoveThisMember = 
-                        !isCurrentUser && 
+                      const canRemoveThisMember =
+                        !isCurrentUser &&
                         ((member.user_role === UserRole.Member && canRemoveMembers) ||
-                         (member.user_role === UserRole.Admin && canRemoveAdmins));
-                      const canPromoteThisMember = 
-                        !isCurrentUser && 
-                        member.user_role === UserRole.Member && 
+                          (member.user_role === UserRole.Admin && canRemoveAdmins));
+                      const canPromoteThisMember =
+                        !isCurrentUser &&
+                        member.user_role === UserRole.Member &&
                         canPromote;
-                      const canDemoteThisMember = 
-                        !isCurrentUser && 
-                        member.user_role === UserRole.Admin && 
+                      const canDemoteThisMember =
+                        !isCurrentUser &&
+                        member.user_role === UserRole.Admin &&
                         canPromote;
 
                       return (
-                        <ListGroup.Item 
-                          key={member.user_id} 
-                          className="bg-transparent text-white"
+                        <div
+                          key={member.user_id}
+                          className={styles.item}
                         >
-                          <div className="d-flex justify-content-between align-items-start mb-2">
-                            <div className="d-flex align-items-center gap-2">
-                              <i className="bi bi-person-circle fs-4"></i>
+                          <div className="d-flex justify-content-between align-items-start m-0">
+                            <div className="d-flex w-100 align-items-center gap-3">
+                              <i className="bi bi-person fs-4"></i>
                               <div>
-                                <div>
-                                  {member.username || memberNames.get(member.user_id) || 'Utente'}
-                                  {isCurrentUser && (
-                                    <Badge bg="secondary" className="ms-2">Tu</Badge>
-                                  )}
+                                <div className="d-flex align-items-start w-100 m-0">
+                                  <span className='text-medium me-2'>
+                                    {currentUserId == member.user_id ? "Tu" : (member.username || memberNames.get(member.user_id) || 'Utente')}
+                                  </span>
+                                  <span className={styles.badge}>{member.user_role || 'Member'}</span>
+
                                 </div>
-                                <small className="text-muted">
-                                  {member.member_since ? 
-                                    `Membro dal ${new Date(member.member_since).toLocaleDateString()}` : 
+                                <span className="text-muted text-small">
+                                  {member.member_since ?
+                                    `Membro dal ${new Date(member.member_since).toLocaleDateString()}` :
                                     'Data non disponibile'}
-                                </small>
+                                </span>
                               </div>
                             </div>
-                            <Badge bg="danger">{member.user_role || 'Member'}</Badge>
+
+                            {(canRemoveThisMember || canPromoteThisMember || canDemoteThisMember) && (
+                              <div className="d-flex gap-2 align-items-end justify-content-end">
+                                <DropdownButton
+                                  as={ButtonGroup}
+                                  key="left"
+                                  id="dropdown-button-drop-up"
+                                  drop="up"
+                                  variant="primary"
+                                  title=""
+                                  menuVariant='dark'
+                                >
+                                  {canPromoteThisMember && (
+                                    <Dropdown.Item onClick={() => handlePromoteToAdmin(member.user_id)}><i className="bi bi-arrow-up-circle me-1"></i>
+                                      Promuovi</Dropdown.Item>
+                                  )}
+                                  {canDemoteThisMember && (
+                                    <Dropdown.Item onClick={() => handleDemoteToMember(member.user_id)}><i className="bi bi-arrow-down-circle me-1"></i>
+                                      Retrocedi</Dropdown.Item>
+                                  )}
+                                  {canRemoveThisMember && (
+                                    <Dropdown.Item onClick={() => handleRemoveMember(member.user_id, member.user_role || UserRole.Member)}
+                                    ><i className="bi bi-person-dash me-1"></i>
+                                      Rimuovi</Dropdown.Item>
+                                  )}
+
+
+
+                                  {isOwner && member.user_role === UserRole.Admin && (
+                                    <Dropdown.Item
+                                      onClick={async () => {
+                                        const targetId = member.user_id;
+                                        const targetName = member.username || memberNames.get(targetId) || `Utente ${targetId}`;
+                                        if (confirm(`Sei sicuro di trasferire la proprietà del gruppo a ${targetName}? Diventerai admin.`)) {
+                                          try {
+                                            await api.transferOwnership(chat.chat_id, targetId);
+                                            alert(`La proprietà è stata trasferita a ${targetName}`);
+                                            loadMembers();
+                                          } catch (error) {
+                                            console.error('Errore trasferimento ownership:', error);
+                                            alert('Errore durante il trasferimento della proprietà');
+                                          }
+                                        }
+                                      }}
+                                    >
+                                      <i className="bi bi-arrow-left-right me-1"></i>
+                                      Trasferisci Proprietà
+                                    </Dropdown.Item>
+                                  )}
+
+                                </DropdownButton>
+                              </div>
+                            )}
                           </div>
-                          
-                          {/* Azioni membro */}
-                          {(canRemoveThisMember || canPromoteThisMember || canDemoteThisMember) && (
-                            <div className="d-flex gap-2">
-                              {canPromoteThisMember && (
-                                <Button
-                                  size="sm"
-                                  variant="outline-warning"
-                                  onClick={() => handlePromoteToAdmin(member.user_id)}
-                                >
-                                  <i className="bi bi-arrow-up-circle me-1"></i>
-                                  Promuovi ad Admin
-                                </Button>
-                              )}
-                              {canDemoteThisMember && (
-                                <Button
-                                  size="sm"
-                                  variant="outline-info"
-                                  onClick={() => handleDemoteToMember(member.user_id)}
-                                >
-                                  <i className="bi bi-arrow-down-circle me-1"></i>
-                                  Retrocedi a Member
-                                </Button>
-                              )}
-                              {canRemoveThisMember && (
-                                <Button
-                                  size="sm"
-                                  variant="outline-danger"
-                                  onClick={() => handleRemoveMember(member.user_id, member.user_role || UserRole.Member)}
-                                >
-                                  <i className="bi bi-person-dash me-1"></i>
-                                  Rimuovi
-                                </Button>
-                              )}
-                            </div>
-                          )}
-                        </ListGroup.Item>
+
+
+
+
+                        </div>
                       );
                     })}
-                </ListGroup>
-
-                {/* Trasferisci Proprietà (solo Owner) */}
-                {isOwner && !showTransferOwnership && (
-                  <Button
-                    variant="outline-warning"
-                    size="sm"
-                    className="mt-3 w-100"
-                    onClick={() => setShowTransferOwnership(true)}
-                  >
-                    <i className="bi bi-arrow-left-right me-2"></i>
-                    Trasferisci Proprietà
-                  </Button>
-                )}
-
-                {/* Form trasferimento proprietà */}
-                {isOwner && showTransferOwnership && (
-                  <div className="mt-3 p-3 border border-warning rounded">
-                    <h6 className="text-warning mb-3">Trasferisci Proprietà</h6>
-                    <p className="small text-muted mb-3">
-                      Seleziona un admin a cui trasferire la proprietà del gruppo. 
-                      Diventerai admin dopo il trasferimento.
-                    </p>
-                    <Form.Select
-                      value={selectedAdminForTransfer || ''}
-                      onChange={(e) => setSelectedAdminForTransfer(Number(e.target.value))}
-                      className="mb-3 bg-dark text-white"
-                    >
-                      <option value="">Seleziona un admin...</option>
-                      {members
-                        .filter(m => m.user_role === UserRole.Admin && m.user_id !== currentUserId)
-                        .map(m => (
-                          <option key={m.user_id} value={m.user_id}>
-                            {m.username || memberNames.get(m.user_id) || `Utente ${m.user_id}`}
-                          </option>
-                        ))}
-                    </Form.Select>
-                    <div className="d-flex gap-2">
-                      <Button
-                        variant="warning"
-                        size="sm"
-                        onClick={handleTransferOwnership}
-                        disabled={!selectedAdminForTransfer}
-                      >
-                        Conferma Trasferimento
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => {
-                          setShowTransferOwnership(false);
-                          setSelectedAdminForTransfer(null);
-                        }}
-                      >
-                        Annulla
-                      </Button>
-                    </div>
-                  </div>
-                )}
+                </div>
               </div>
             )}
 
             {/* Azioni */}
             <div className="mb-4">
-              <h5 className="text-uppercase text-muted mb-3">Azioni</h5>
-              <div className="d-grid gap-2">
-                {/* Pulisci chat - disponibile per tutti i tipi di chat */}
+              <div className="d-flex gap-2">
                 <Button
-                  variant="outline-warning"
+                  variant="warn"
                   onClick={handleCleanChat}
+                  className="flex-grow-1"
                 >
                   <i className="bi bi-eraser me-2"></i>
                   Pulisci chat
                 </Button>
-                
-                {/* Lascia chat - solo per chat di gruppo */}
+
                 {!isPrivate && (
                   <Button
-                    variant="outline-light"
+                    variant="danger"
                     onClick={handleLeaveChat}
+                    className="flex-grow-1"
                   >
                     <i className="bi bi-box-arrow-right me-2"></i>
                     Lascia la chat
