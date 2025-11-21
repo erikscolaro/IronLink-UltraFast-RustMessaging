@@ -1,0 +1,60 @@
+/* ChatInput Styles */
+
+.chatInputContainer {
+  padding: 0.5rem;
+  background-color: rgba(0, 0, 0, 0.4) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  height: fit-content;
+  border-radius: 2rem;
+  display: flex;
+  align-items: end;
+}
+
+.inputForm {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+  box-sizing: 'border-box';
+  background-color: transparent !important;
+  border: 3px solid transparent !important;
+  overflow: hidden;
+  resize: none;
+  margin-bottom: 4px;
+}
+
+.inputForm::placeholder {
+  color: rgba(255, 255, 255, 0.25) !important;
+}
+
+.inputForm:focus {
+  border: 3px solid transparent !important;
+}
+
+.sendButton {
+  padding: 0.75rem !important;
+  background-color: rgba(231, 76, 60, 0.8) !important;
+  color: white;
+  border: none;
+  border-radius: 2rem !important;
+  font-size: 1.25rem;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 50px;
+  width: 50px;
+}
+
+.sendButton:disabled {
+  background-color: rgba(231, 76, 60, 0.4) !important;
+  cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+  .chatInputContainer {
+    margin: 0.5rem;
+    margin-bottom: 0.25rem;
+  }
+}

@@ -1,0 +1,30 @@
+
+/* Common styles */
+
+.blur {
+  background-color: rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.shadow {
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.7);
+}
+
+
+/* Home Page Styles */
+
+.homeContainer {
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  padding: 1rem !important;
+  margin: 0 !important;
+}
+
+@media (max-width: 768px) {
+  .homeContainer {
+    height: 100dvh; /* Dynamic viewport height per mobile */
+    padding: 0 !important;
+  }
+}

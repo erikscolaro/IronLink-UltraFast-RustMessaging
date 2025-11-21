@@ -1,0 +1,42 @@
+/* ChatArea Styles */
+
+.chatArea {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: transparent;
+
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 1.2rem;
+  color: #7f8c8d;
+}
+
+.messagesContainer {
+  flex: 1;
+  overflow-y: scroll;
+  padding: 1rem;
+  background-color: transparent;
+    scrollbar-width: none;   /* Firefox */
+}
+
+.messagesContainer::-webkit-scrollbar {
+  display: none;           /* Chrome, Safari, Edge */
+}
+
+
+.emptyState {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: transparent;
+  font-size: 1.1rem;
+  text-align: center;
+  padding: 2rem;
+}

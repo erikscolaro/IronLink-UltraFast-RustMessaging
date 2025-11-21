@@ -1,0 +1,117 @@
+/* Login Page Styles - Tema vetro e ferro */
+
+.loginContainer {
+  height: 100vh;
+  width: 100vw;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden;
+}
+
+.leftPanel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ecf0f1;
+  padding: 3rem 2rem;
+  height: 100%;
+  border-radius:0 2em 2em;
+}
+
+@media (max-width: 768px) {
+  .leftPanel {
+    padding: 2rem 1rem;
+    max-height: fit-content;
+    flex-direction: column !important;
+  }
+  .loginContainer {
+    overflow-y: scroll;
+    height: auto;
+  }
+}
+
+.brandSection {
+  max-width: 600px;
+  text-align: left;
+}
+
+.brandTitle {
+  font-size: 4rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  color: #e74c3c;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+@media (max-width: 992px) {
+  .brandTitle {
+    font-size: 3rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .brandTitle {
+    font-size: 2.5rem;
+  }
+}
+
+.brandSubtitle {
+  font-size: 1.5rem;
+  margin-bottom: 2rem;
+  color: #bdc3c7;
+}
+
+@media (max-width: 768px) {
+  .brandSubtitle {
+    font-size: 1.2rem;
+    margin-bottom: 1rem;
+  }
+}
+
+.rightPanel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 2rem;
+  height: 100%;
+}
+
+@media (max-width: 768px) {
+  .rightPanel {
+    padding: 2rem 1rem;
+    height: 100%;
+  }
+}
+
+.formContainer {
+  width: 100%;
+  max-width: 400px;
+  padding: 2.5rem;
+  border-radius: 2rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.formTitle {
+  font-size: 2rem;
+  font-weight: 600;
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.label {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #34495e;
+}

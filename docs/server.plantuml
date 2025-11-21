@@ -1,102 +1,103 @@
-@startuml
+@startuml UML
+
+top to bottom direction
 
 class User {
-  +id: Uuid
+  +id: Option<u32>
   +username: String
-  +password_hash: String
-  +fn verify_password(&self, password: &str) -> bool
-  +fn change_password(&mut self, new_hash: String)
-  +fn new(username: String, password: String)
-  +fn delete(&mut self) -> Result<()>
-
-}
-
-class OnlineUsers {
-  +connections: HashMap<UserId, WebSocketConnection>
-  +fn check_if_online(&self, user_id: &UserId) -> bool
-  +fn get_connection(&self, user_id: &UserId) -> Option<&WebSocketConnection>
-  +fn add_connection(&mut self, user_id: UserId, conn: WebSocketConnection)
-  +fn remove_connection(&mut self, user_id: &UserId)
-  +fn deliver_or_store(&self, msg: Message) -> DeliveryResult
-  +fn broadcast_to_chat(&self, chat_members: Vec<UserId>, msg: &Message)
+  +password: String
+  +fn verify_password(&self, target_password: &String) -> bool
+  +fn hash_password(password: &str) -> Result<String, bcrypt::BcryptError>
 }
 
 class Message {
-  +id: Uuid
-  +chat_id: Uuid
-  +sender_id: Uuid
+  +id: u32
+  +chat_id: u32
+  +sender_id: u32
   +content: String
-  +type: MessageType
+  +message_type: MessageType
   +created_at: DateTime<Utc>
-  +fn new(chat_id: Uuid, sender_id: Uuid, content: String) -> Message
-  +fn search(chat_id: Uuid, content: String) -> List<&Message>
-  ' not user called
-  +fn delete_multiple(chat_id: uuid, delete_up_to_message_included: uuid)
-  ' note: messages are immutable once sent (no delete/edit)
-  +fn delete(messageId: uuid) -> Result<()>
 }
 
-class MessageDAO {
-    + fn delete_message(messageId: uuid)
-    + fn delete_multiple(chat_id: uuid, delete_up_to_message_included: uuid)
-}
-
-Message -- MessageDAO
-
-abstract Chat <<trait>> {
-  +fn send_message(&mut self, msg: Message) -> Result<()>
-  +fn get_messages(center: Option<MessageId>, before: Option<usize>, after: Option<usize> ): Vec<Message>
-  +fn is_member(&self, user_id: Uuid) -> bool
-  +fn get_members(&self) -> Vec<Uuid>
-  +fn delete(&mut self) -> Result<()>
-}
-
-class PrivateChat {
-  +id: Uuid
-  +fn new(user1: Uuid, user2: Uuid) -> PrivateChat
-}
-
-class GroupChat {
-  +id: Uuid
-  +title: String
-  +description: String
-  +fn new(title: String, description: String, owner_id: Uuid) -> GroupChat
-  +fn change_title(&mut self, new_title: String)
-  +fn change_description(&mut self, new_description: String)
-  +fn remove_user(&mut self, caller_user: Uuid ,target_user: Uuid) -> Result<()>
-  +fn transfer_ownership(&mut self, performed_by: Uuid, new_owner_id: Uuid) -> Result<()>
-  ' role changes / ownership are handled in UserChatMetadata
+class Chat {
+  +id: u32
+  +title: Option<String>
+  +description: Option<String>
+  +chat_type: ChatType
 }
 
 class UserChatMetadata {
-    +user_id: Uuid
-    +chat_id: Uuid
-    +last_delivered: Option<Uuid>
-    +deliver_from: Option<Uuid>
-    +role: Role
-    ' deliver from is none initially, the system message must be sended before user enters the group
-    ' otherwise deliver_from does not have a valid uuid to start with
-    +fn new(user_id: uuid, chat_id: uuid, last_delivered: MessageId) -> Self
-    +fn update_last_delivered(&mut self, msg_id: Uuid)
-    +fn update_deliver_from(&mut self, msg_id: Uuid)
-    +fn change_role(&mut self, performed_by: Uuid, new_role: Role) -> Result<()>
-    +fn delete(&mut self) -> Result<()>
-    ' calls delete on dao class
+    +user_id: u32
+    +chat_id: u32
+    +user_role: UserRole
+    +messages_visible_from: DateTime<Utc>
+    +messages_received_until: DateTime<Utc>
 }
 
 class Invitation {
-  +id: Uuid
-  +group_id: Uuid
-  +invited_user_id: Uuid
-  +invited_by_id: Uuid
-  +status: InvitationStatus
-  +fn new(group_id: Uuid, inviter: Uuid, invitee: Uuid) -> Self
-  ' must check if my uuid corresponds with the invitee
-  +fn get_pending_invitations(&self, invitee: uuid) -> Vec<Invitation>
-  'validation to be done before calling the method
-  +fn set_status(&mut self, invitation_id: uuid, new_status: InvitationStatus) -> Result<()>
-  ' invitations cannot be revoked/resend per your constraint
-  +fn delete(&mut self) -> Result<()>
+  +id: u32
+  +chat_id: u32
+  +invited_id: u32
+  +invitee_id: u32
+  +state: InvitationStatus
+}
+
+' Repository pattern with CRUD trait
+interface Crud<T, Id> <<trait>> {
+  +async fn create(&self, item: T) -> Result<T, sqlx::Error>
+  +async fn read(&self, id: Id) -> Result<Option<T>, sqlx::Error>
+  +async fn update(&self, item: T) -> Result<T, sqlx::Error>
+  +async fn delete(&self, id: Id) -> Result<(), sqlx::Error>
+}
+
+class UserRepository {
+  +connection_pool: MySqlPool
+  +fn new(connection_pool: MySqlPool) -> UserRepository
+  +async fn find_by_username(&self, username: &String) -> Result<Option<User>, Error>
+}
+
+class MessageRepository {
+  +connection_pool: MySqlPool
+  +fn new(connection_pool: MySqlPool) -> Self
+}
+
+class ChatRepository {
+  +connection_pool: MySqlPool
+  +fn new(connection_pool: MySqlPool) -> Self
+}
+
+class UserChatMetadataRepository {
+  +connection_pool: MySqlPool
+  +fn new(connection_pool: MySqlPool) -> Self
+}
+
+class InvitationRepository {
+  +connection_pool: MySqlPool
+  +fn new(connection_pool: MySqlPool) -> Self
+}
+
+class AppState {
+  +user: UserRepository
+  +chat: ChatRepository
+  +msg: MessageRepository
+  +invitation: InvitationRepository
+  +meta: UserChatMetadataRepository
+  +jwt_secret: String
+}
+
+class Claims {
+  +exp: usize
+  +iat: usize
+  +id: u32
+  +username: String
+}
+
+class AppError {
+  +code: StatusCode
+  +message: Option<String>
+  +details: Option<String>
+  +fn new(code: StatusCode, message: Option<String>, err: Option<E>) -> Self
+  +fn from_status(code: StatusCode) -> Self
 }
 
 
@@ -105,7 +106,7 @@ enum MessageType {
   SystemMessage
 }
 
-enum Role {
+enum UserRole {
   Owner
   Admin
   Standard
@@ -117,24 +118,35 @@ enum InvitationStatus {
   Rejected
 }
 
+enum ChatType {
+  Group
+  Private
+}
+
 ' Relationships
 UserChatMetadata "0..*" --> "1" User : belongs_to
-UserChatMetadata "0..*" --> "1" PrivateChat : metadata_for
-UserChatMetadata "0..*" --> "1" GroupChat : metadata_for
+UserChatMetadata "0..*" --> "1" Chat : metadata_for
 
 Message "0..*" --> "1" User : sender
-Message "0..*" --> "1" PrivateChat : in_private_chat
-Message "0..*" --> "1" GroupChat : in_group_chat
+Message "0..*" --> "1" Chat : in_chat
 
-OnlineUsers o-- "0..*" User : tracks
-
-GroupChat "0..*" --> "0..*" Invitation : has_invitations
+Chat "0..*" --> "0..*" Invitation : has_invitations
 Invitation "1" --> "1" User : invited_user
 Invitation "1" --> "1" User : invited_by
-Invitation "1" --> "1" GroupChat : target_group
+Invitation "1" --> "1" Chat : target_chat
 
-' trait implementation arrows
-GroupChat ..|> Chat
-PrivateChat ..|> Chat
+' Repository implementations
+UserRepository ..|> Crud : implements
+MessageRepository ..|> Crud : implements
+ChatRepository ..|> Crud : implements
+UserChatMetadataRepository ..|> Crud : implements
+InvitationRepository ..|> Crud : implements
+
+' App state aggregation
+AppState o-- UserRepository
+AppState o-- MessageRepository
+AppState o-- ChatRepository
+AppState o-- UserChatMetadataRepository
+AppState o-- InvitationRepository
 
 @enduml

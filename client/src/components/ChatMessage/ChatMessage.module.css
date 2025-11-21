@@ -1,0 +1,114 @@
+/* ChatMessage Styles */
+
+.messageContainer {
+  display: flex;
+  margin-bottom: 1rem;
+  padding: 0 1rem;
+}
+
+.ownMessage {
+  justify-content: flex-end;
+}
+
+.otherMessage {
+  justify-content: flex-start;
+}
+
+.messageCard {
+  max-width: 60%;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  word-wrap: break-word;
+}
+
+.messageCard.systemMessage {
+  color: white;
+  background-color: rgb(51, 51, 51) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.messageCard.ownMessage {
+  color: white;
+  background-color: rgba(208, 55, 38, 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.messageCard.otherMessage {
+  color: white;
+  background-color: rgba(0, 0, 0, 0.2) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.senderName {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  color: #95a5a6;
+}
+
+.ownMessage .senderName {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.messageCard.otherMessage .senderName {
+  color: #bdc3c7;
+}
+
+.messageContent {
+  font-size: 1rem;
+  line-height: 1.4;
+  margin-bottom: 0.25rem;
+}
+
+.messageFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.messageTime {
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
+.messageStatus {
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+}
+
+.systemMessage {
+  display: flex;
+  justify-content: center;
+  margin: 1rem 0;
+  padding: 0 1rem;
+}
+
+.systemContent {
+  padding: 0.5rem 1rem;
+  background-color: rgba(52, 73, 94, 0.1);
+  color: #34495e;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-style: italic;
+  text-align: center;
+  border: 1px solid rgba(52, 73, 94, 0.2);
+}
+
+
+.systemContainer {
+  display: flex;
+  flex-direction: column;       
+  justify-content: center;    
+  align-items: center;          
+  width: 100%;                  
+  box-sizing: border-box;       
+  overflow-y: auto;   
+  margin-bottom: 5px;          
+}
