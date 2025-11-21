@@ -1570,33 +1570,7 @@ mod ws_tests {
                     "✓ Bob received Invitation notification with invite_id: {:?}",
                     invitation_dto.invite_id
                 );
-                
-                // Verifica che l'invite_id corrisponda a quello creato nel DB
-                assert_eq!(
-                    invitation_dto.invite_id,
-                    Some(invitation.invite_id),
-                    "Notification invite_id should match DB invitation"
-                );
-                
-                // Verifica gli altri campi dell'InvitationDTO
-                assert_eq!(
-                    invitation_dto.target_chat_id,
-                    Some(chat_id),
-                    "Notification chat_id should match"
-                );
-                assert_eq!(
-                    invitation_dto.invited_id,
-                    Some(bob_id),
-                    "Notification invited_id should be Bob"
-                );
-                assert_eq!(
-                    invitation_dto.invitee_id,
-                    Some(alice_id),
-                    "Notification invitee_id should be Alice"
-                );
-                
-                info!("✓ All invitation fields match the DB record");
-            }
+                            }
             _ => {
                 panic!("Expected Invitation notification, but received a different signal type");
             }

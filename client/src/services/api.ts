@@ -270,6 +270,8 @@ export async function cleanChat(chatId: number): Promise<void> {
   await handleResponse<void>(response);
 }
 
+
+
 // ==================== INVITATIONS ====================
 
 export async function listPendingInvitations(): Promise<EnrichedInvitationDTO[]> {
