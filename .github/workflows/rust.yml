@@ -28,11 +28,22 @@ jobs:
         run: rustup target add ${{ matrix.target }}
 
       # --- Build Server Rust ---
-      - name: Build Server Release
+      - name: Build Server Release Windows
+        run: |
+          cd server
+          $env:RUSTFLAGS="-C opt-level=z -C lto -C codegen-units=1 -C panic=abort"
+          cargo build --release --target ${{ matrix.target }}
+        shell: pwsh
+        if: runner.os == 'Windows'
+      
+      - name: Build Server Release Linux
         run: |
           cd server
           RUSTFLAGS="-C opt-level=z -C lto -C codegen-units=1 -C panic=abort" \
           cargo build --release --target ${{ matrix.target }}
+        shell: bash
+        if: runner.os != 'Windows'
+
 
       - name: Zip Server Binary
         run: |
