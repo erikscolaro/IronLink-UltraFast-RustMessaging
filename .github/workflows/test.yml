@@ -10,13 +10,48 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
     steps:
-    - uses: actions/checkout@v4
-    - name: Build
-      run: |
-        cd server 
-        cargo build --verbose
-    - name: Run tests
-      run: |
-        cd server
-        cargo test --verbose
+      - uses: actions/checkout@v4
+
+      - name: Load .env
+        run: |
+          set -a
+          source server/.env
+          set +a
+
+      - name: Override DATABASE_URL for tests
+        run: |
+          # Imposta DATABASE_URL con root per i test SQLx
+          export DATABASE_URL="mysql://root:root@127.0.0.1:3306"
+          echo "DATABASE_URL=${DATABASE_URL}" >> $GITHUB_ENV
+
+      - name: Wait for MySQL
+        run: |
+          echo "Waiting for MySQL to be ready..."
+          for i in {1..30}; do
+            mysqladmin ping -h 127.0.0.1 -uroot -proot && break
+            sleep 2
+          done
+
+      - name: Build
+        run: |
+          cd server 
+          cargo build --verbose
+
+      - name: Run tests
+        run: |
+          cd server
+          cargo test --verbose
