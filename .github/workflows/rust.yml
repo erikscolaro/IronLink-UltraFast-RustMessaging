@@ -1,18 +1,14 @@
-name: Build and Release
+name: Build and Release Linux
 
 on:
   push:
     tags:
       - 'v*'  # Trigger solo su tag, es. v0.1.0
+  workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-        target: [x86_64-unknown-linux-gnu, x86_64-pc-windows-gnu]
-
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
 
@@ -24,31 +20,17 @@ jobs:
           profile: minimal
           override: true
 
-      - name: Add Rust target
-        run: rustup target add ${{ matrix.target }}
-
       # --- Build Server Rust ---
-      - name: Build Server Release Windows
-        run: |
-          cd server
-          $env:RUSTFLAGS="-C opt-level=z -C lto -C codegen-units=1 -C panic=abort"
-          cargo build --release --target ${{ matrix.target }}
-        shell: pwsh
-        if: runner.os == 'Windows'
-      
-      - name: Build Server Release Linux
+      - name: Build Server Release
         run: |
           cd server
           RUSTFLAGS="-C opt-level=z -C lto -C codegen-units=1 -C panic=abort" \
-          cargo build --release --target ${{ matrix.target }}
-        shell: bash
-        if: runner.os != 'Windows'
-
+          cargo build --release --target x86_64-unknown-linux-gnu
 
       - name: Zip Server Binary
         run: |
-          cd server/target/${{ matrix.target }}/release
-          zip -j server-${{ github.ref_name }}-${{ matrix.os }}.zip server
+          cd server/target/x86_64-unknown-linux-gnu/release
+          zip -j server-${{ github.ref_name }}-linux.zip server
 
       # --- Setup Node.js for frontend ---
       - name: Setup Node.js
@@ -68,8 +50,8 @@ jobs:
 
       - name: Zip Frontend Bundle
         run: |
-          cd frontend/src-tauri/target/release/bundle/${{ matrix.os }}
-          zip -r ../../../../frontend-${{ github.ref_name }}-${{ matrix.os }}.zip *
+          cd frontend/src-tauri/target/release/bundle/linux
+          zip -r ../../../../frontend-${{ github.ref_name }}-linux.zip *
 
       # --- Create GitHub Release ---
       - name: Create Release
@@ -90,8 +72,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./server/target/${{ matrix.target }}/release/server-${{ github.ref_name }}-${{ matrix.os }}.zip
-          asset_name: server-${{ github.ref_name }}-${{ matrix.os }}.zip
+          asset_path: ./server/target/x86_64-unknown-linux-gnu/release/server-${{ github.ref_name }}-linux.zip
+          asset_name: server-${{ github.ref_name }}-linux.zip
           asset_content_type: application/zip
 
       # --- Upload Frontend Bundle ---
@@ -101,6 +83,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./frontend/frontend-${{ github.ref_name }}-${{ matrix.os }}.zip
-          asset_name: frontend-${{ github.ref_name }}-${{ matrix.os }}.zip
+          asset_path: ./frontend/frontend-${{ github.ref_name }}-linux.zip
+          asset_name: frontend-${{ github.ref_name }}-linux.zip
           asset_content_type: application/zip
