@@ -940,51 +940,12 @@ cargo run --bin server
 
 ## 15. Deployment Diagram
 
+![Deployment Diagram](Deployment_diagram.png)
 
 
-```
- [Developer] -> CI/CD -> [Registry / Artifacts]
-                            |
-                            v
-                   +-----------------------+
-                   |  Reverse Proxy (nginx) |
-                   +-----------------------+
-                            |
-                            v
-    +-------------------+         +-------------------+
-    | App Server (Rust) |  <---->  |  MySQL Database   |
-    | (container/or VM) |         | (managed / RDS)   |
-    +-------------------+         +-------------------+
-             |
-             v
-       Optional: Metrics / Logs -> ELK / Prometheus
-```
 ## 16. Context Diagram
 
-```
-
-        +-------------------+            +----------------+
-        |    External       |            |   External     |
-        |    Identity / SSO  |            | Monitoring /   |
-        |    Provider       |            | Logging (ELK)  |
-        +---------+---------+            +--------+-------+
-            |                               |
-            v                               v
-          +--------------------------------+    +---------------------------+
-          |  Reverse Proxy (nginx)         |    |  CI/CD / Registry         |
-          |  (TLS, routing, compression)   |    |  (build images, artifacts)|
-          +---------------+----------------+    +-------------+-------------+
-              |                                   |
-              v                                   v
-            +-------------------+                 +-------------------+
-            |  App Server (Rust)| <--------------> |  Database (MySQL) |
-            |  (Axum + WS)      |                 |  (rugginedb)      |
-            +---+------+--------+                 +-------------------+
-          |      |
-          |      +--> ChatMap / UserMap (in-memory)
-          |
-          +--> Background tasks (metrics, cpu-monitor)
-```
+![Deployment Diagram](Context_diagram.png)
 
 ### Descrizione nodi
 
