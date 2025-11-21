@@ -100,4 +100,4 @@ client/target
 
 # CPU monitoring logs
 # Ignore all files ending with .log
-**/*.log
+*.log
