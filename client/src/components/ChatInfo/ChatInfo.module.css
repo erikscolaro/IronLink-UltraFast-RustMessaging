@@ -14,22 +14,34 @@
   overflow: hidden;
 }
 
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  background-color: rgba(0, 0, 0, 0.4) !important;
+  border-radius: 2rem;
+  position: absolute;
+  width: 100%;
+}
+
 @media (max-width: 767px) {
   .chatInfo {
     position: fixed;
     top: 0;
     right: 0;
     z-index: 1000;
-    border-radius: 0%;
+    border-radius: 0;
   }
+
   .header {
-    border-radius: 0%;
+    border-radius: 0;
   }
 }
 
 .listContainer {
   flex: 0 0 auto;
-  display: flex;  
+  display: flex;
   flex-direction: column;
   clip-path: inset(0 round 1rem);
   gap: 2px;
@@ -43,13 +55,13 @@
 }
 
 .badge {
-    color: rgb(255, 255, 255);
-    background-color: rgba(205, 58, 41, 0.8);
-    font-size: 0.75rem;
-    border-radius: 0.5rem;
-    padding: 0.1rem;
-    font-weight: bold;
-    height: 100%;
+  color: rgb(255, 255, 255);
+  background-color: rgba(205, 58, 41, 0.8);
+  font-size: 0.75rem;
+  border-radius: 0.5rem;
+  padding: 0.1rem;
+  font-weight: bold;
+  height: 100%;
 }
 
 .content {
@@ -59,22 +71,15 @@
   overflow: scroll;
   padding: 1rem;
   padding-top: 100px;
-  padding-bottom:80px;
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE 10+ */
+  padding-bottom: 80px;
+  scrollbar-width: none;
+  /* Firefox */
+  -ms-overflow-style: none;
+  /* IE 10+ */
 }
 
 
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem 1.5rem;
-  background-color: rgba(0, 0, 0, 0.4) !important;
-  border-radius: 2rem;
-  position: absolute;
-  width: 100%;
-}
+
 
 .title {
   font-size: 1.25rem;
@@ -181,4 +186,3 @@
 .searchResultItem:hover {
   background-color: #1a252f;
 }
-

@@ -20,7 +20,6 @@ export default function ChatInfo({ chat, isVisible, onClose, onStartInvite, onCh
   const [members, setMembers] = useState<UserChatMetadataDTO[]>([]);
   const [memberNames, setMemberNames] = useState<Map<number, string>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
-  const [showTransferOwnership, setShowTransferOwnership] = useState(false);
 
   const isPrivate = chat.chat_type === ChatType.Private;
 
@@ -177,7 +176,7 @@ export default function ChatInfo({ chat, isVisible, onClose, onStartInvite, onCh
   return (
     <div className={styles.chatInfo}>
       <div className={styles.header}>
-        <span className={styles.title}>Informazioni Chat</span>
+        <span className={styles.title}>Info {chat.chat_type==ChatType.Group?chat.title:""}</span>
         <Button variant="primary" onClick={onClose} className="text-white">
           <i className="bi bi-x-lg"></i>
         </Button>

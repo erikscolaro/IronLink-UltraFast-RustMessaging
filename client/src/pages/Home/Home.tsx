@@ -9,6 +9,7 @@ import ChatArea from '../../components/ChatArea/ChatArea';
 import ChatInfo from '../../components/ChatInfo/ChatInfo';
 import ProfileModal from '../../components/ProfileModal/ProfileModal';
 import styles from './Home.module.css';
+import { show } from '@tauri-apps/api/app';
 
 export default function Home() {
   const { onChatAdded, onChatRemoved, subscribeToChat } = useWebSocket();
@@ -110,7 +111,7 @@ export default function Home() {
         {/* Sidebar sinistra - nascosta su mobile quando c'è una chat selezionata */}
         <Col
           xs={12}
-          md={4}
+          md={3}
           className={`h-100 ${selectedChat ? 'd-none d-md-block' : ''}`}
         >
           <Sidebar
@@ -136,7 +137,7 @@ export default function Home() {
         {/* Area centrale della chat */}
         <Col
           xs={12}
-          md={showChatInfo ? 4 : 8}
+          md={showChatInfo ? 6 : 9}
           className={`h-100 ${!selectedChat ? 'd-none d-md-block' : ''}`}
         >
           {selectedChat ? (
@@ -157,7 +158,7 @@ export default function Home() {
 
         {/* Pannello info chat (se visibile) - hidden su mobile */}
         {selectedChat && showChatInfo && (
-          <Col xs={12} md={4} className="h-100 d-none d-md-block">
+          <Col xs={12} md={3} className="h-100">
             <ChatInfo
               chat={selectedChat}
               isVisible={showChatInfo}

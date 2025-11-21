@@ -42,6 +42,9 @@
   .chatName {
     font-size: 1.2rem;
   }
+  .chatHeader {
+    border-radius: 0%;
+  }
 }
 
 .chatDescription {
