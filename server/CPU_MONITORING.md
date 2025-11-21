@@ -89,3 +89,42 @@ async fn main() {
 
 - Il monitor misura solo l'utilizzo CPU del processo server. Non fornisce metriche di sistema (globali) né per-core.
 - L'accuratezza del valore dipende dall'implementazione di `sysinfo` sulla piattaforma target; i valori sono percentuali (0.0 - 100.0).
+
+## Strumenti e report
+
+Per facilitare l'analisi, è fornito uno script PowerShell che estrae le percentuali
+dal file `cpu_stats.log` e calcola statistiche riassuntive (count, min, max,
+average). Il file si trova in `tools/compute_cpu_stats.ps1`.
+
+Esempio d'uso (PowerShell):
+
+```pwsh
+# Stampa riepilogo su console
+.\n+tools\compute_cpu_stats.ps1 -LogPath .\cpu_stats.log
+
+# Esporta CSV e JSON
+.
+tools\compute_cpu_stats.ps1 -LogPath .\cpu_stats.log -OutCsv .\cpu_report.csv -OutJson .\cpu_report.json
+```
+
+Esempio di output del report:
+
+```
+CPU process usage report for: .\cpu_stats.log
+
+Count   : 11
+Min     : 6.67
+Max     : 66.67
+Average : 34.84
+Sum     : 383.24
+FirstTimestamp : 2025-11-21 16:04:35
+LastTimestamp  : 2025-11-21 16:24:35
+```
+
+Riferimenti pratici:
+
+- `debug` exe (per sviluppo): `target/debug/server.exe` — dimensione rilevata: **16.01 MB**
+- `release` exe (per distribuzione): `target/release/server.exe` — dimensione rilevata: **2.86 MB**
+
+Se vuoi, posso aggiungere un piccolo task CI o una GitHub Action che produce automaticamente
+questo report dopo ogni build sul branch `dev`.
