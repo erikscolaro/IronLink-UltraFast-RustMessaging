@@ -83,7 +83,7 @@ body {
   --c2: #4e4f51;
   --c3: #3c3c3c;
   overflow-x: hidden;
-  background-image: url("/public/background.jpg");
+  background-image: url("/background.jpg");
   background-size: cover;         /* mantiene ratio e taglia */
   background-position: left center; /* allinea a sinistra */
   background-repeat: no-repeat;   /* evita ripetizioni */
