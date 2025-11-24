@@ -128,3 +128,24 @@ Riferimenti pratici:
 
 Se vuoi, posso aggiungere un piccolo task CI o una GitHub Action che produce automaticamente
 questo report dopo ogni build sul branch `dev`.
+
+### Misure di compilazione (locale)
+
+- `Measure-Command { cargo build --release }` (misura eseguita nella workspace corrente): **0.61 s** (TotalMilliseconds: ~614.49)
+
+Nota: il tempo riportato sopra è relativo a una build nella workspace dove gli artefatti erano aggiornati (build incrementale).
+
+Esempio output di una build `--release` eseguita come *clean build* sulla stessa macchina (log troncato per brevità):
+
+```text
+PS C:\Users\User\OneDrive - University of Pisa\Polito\ANNO_1\2_SEM\Programmazione di sistema\RUGGINE\G43\server> cargo build --release
+    Compiling proc-macro2 v1.0.101
+    Compiling unicode-ident v1.0.19
+    Compiling version_check v0.9.5
+    ...
+    Compiling sysinfo v0.32.1
+    Compiling server v0.1.0 (C:\Users\User\OneDrive - University of Pisa\Polito\ANNO_1\2_SEM\Programmazione di sistema\RUGGINE\G43\server)
+     Finished `release` profile [optimized] target(s) in 4m 12s
+```
+
+Misura (clean build): **4 minuti 12 secondi**. I tempi di compilazione variano in base a CPU, I/O, cache e configurazione della toolchain.
