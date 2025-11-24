@@ -1,628 +1,1077 @@
-# Documentazione Ufficiale – **Ruggine: App di Chat Testuale**# Documentazione Ufficiale – **Ruggine: App di Chat Testuale**
+# Ruggine — Documentazione Tecnica
+
+
+
+## 1. Indice completo
+
+
+1. Indice completo
+2. Panoramica del progetto
+3. Tecnologie
+4. Installazione
+5. Configurazione
+6. Avvio
+7. Architettura del Sistema
+  - Diagramma generale
+  - Descrizione dei layer
+  - Comunicazioni HTTP/WS
+8. Architettura WebSocket (sezione dedicata)
+  - Analisi approfondita `connection.rs`
+  - Analisi approfondita `chatmap.rs`
+  - Task di lettura/scrittura
+  - Segnali interni
+  - Gestione utenti
+  - Messaggi e formati
+  - Esempi dettagliati
+9. Struttura del Progetto
+  - Albero directory aggiornato
+  - Descrizione responsabilità layer
+10. API Documentation
+  - Introduzione generale
+  - Meccanismi di autenticazione
+  - Endpoint Catalog (formato uniforme)
+11. WebSocket Protocol Documentation
+  - Endpoint
+  - Lifecycle connessione
+  - Eventi server → client
+  - Eventi client → server
+  - Errori, rate limiting, batching
+12. Database Schema
+  - Diagramma ER (ASCII)
+  - Tabelle dettagliate (tipi, PK/FK, note)
+  - Coerenza schema–modello
+13. Test
+   - Strategia
+   - White tests
+   - Test e2e
+   - `sqlx` mocking
+   - `axum` e2e
+   - `tarpaulin` coverage report
+14. Logging
+   - Stack logging
+   - Configurazioni
+   - Esempi
+15. Deployment Diagram & Context Diagram
+   - Diagramma ASCII
+   - Context Diagram
+   - Descrizione nodi
+   - Ambiente produzione/dev
+16. Documentazione Client
+   - Architettura front-end
+   - Descrizione di ogni pagina
+   - Descrizione dei componenti principali
+   - Interazioni con API e WS
+17. Dimensione del Compilato
+   - Misurazioni
+   - Ottimizzazioni
+18. Troubleshooting
+19. Sicurezza
+20. Performance
 
-
-
-## 1. Introduzione## 1. Introduzione
-
-**Ruggine** è un'applicazione client/server sviluppata in **Rust** per la gestione di chat testuali.  **Ruggine** è un’applicazione client/server sviluppata in **Rust** per la gestione di chat testuali.  
-
-L'obiettivo è fornire un sistema efficiente, sicuro e multi-piattaforma che consenta comunicazioni sia private che di gruppo.L’obiettivo è fornire un sistema efficiente, sicuro e multi–piattaforma che consenta comunicazioni sia private che di gruppo.
-
-
-
----## 2. Obiettivi del Progetto
-
-- Fornire un sistema di **messaggistica testuale** robusto e scalabile.
-
-## 2. Stato Corrente dell'Implementazione (Aggiornato: 5 Ottobre 2025)- Permettere la creazione di **gruppi di utenti**, accessibili solo tramite invito.
-
-- Garantire **portabilità** su almeno due piattaforme tra Windows, Linux, MacOS, Android, ChromeOS e iOS.
-
-### 2.1 Server Backend ✅ (80% Completato)- Ottimizzare **prestazioni** (CPU e dimensione binario).
-
-- Implementare un sistema di **logging** periodico delle risorse utilizzate dal server.
-
-#### ✅ **Completamente Implementato:**
-
-- **Architettura**: REST API + WebSocket con Axum framework (v0.8.4)## 4. Requisiti
-
-- **Database**: MySQL con SQLx (compile-time checked queries)
-
-- **Schema DB Completo**: ### 4.1 Requisiti Funzionali (Stato di implementazione)
-
-  - Tabelle: `users`, `chats`, `messages`, `userchatmetadata`, `invitations`- **Gestione utenti**: [x] Struttura implementata, [~] Login parziale, [ ] Altri endpoint da completare
-
-  - Tipi ENUM nativi: `USERMESSAGE/SYSTEMMESSAGE`, `OWNER/ADMIN/STANDARD`, `PENDING/ACCEPTED/REJECTED`, `GROUP/PRIVATE`- **Chat unificate**: [x] Modello unificato Chat (Group/Private), [ ] Logica di business da implementare  
-
-  - Tipi TIMESTAMP per gestione date UTC- **Messaggi**: [x] Modello implementato, [ ] Invio/ricezione da implementare
-
-  - Foreign keys con CASCADE e SET NULL appropriati- **Inviti**: [x] Modello implementato, [ ] Logica di business da implementare
-
-- **Autenticazione**: JWT Bearer Token completo- **Logging**: [ ] Non implementato
-
-  - Encoding/Decoding con `jsonwebtoken`
-
-  - Middleware di autenticazione funzionante### 4.2 Requisiti Non Funzionali
-
-  - Password hashing con `bcrypt`- Portabilità (almeno 2 piattaforme).
-
-- **Repository Layer Completo**: Pattern CRUD per tutti i modelli- Efficienza massima in CPU e memoria.
-
-  - `UserRepository` - Gestione utenti, ricerca username, autenticazione- Binario leggero, con dimensione riportata nel report.
-
-  - `ChatRepository` - Chat unificate (Group/Private), ricerca per titolo, chat tra utenti- Sicurezza con **JWT bearer token** per autenticazione e autorizzazione. [x] **Implementato**
-
-  - `MessageRepository` - Messaggi con paginazione, filtraggio temporale
-
-  - `UserChatMetadataRepository` - Ruoli, permessi, visibilità messaggi, gestione membri## 5. API REST (Implementazione Corrente)
-
-  - `InvitationRepository` - Gestione inviti con stati e timestamp
-
-- **Modelli Core**: Tutti definiti con serde + sqlx::Type### 5.1 Endpoints Implementati
-
-  - `User`, `Message`, `Chat`, `UserChatMetadata`, `Invitation`#### Autenticazione
-
-  - Conversioni automatiche da/verso ENUM MySQL- `POST /auth/login` [x] **Implementato** - Login utente con JWT
-
-- **Error Handling**: Sistema centralizzato con `AppError` e conversioni automatiche- `POST /auth/logout` [~] **Struttura pronta** - Logout utente  
-
-- **DTOs**: Strutture complete per comunicazione client-server- `POST /auth/register` [~] **Struttura pronta** - Registrazione utente
-
-  - `UserDTO`, `ChatDTO`, `MessageDTO`, `InvitationDTO`, `UserInChatDTO`
-
-  - `WsEventDTO` con tagged union per eventi WebSocket#### Utenti 
-
-- **WebSocket Infrastructure**:- `GET /users` [~] **Struttura pronta** - Ricerca utenti (query param `?search=...`)
-
-  - Handler WS con autenticazione JWT pre-upgrade- `GET /users/{id}` [~] **Struttura pronta** - Informazioni utente specifico
-
-  - Split read/write con MPSC channels (tokio)- `DELETE /users/me` [~] **Struttura pronta** - Cancellazione del proprio account
-
-  - User online tracking con `DashMap<i32, Sender<WsEventDTO>>`
-
-  - Gestione cleanup automatico su disconnessione#### Chat Unificate (Group + Private)
-
-- `GET /chats` [~] **Struttura pronta** - Lista delle chat dell'utente
-
-#### 🔄 **Parzialmente Implementato (40%):**- `POST /chats` [~] **Struttura pronta** - Creazione nuova chat
-
-- **Service Layer**: - `GET /chats/{id}/messages` [~] **Struttura pronta** - Messaggi di una chat
-
-  - ✅ `login_user` - Completamente funzionante con JWT e cookie- `GET /chats/{id}/members` [~] **Struttura pronta** - Lista membri di una chat
-
-  - ✅ `search_user_with_username` - Ricerca parziale con validazione
-
-  - ✅ `list_chats` - Lista chat dell'utente con join su metadata#### Gestione Gruppo
-
-  - ⚠️ `register_user` - Struttura pronta, logica da implementare- `POST /chats/{id}/invite` [~] **Struttura pronta** - Invito a gruppo
-
-  - ⚠️ `create_chat`, `get_chat_messages`, `list_chat_members` - `todo!()`- `DELETE /chats/{id}/members/{id}` [~] **Struttura pronta** - Rimozione membro
-
-  - ⚠️ `invite_to_chat`, `update_member_role`, `transfer_ownership` - `todo!()`- `POST /chats/{id}/leave` [~] **Struttura pronta** - Uscita da gruppo
-
-  - ⚠️ `remove_member`, `leave_chat` - `todo!()`- `PATCH /chats/{id}/members/{id}/role` [~] **Struttura pronta** - Cambio ruolo membro
-
-- **WebSocket Services (30%)**:- `PATCH /chats/{id}/members/{id}/transfer-ownership` [~] **Struttura pronta** - Trasferimento ownership
-
-  - ✅ Infrastruttura connessione completa
-
-  - ✅ Serializzazione/deserializzazione eventi### 5.2 Inviti Rimossi
-
-  - ✅ Funzione helper `send_error_to_user`Gli inviti sono ora gestiti tramite **messaggi di sistema** nelle chat private anziché endpoint dedicati.
-
-  - ⚠️ `process_chat_message` - `todo!()`
-
-  - ⚠️ `process_invitation` - `todo!()`## 6. WebSocket (Implementazione Futura)
-
-- **Nota**: La messaggistica in tempo reale verrà implementata successivamente
-
-#### ⏳ **Da Implementare:**- **Endpoint pianificato**: `WS /ws/chat`
-
-- Completare business logic per tutti gli endpoint con `todo!()`- **Funzionalità future**:
-
-- Validazione permessi basata su ruoli (middleware?)  - Invio messaggi in tempo reale
-
-- Sistema di logging risorse server (CPU, memoria ogni 2 minuti)  - Notifiche di typing  
-
-- Test unitari con database isolati (sqlx::test)  - Gestione utenti online (OnlineUsers)
-
-- Test integration per API REST e WebSocket
-
-- Rate limiting e security headers## 7. Modellazione (Implementazione Corrente)
-
-
-
-### 2.2 Client Frontend ❌ (0% Completato)### 7.1 Strutture Dati Implementate
-
-- Attualmente solo stub "Hello, world!" in `client/src/main.rs`#### Modelli Core
-
-- Struttura Rust pronta per lo sviluppo- `User` - Utente del sistema (ID: u32, username, password hash)
-
-- Da definire: - `Message` - Messaggio in chat (ID: u32, chat_id, sender_id, content, timestamp, tipo)
-
-  - UI framework (egui? iced? web con WASM?)- `Chat` - Chat unificata (ID: u32, titolo, descrizione, tipo: Group/Private)
-
-  - Gestione stato applicazione- `UserChatMetadata` - Metadati utente-chat (ruoli, messaggi visualizzati)
-
-  - Connessione WebSocket persistente- `Invitation` - Invito a gruppo (ID: u32, chat_id, utenti coinvolti, stato)
-
-  - Rendering messaggi e chat
-
-#### Repository Pattern
-
----- Trait `Crud<T, Id>` per operazioni CRUD generiche
-
-- Repository specifici: `UserRepository`, `MessageRepository`, `ChatRepository`, etc.
-
-## 3. Obiettivi del Progetto- Database: SQLite con SQLx
-
-- ✅ Fornire un sistema di **messaggistica testuale** robusto e scalabile
-
-- ✅ Chat **unificate** (gruppi e private con stesso modello)### 7.2 Enum Implementate
-
-- ⏳ Permettere la creazione di **gruppi di utenti**, accessibili solo tramite invito- `MessageType { UserMessage, SystemMessage }`
-
-- ⏳ Garantire **portabilità** su almeno due piattaforme- `UserRole { Owner, Admin, Standard }`
-
-- ⏳ Ottimizzare **prestazioni** (CPU e dimensione binario)- `InvitationStatus { Pending, Accepted, Rejected }`
-
-- ❌ Implementare un sistema di **logging** periodico delle risorse utilizzate dal server- `ChatType { Group, Private }`
-
-
-
----### 7.3 Architettura Sistema
-
-- `AppState` - Stato condiviso dell'applicazione (repositories + JWT secret)
-
-## 4. Requisiti- `Claims` - Payload JWT per autenticazione
-
-- `AppError` - Gestione errori unificata
-
-### 4.1 Requisiti Funzionali (Stato di implementazione)
-
-### 7.4 Schema Database (MySQL)
-
-#### **Gestione utenti**: 🟡 60%- Tabelle: `Users`, `Chats`, `Messages`, `UserChatMetadata`, `Invitations`
-
-- ✅ Modello e repository completo- Relazioni con foreign keys e cascading
-
-- ✅ Login con JWT funzionante- Indici per performance su query frequenti
-
-- ✅ Ricerca utenti per username (partial match)
-
-- ✅ Soft delete (username → "Deleted User")### UML
-
-- ⏳ Registrazione - struttura pronta, da implementare
-
-- ⏳ Cancellazione account - da implementare![Diagramma concettuale](server.png)
-
-- ⏳ Get user by ID - da implementare
-
-## 8. Tecnologie Utilizzate
-
-#### **Chat unificate**: 🟡 70%
-
-- ✅ Modello unificato Chat (Group/Private)### 8.1 Server (Rust)
-
-- ✅ Repository completo con query ottimizzate- **Framework Web**: Axum (async, performante)
-
-- ✅ Lista chat per utente- **Database**: MySQL con SQLx (compile-time checked queries)
-
-- ✅ Ricerca chat private tra due utenti- **Autenticazione**: jsonwebtoken + bcrypt
-
-- ✅ Ricerca gruppi per titolo- **Serialization**: serde (JSON)
-
-- ⏳ Creazione chat - da implementare- **Async Runtime**: tokio
-
-- ⏳ Gestione membri - da implementare- **Config**: dotenv per variabili d'ambiente
-
-
-
-#### **Messaggi**: 🟡 60%### 8.2 Client (Rust - In sviluppo)
-
-- ✅ Modello implementato con DateTime<Utc>- Struttura base creata ma non implementata
-
-- ✅ Repository con paginazione (limit/offset)
-
-- ✅ Filtraggio per chat_id## 9. Logging e Monitoraggio [ ] (Non Implementato)
-
-- ✅ Filtraggio per timestamp (dopo una certa data)- **Pianificato**: File di log generato dal server ogni 2 minuti
-
-- ⏳ Invio via WebSocket - infrastruttura pronta, logica da implementare- **Librerie da usare**: sysinfo + tracing
-
-- ⏳ Ricezione real-time - infrastruttura pronta, logica da implementare- **Metriche**: Tempo CPU, utilizzo memoria, connessioni attive
-
-
-
-#### **Inviti**: 🟡 50%## 10. Prossimi Passi per lo Sviluppo
-
-- ✅ Modello implementato con `created_at: DateTime<Utc>`
-
-- ✅ Repository completo (CRUD + ricerca pending)### 10.1 Priorità Alta
-
-- ✅ Check duplicati (has_pending_invitation)1. **Completare implementazione repository** - Sostituire `todo!()` con logica SQLx
-
-- ⏳ Logica invito tramite chat privata + messaggio sistema - da implementare2. **Implementare services layer** - Logica di business per tutti gli endpoints
-
-- ⏳ Accettazione/rifiuto inviti - da implementare3. **Testing database** - Setup test con database isolati
-
-4. **WebSocket server** - Messaggistica in tempo reale
-
-#### **WebSocket Real-time**: 🟡 50%
-
-- ✅ Infrastruttura completa### 10.2 Priorità Media  
-
-- ✅ Autenticazione JWT pre-upgrade1. **Client implementation** - Interface utente
-
-- ✅ Gestione connessioni multiple con DashMap2. **Logging system** - Monitoraggio risorse server
-
-- ✅ Split read/write tasks3. **Error handling migliorato** - Messaggi d'errore più specifici
-
-- ✅ Serializzazione eventi `WsEventDTO`4. **Validation layer** - Validazione input utente
-
-- ⏳ Business logic messaggi - da implementare
-
-- ⏳ Business logic inviti - da implementare### 10.3 Note di Sviluppo
-
-- ⏳ Notifiche typing - da implementare- **Database**: Schema MySQL completo e migrato
-
-- **Architecture**: Clean separation between layers (models, repositories, services)
-
-#### **Ruoli e Permessi**: 🟡 40%- **Security**: JWT implementato, password hashing con bcrypt
-
-- ✅ Enum `UserRole { Owner, Admin, Standard }`- **Performance**: SQLx per query compile-time checked, connection pooling configurato
-
-- ✅ Storage in `UserChatMetadata`
-
-- ✅ Query helper: `is_user_admin_or_owner`, `get_chat_owner`
-- ✅ Trasferimento ownership (transazione atomica)
-- ⏳ Middleware/validation per controllo permessi - da implementare
-- ⏳ Logica rimozione membri - da implementare
-
-#### **Logging**: ❌ 0%
-- ❌ Non implementato
-- Da implementare: sysinfo + tracing per monitoraggio CPU/memoria
-
-### 4.2 Requisiti Non Funzionali
-- ⏳ Portabilità (almeno 2 piattaforme)
-- ⏳ Efficienza massima in CPU e memoria
-- ⏳ Binario leggero, con dimensione riportata nel report
-- ✅ **Sicurezza con JWT bearer token** - Completamente implementato
-- ✅ **Password hashing con bcrypt** - Implementato
 
 ---
 
-## 5. API REST (Implementazione Corrente)
+## 2. Panoramica del progetto
 
-### 5.1 Endpoints Implementati
+Ruggine è un'applicazione di chat in tempo reale composta da un backend Rust (Axum + sqlx) e un frontend React/TypeScript (Vite). Il server espone API REST per gestione utenti, chat e inviti e un endpoint WebSocket autenticato per la comunicazione real-time (messaggi, inviti, notifiche). I messaggi sono persistiti su MySQL via `sqlx`. L'architettura privilegia separazione dei livelli (repositories/services/controllers) e un layer in-memory per il broadcasting via canali `tokio::sync::broadcast` gestiti da `ChatMap`.
 
-#### **Autenticazione**
-- `POST /auth/login` ✅ **Completamente funzionante**
-  - Input: `{ "username": "...", "password": "..." }`
-  - Output: JWT token in header `Authorization` e cookie `HttpOnly`
-- `POST /auth/register` ⚠️ **Struttura pronta** - `todo!()`
-
-<<<<<<< HEAD
-#### **Utenti** 
-- `GET /users?search=<username>` ✅ **Funzionante**
-  - Ricerca parziale username (min 3 caratteri)
-  - Limit 10 risultati
-- `GET /users/{user_id}` ⚠️ **Struttura pronta** - `todo!()`
-- `DELETE /users/me` ⚠️ **Struttura pronta** - `todo!()`
-=======
-#### Chat Unificate (Group + Private)
-- `GET /chats` [~] **Struttura pronta** - Lista delle chat dell'utente
-- `POST /chats` [~] **Struttura pronta** - Creazione nuova chat (se privata evita la creazione di duplicati)
-- `GET /chats/{id}/messages` [~] **Struttura pronta** - Messaggi di una chat
-- `GET /chats/{id}/members` [~] **Struttura pronta** - Lista membri di una chat
->>>>>>> 18bf51259401f13794d7c06b90eaf584356b5016
-
-#### **Chat Unificate (Group + Private)**
-- `GET /chats` ✅ **Funzionante**
-  - Lista tutte le chat dell'utente autenticato
-- `POST /chats` ⚠️ **Struttura pronta** - `todo!()`
-- `GET /chats/{chat_id}/messages` ⚠️ **Struttura pronta** - `todo!()`
-- `GET /chats/{chat_id}/members` ⚠️ **Struttura pronta** - `todo!()`
-
-#### **Gestione Gruppo**
-- `POST /chats/{chat_id}/invite/{user_id}` ⚠️ **Struttura pronta** - `todo!()`
-- `PATCH /chats/{chat_id}/members/{user_id}/role` ⚠️ **Struttura pronta** - `todo!()`
-- `PATCH /chats/{chat_id}/transfer_ownership` ⚠️ **Struttura pronta** - `todo!()`
-- `DELETE /chats/{chat_id}/members/{user_id}` ⚠️ **Struttura pronta** - `todo!()`
-- `POST /chats/{chat_id}/leave` ⚠️ **Struttura pronta** - `todo!()`
-
-### 5.2 WebSocket
-- `WS /ws` ✅ **Infrastruttura completa**
-  - Autenticazione JWT richiesta prima dell'upgrade
-  - Eventi supportati: `Message`, `Invitation`, `System`, `Error`
-  - ⚠️ Business logic handlers da implementare
+Obiettivi principali:
+- Comunicazione real-time efficiente (batching, broadcast)
+- Persistenza sicura dei messaggi
+- Middleware per autenticazione e membership
+- Test coverage e strumenti di analisi
 
 ---
 
-## 6. Modellazione (Implementazione Corrente)
+## 3. Tecnologie
 
-### 6.1 Strutture Dati Implementate
+Breve elenco delle tecnologie core usate nel server:
 
-#### **Modelli Core** (in `entities.rs`)
-```rust
-pub struct User {
-    pub user_id: i32,
-    pub username: String,
-    pub password: String, // bcrypt hash
+- Rust >= 1.70, runtime `tokio`
+- Web framework: `axum`
+- Database: MySQL con `sqlx`
+- Serializzazione: `serde`
+- Autenticazione: JWT (`jsonwebtoken`)
+- Hashing password: `bcrypt`
+- Concorrenza memorizzata: `dashmap`, `tokio::sync::broadcast`
+- Logging: `tracing`, `tracing_subscriber`
+
+## 4. Installazione
+
+Prerequisiti:
+
+- Rust (toolchain stabile / 1.70+)
+- MySQL 8.0+
+- Node.js + npm (per il client)
+
+Setup rapido (server):
+
+```pwsh
+#clone del repository
+git clone https://github.com/PdS2425-C2/G43.git
+cd G43/server
+
+#Installazione dipendeze
+cargo build
+```
+
+Setup database:
+
+```pwsh
+# Avviare MySQL
+mysql -u root -p
+
+# Eseguire lo script di migrazione
+source migrations/1_create_database.sql
+```
+
+
+## 5. Configurazione
+
+Creare un file `.env` nella root `server/` con le variabili minime:
+
+
+```env
+# Database Configuration
+DATABASE_URL=mysql://ruggine:ferro@127.0.0.1:3306/rugginedb
+
+# Server Configuration
+SERVER_HOST=127.0.0.1
+SERVER_PORT=3000
+
+# Database Pool Configuration
+MAX_DB_CONNECTIONS=1000
+DB_CONNECTION_LIFETIME_SECS=1
+
+# Security
+JWT_SECRET=your_super_secret_jwt_key_here
+
+# Environment
+APP_ENV=development
+LOG_LEVEL=info
+```
+
+### Variabili d'Ambiente
+
+| Variabile | Default | Descrizione |
+|-----------|---------|-------------|
+| `DATABASE_URL` | *(required)* | Connection string MySQL |
+| `JWT_SECRET` | *(warning se mancante)* | Secret key per JWT |
+| `SERVER_HOST` | `127.0.0.1` | Indirizzo di binding |
+| `SERVER_PORT` | `3000` | Porta del server |
+| `MAX_DB_CONNECTIONS` | `1000` | Max connessioni pool |
+| `DB_CONNECTION_LIFETIME_SECS` | `1` | Durata connessioni pool |
+| `APP_ENV` | `development` | Ambiente applicazione |
+| `LOG_LEVEL` | `info` | Livello di logging |
+
+## 6. Avvio
+
+Development:
+
+```pwsh
+cd server
+cargo run
+```
+
+Release:
+
+```pwsh
+cd server
+cargo build --release
+./target/release/server
+```
+
+Con hot-reload:
+
+```pwsh
+cargo install cargo-watch
+cargo watch -x run
+```
+
+Output di Avvio:
+
+```
+Attempting to connect to database...
+✓ Database connection established successfully!
+
+Config {
+    database_url: "mysql://ruggine:***@127.0.0.1:3306/rugginedb",
+    server_host: "127.0.0.1",
+    server_port: 3000,
+    max_connections: 1000,
+    connection_lifetime_secs: 1,
+    app_env: "development",
+    log_level: "info",
 }
 
-pub struct Message {
-    pub message_id: i32,
-    pub chat_id: i32,
-    pub sender_id: i32,
-    pub content: String,
-    pub created_at: DateTime<Utc>,
-    pub message_type: MessageType,
-}
+Server listening on http://127.0.0.1:3000
+```
+---
 
-pub struct Chat {
-    pub chat_id: i32,
-    pub title: Option<String>,
-    pub description: Option<String>,
-    pub chat_type: ChatType,
-}
+## 7. Architettura del Sistema
 
-pub struct UserChatMetadata {
-    pub user_id: i32,
-    pub chat_id: i32,
-    pub user_role: UserRole,
-    pub member_since: DateTime<Utc>,
-    pub messages_visible_from: DateTime<Utc>,
-    pub messages_received_until: DateTime<Utc>,
-}
+### Diagramma generale
 
-pub struct Invitation {
-    pub invite_id: i32,
-    pub target_chat_id: i32,
-    pub invited_id: i32,
-    pub invitee_id: i32,
-    pub state: InvitationStatus,
-    pub created_at: DateTime<Utc>,
+```
++----------------+        HTTPS/API        +--------------------+
+|   Client (UI)  | <---------------------> |  Reverse Proxy /   |
+| React + WS     |                          |  Load Balancer     |
++----------------+        WebSocket         +--------------------+
+        |                                         |
+        | HTTP/WS                                  | Forward
+        v                                         v
++----------------------+                   +-----------------------+
+|  Server (Axum, Rust) |                   |  Database (MySQL)     |
+| - REST API           |                   | - messages, users,    |
+| - WebSocket endpoint |                   |   chats, invitations  |
+| - ChatMap, UserMap   |                   +-----------------------+
+| - Services / Repos   |
++----------------------+                   (optional) Monitoring/Logs
+        |
+        v
++----------------+
+|  Background    |
+|  Tasks:        |
+|  - CPU monitor | 
+|  - Cleanup     |
++----------------+
+```
+
+### Descrizione dei layer
+
+- Transport layer: HTTP/HTTPS per API REST (Axum), WebSocket upgrade per canale real-time (`/ws`).
+- Application layer: Handler Axum che orchestrano autenticazione + chiamate a services e repository.
+- Services: Logica di business (inviti, messaggi, membership). Validano, trasformano DTO ↔ Entities.
+- Repositories: Accesso persistente via `sqlx` su MySQL.
+- Real-time layer: `ChatMap` (broadcast channels per chat) + `UserMap` (mappa utenti online) + per-connection tasks (read/write).
+- Persistence: MySQL con tabelle `users`, `chats`, `messages`, `invitations`, `userchatmetadata`.
+
+### Comunicazioni HTTP/WS
+
+- HTTP: REST endpoints per login/register, gestione utenti, chat, inviti.
+- WS: Endpoint `/ws` con autenticazione JWT (middleware) che esegue upgrade e poi `handle_socket` per split reader/writer.
+
+---
+
+## 8. Architettura WebSocket
+
+Questa sezione descrive in dettaglio il comportamento interno del modulo WebSocket (`server/src/ws`).
+
+Grafo funzionale (flow) dell'architettura WebSocket — mostra i componenti e il flusso dati/controllo:
+
+```
+Client (Browser)                           Reverse Proxy
+     |                                         |
+     |  HTTP Upgrade / Authorization Bearer    |
+     |---------------------------------------->|
+     |                                         |  forward
+     |                                         v
+     |                                  App Server (Axum)
+     |                                         |
+     |            WebSocket Upgrade (/ws)      |
+     |<--------------------------------------->|
+     |                                         |
+     v                                         v
+ +----------------+   spawn per-connection   +-------------------+
+ |  listen_ws     |<------------------------>|   write_ws        |
+ | (reader task)  |                          | (writer task)     |
+ +-------+--------+                          +-----+-------------+
+     |                                         |
+     | on text msg                              | sends batches
+     v                                         v
+   event_handlers::process_message           BroadcastStream from ChatMap
+     |                                         |
+     v                                         v
+   services/repositories -> persist message    ChatMap.send(chat_id, Arc<MessageDTO>)
+     |                                         |
+     v                                         v
+   If user in chat -> OK                     Receivers (other write_ws tasks)
+     |                                         |
+     +-----------------------------------------+
+          broadcast
+```
+
+Il grafo evidenzia i ruoli principali: client richiede upgrade (autenticato), il server crea due task per connessione (`listen_ws` e `write_ws`), `process_message` valida e persiste i messaggi e `ChatMap` si occupa del broadcasting ai writer task degli utenti connessi.
+
+### 8.1 Analisi approfondita `connection.rs`
+
+Ruolo: orchestrare la vita di una singola connessione WebSocket per utente autenticato. Le funzioni principali:
+- `handle_socket(ws: WebSocket, state: Arc<AppState>, user_id: i32)` — entry point per ogni connessione.
+- `write_ws(user_id, websocket_tx, internal_rx, state)` — task che invia dati al client.
+- `listen_ws(user_id, websocket_rx, internal_tx, state)` — task che riceve messaggi dal client e li elabora.
+
+Flusso generale di `handle_socket`:
+1. Split della connessione (`ws.split()`) in `ws_tx` e `ws_rx`.
+2. Creazione di un canale interno non-bounded (`unbounded_channel::<InternalSignal>()`) per ricevere segnali dall'applicazione a questa connessione.
+3. Registrazione dell'utente come online nello `UserMap` via `state.users_online.register_online(user_id, int_tx.clone())`.
+4. Spawn di due task concorrenti:
+   - `listen_ws(...)`: legge messaggi dal socket, effettua rate-limiting e timeout, deserializza in `MessageDTO` e chiama `process_message`.
+   - `write_ws(...)`: aggrega ricezioni dai canali broadcast (per le chat dell'utente), gestisce batching e segnali interni.
+
+Assunzioni implementative e parametri:
+- `RATE_LIMITER_MILLIS` (~10 ms) limita la frequenza di lettura (prevent brute force).
+- `TIMEOUT_DURATION_SECONDS` (~300 s) chiude la connessione se inattiva.
+- Batching: `BATCH_INTERVAL` (1000 ms) e `BATCH_MAX_SIZE` (10) — invio in batch verso client per efficienza.
+- `BROADCAST_CHANNEL_CAPACITY` controlla capienza canali broadcast.
+
+Cleanup e lifecycle:
+- Quando `listen_ws` rileva Close, timeout o errore, invia `InternalSignal::Shutdown` al writer.
+- `write_ws` risponde a `Shutdown` inviando batch finale e terminando.
+- Alla terminazione, l'utente viene rimosso da `UserMap` con `state.users_online.remove_from_online(&user_id)`.
+
+### 8.2 Analisi approfondita `chatmap.rs`
+
+Ruolo: mantenere una mappa thread-safe (`DashMap<i32, Sender<Arc<MessageDTO>>>`) che associa `chat_id` → `broadcast::Sender<Arc<MessageDTO>>`.
+
+Metodi chiave:
+- `new()` — crea `ChatMap` con `DashMap` vuota.
+- `subscribe(&self, chat_id: &i32) -> Receiver<Arc<MessageDTO>>` — se il canale esiste, ritorna un receiver; altrimenti crea un nuovo channel broadcast e lo inserisce.
+- `subscribe_multiple(chat_ids: Vec<i32>) -> Vec<Receiver<Arc<MessageDTO>>>` — sottoscrive multiple chat e ritorna i receivers.
+- `send(&self, chat_id: &i32, msg: Arc<MessageDTO>) -> Result<usize, SendError<Arc<MessageDTO>>>` — invia un messaggio al canale se esiste; se non ci sono ricevitori attivi rimuove il canale.
+
+Comportamento e trade-offs:
+- Uso di `Arc<MessageDTO>` evita copie costose tra sender e più receivers.
+- Se `send` fallisce perché nessun receiver, il canale viene rimosso per evitare leak di canali senza ascoltatori.
+- `subscribe` crea canali on-demand il che è efficiente per chat nuove ma può creare canali temporanei.
+
+### 8.3 Task di lettura/scrittura
+
+- Lettura (`listen_ws`): loop con `timeout(timeout_duration, StreamExt::next(&mut websocket_rx))`. Per ogni `Message::Text` viene tentata deserializzazione in `MessageDTO`. Se valida, si invoca `process_message`.
+  - Validazioni: conversione in `CreateMessageDTO`, `validator::Validate`, matching `sender_id == user_id`.
+  - In caso di invalidità o tentativi di spoofing, si invia `InternalSignal::Error` all'utente (via `users_online.send_server_message_if_online`).
+
+- Scrittura (`write_ws`): costruisce un `StreamMap` contenente i receivers delle chat a cui l'utente è iscritto. Riceve messaggi tramite il broadcast channel e li accumula in `batch`. Il batch viene inviato quando:
+  - la dimensione raggiunge `BATCH_MAX_SIZE`, o
+  - l'`interval` (BATCH_INTERVAL) scatta.
+
+- `internal_rx` (canale unbounded) permette di ricevere segnali interni:
+  - `Shutdown`: fermare la connessione
+  - `AddChat(chat_id)`: sottoscrivere una nuova chat e inviare notifica al client
+  - `RemoveChat(chat_id)`: rimuovere la sottoscrizione e notificare
+  - `Error(err_msg)`: inviare un messaggio di errore
+  - `Invitation(payload)`: inviare inviti arricchiti
+
+### 8.4 Segnali interni
+
+Segnali definiti in `usermap.rs` (`InternalSignal`): `Shutdown`, `AddChat(i32)`, `RemoveChat(i32)`, `Error(&'static str)`, `Invitation(EnrichedInvitationDTO)`.
+
+- L'uso di segnali consente al resto dell'app (services, repository) di comunicare rapidamente con connessioni attive.
+- `UserMap::send_server_message_if_online` esegue lookup e invio sul `UnboundedSender` dell'utente se online.
+
+### 8.5 Gestione utenti
+
+- Registrazione: al momento dell'upgrade WS, `handle_socket` invoca `state.users_online.register_online(user_id, int_tx.clone())`.
+- Rimozione: quando la connessione termina, `listen_ws` invia `Shutdown` e rimuove l'utente da `users_online`.
+- `UserMap` mantiene un `DashMap<i32, UnboundedSender<InternalSignal>>` per lookup O(1).
+
+### 8.6 Messaggi e formati
+
+DTO usati come payload principale: `MessageDTO` (client ↔ server) e `CreateMessageDTO` interno a validazione.
+
+`MessageDTO` (JSON):
+
+```json
+{
+  "message_id": 123,        // optional
+  "chat_id": 10,           // optional (ma necessario per Create)
+  "sender_id": 42,         // optional (ma necessario per Create)
+  "content": "ciao",
+  "message_type": "UserMessage", // enum: UserMessage | SystemMessage
+  "created_at": "2025-11-19T12:34:56Z"
 }
 ```
 
-#### **Enum Implementate** (con `sqlx::Type` + `rename_all = "UPPERCASE"`)
-```rust
-pub enum MessageType { UserMessage, SystemMessage }
-pub enum UserRole { Owner, Admin, Standard }
-pub enum InvitationStatus { Pending, Accepted, Rejected }
-pub enum ChatType { Group, Private }
+- Client → Server (invio messaggio): inviare `MessageDTO` che contenga almeno `chat_id`, `sender_id`, `content`, `message_type`, `created_at`. Viene poi convertito a `CreateMessageDTO` per validazione.
+- Server → Client (broadcast / batch): invio di array JSON di `MessageDTO` (batch), esempio:
+
+```json
+[
+  {"message_id":1,"chat_id":10,"sender_id":2,"content":"Hi","message_type":"UserMessage","created_at":"..."},
+  {"message_id":2,...}
+]
 ```
 
-#### **Repository Pattern**
-- Trait `Crud<T, Id>` per operazioni CRUD generiche
-- Repository specifici con metodi custom:
-  - `UserRepository`: `find_by_username`, `search_by_username_partial`
-  - `ChatRepository`: `get_chats_by_user`, `get_private_chat_between_users`, `get_groups_by_title`
-  - `MessageRepository`: `get_messages_by_chat_id`, `get_messages_after_timestamp`, `get_messages_with_limit`
-  - `UserChatMetadataRepository`: `get_members_by_chat`, `is_user_admin_or_owner`, `transfer_ownership`
-  - `InvitationRepository`: `get_pending_invitations_for_user`, `has_pending_invitation`
+- Segnali interni / notifiche: il writer invia JSON con chiave semantica, ad esempio:
+  - `{"AddChat": 123}`
+  - `{"RemoveChat": 123}`
+  - `{"Invitation": { ... EnrichedInvitationDTO ... }}`
+  - `{"Error": "Malformed message."}`
 
-#### **Architettura Sistema**
-```rust
-struct AppState {
-    user: UserRepository,
-    chat: ChatRepository,
-    msg: MessageRepository,
-    invitation: InvitationRepository,
-    meta: UserChatMetadataRepository,
-    jwt_secret: String,
-    users_online: DashMap<i32, Sender<WsEventDTO>>,
+### 8.7 Esempi dettagliati
+
+Esempio: flusso invio messaggio da client
+1. Client invia (via WS): JSON `MessageDTO` con campi necessari.
+2. Server (listen_ws) deserializza → `MessageDTO` → `CreateMessageDTO` (try_from).
+3. `event_handlers::process_message` verifica membership usando `state.meta.read((user_id, chat_id))`.
+4. `chats_online.send(&chat_id, Arc::from(msg))` per broadcasting ai receivers online.
+5. Persistenza: `state.msg.create(&input_message)` salva message su DB.
+6. Writer tasks dei client connessi (chat subscribers) ricevono il messaggio via `BroadcastStream` e lo includono nei batch per invio.
+
+Esempio: server notifica invito
+- Un servizio crea una `EnrichedInvitationDTO` e invoca `users_online.send_server_message_if_online(&target_user_id, InternalSignal::Invitation(inv))`.
+- Se l'utente è online, il writer riceve il segnale e invia `{"Invitation": {...}}` al client.
+
+---
+
+## 9. Struttura del Progetto
+
+### Albero directory 
+
+```
+/ (root)
+├─ client/                      # Frontend React + Vite (TypeScript)
+│  ├─ src/
+│  │  ├─ components/            # UI components
+│  │  ├─ context/               # Auth + WebSocket contexts
+│  │  ├─ pages/                 # Login, Home
+│  │  └─ services/              # api.ts, tauri.ts
+│  └─ vite.config.ts
+├─ server/                      # Backend Rust (Axum)
+│  ├─ src/
+│  │  ├─ core/                  # AppState, config, middleware
+│  │  ├─ dtos/                  # DTOs per API / WS
+│  │  ├─ entities/              # Domain entities (User, Chat, Message...)
+│  │  ├─ repositories/          # DB access (sqlx)
+│  │  ├─ services/              # Business logic
+│  │  └─ ws/                    # WebSocket implementation (chatmap, connection...)
+│  └─ migrations/
+└─ docs/
+```
+
+### Descrizione responsabilità layer
+
+- `core`: definisce `AppState` (pool DB, mappe in-memory), middleware (authentication, membership) e config.
+- `dtos`: oggetti scambiati con client (HTTP + WS).
+- `entities`: modelli interni coerenti con DB.
+- `repositories`: tutte le query e transazioni `sqlx`.
+- `services`: orchestrano logica, chiamano repositories e notificano utenti via `UserMap`/`ChatMap`.
+- `ws`: implementazione real-time con `ChatMap` e `UserMap`.
+
+---
+
+## 10. API Documentation
+
+### Introduzione generale
+
+- Tutte le rotte sono montate in `server/src/main.rs`.
+- Endpoint principali: `/auth/*`, `/users/*`, `/chats/*`, `/invitations/*`.
+- Autenticazione: JWT (middleware `authentication_middleware`). I token sono presenti nell'header `Authorization: Bearer <token>`.
+
+### Meccanismi di autenticazione
+
+- Login restituisce JWT.
+- Middleware `authentication_middleware` estrae e valida token e inserisce `Extension(User)` nei handler (usato anche per upgrade WS).
+
+### Endpoint Catalog (formato uniforme)
+
+Nota: Bodies e DTO si riferiscono a `server/src/dtos/*`.
+
+### POST /auth/login
+- URL: `/auth/login`
+- HTTP Method: POST
+- Protetta: No
+- Description: Effettua login e restituisce JWT.
+- Path parameters: None
+- Query parameters: None
+- Request body: `{ "username": "string", "password": "string" }`
+- Response status: 200 OK / 401 Unauthorized
+- Response body:
+
+```json
+{
+  "token": "<jwt>",
+  "user": { "user_id": 1, "username": "mario_rossi" }
 }
 ```
 
-### 6.2 Schema Database (MySQL)
-
-#### **Tabelle:**
-```sql
-CREATE TABLE users (
-    user_id INT PRIMARY KEY AUTO_INCREMENT,
-    username VARCHAR(255) UNIQUE NOT NULL,
-    password TEXT NOT NULL
-);
-
-CREATE TABLE chats (
-    chat_id INT PRIMARY KEY AUTO_INCREMENT,
-    title VARCHAR(255),
-    description TEXT,
-    chat_type ENUM('GROUP', 'PRIVATE') NOT NULL
-);
-
-CREATE TABLE messages (
-    message_id INT PRIMARY KEY AUTO_INCREMENT,
-    chat_id INT NOT NULL,
-    sender_id INT NOT NULL,
-    content TEXT NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    message_type ENUM('USERMESSAGE', 'SYSTEMMESSAGE') NOT NULL,
-    FOREIGN KEY (chat_id) REFERENCES chats(chat_id) ON DELETE CASCADE,
-    FOREIGN KEY (sender_id) REFERENCES users(user_id) ON DELETE CASCADE
-);
-
-CREATE TABLE userchatmetadata (
-    user_id INT NOT NULL,
-    chat_id INT NOT NULL,
-    user_role ENUM('OWNER', 'ADMIN', 'STANDARD') NOT NULL,
-    member_since TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    messages_visible_from TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    messages_received_until TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (user_id, chat_id),
-    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-    FOREIGN KEY (chat_id) REFERENCES chats(chat_id) ON DELETE CASCADE
-);
-
-CREATE TABLE invitations (
-    invite_id INT PRIMARY KEY AUTO_INCREMENT,
-    target_chat_id INT NOT NULL,
-    invited_id INT NOT NULL,
-    invitee_id INT NOT NULL,
-    state ENUM('PENDING', 'ACCEPTED', 'REJECTED') NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (target_chat_id) REFERENCES chats(chat_id) ON DELETE CASCADE,
-    FOREIGN KEY (invited_id) REFERENCES users(user_id) ON DELETE CASCADE,
-    FOREIGN KEY (invitee_id) REFERENCES users(user_id) ON DELETE SET NULL
-);
-```
-
-#### **Indici per Performance:**
-```sql
-CREATE INDEX idx_messages_chat_createdAt ON messages(chat_id, created_at DESC);
-CREATE INDEX idx_messages_sender ON messages(sender_id);
-CREATE INDEX idx_userchatmetadata_user ON userchatmetadata(user_id);
-CREATE INDEX idx_userchatmetadata_chat ON userchatmetadata(chat_id);
-```
-
-### 6.3 UML Diagram
-
-![Diagramma concettuale](server.png)
-
 ---
 
-## 7. Tecnologie Utilizzate
+### POST /auth/register
+- URL: `/auth/register`
+- HTTP Method: POST
+- Protetta: No
+- Description: Registra nuovo utente.
+- Path parameters: None
+- Query parameters: None
+- Request body:
 
-### 7.1 Server (Rust)
-```toml
-[dependencies]
-axum = { version = "0.8.4", features = ["ws"] }
-sqlx = { version = "0.8.6", features = ["mysql", "runtime-tokio-native-tls", "macros", "chrono", "migrate"] }
-tokio = { version = "1.47.1", features = ["full"] }
-serde = { version = "1.0.226", features = ["derive"] }
-serde_json = "1.0.145"
-chrono = { version = "0.4.42", features = ["serde"] }
-bcrypt = "0.17.1"
-jsonwebtoken = "9.3.1"
-dashmap = "6.1.0"
-futures-util = "0.3.31"
-dotenv = "0.15.0"
-axum-macros = "0.5.0"
+```json
+{ "username": "mario_rossi", "password": "SecurePass123!" }
 ```
+- Response status: 201 Created / 400 Bad Request
+- Response body:
 
-**Stack:**
-- **Framework Web**: Axum (async, performante, basato su Tokio)
-- **Database**: MySQL con SQLx (compile-time checked queries)
-- **Autenticazione**: jsonwebtoken + bcrypt
-- **Serialization**: serde + serde_json
-- **Async Runtime**: tokio
-- **Concurrency**: DashMap per thread-safe HashMap
-- **Config**: dotenv per variabili d'ambiente
-- **WebSocket**: axum built-in WebSocket support
-
-### 7.2 Client (Rust - In sviluppo)
-- Struttura base creata ma non implementata
-- Da decidere framework UI
-
----
-
-## 8. Prossimi Passi per lo Sviluppo
-
-### 8.1 Priorità Alta 🔴
-1. **Completare Service Layer** (10 endpoint con `todo!()`)
-   - Registrazione utenti
-   - Creazione chat (private e gruppo)
-   - Invio/ricezione messaggi
-   - Gestione membri gruppo
-2. **Implementare WebSocket Business Logic**
-   - Handler `process_chat_message`
-   - Handler `process_invitation`
-   - Broadcasting messaggi ai membri chat
-3. **Sistema Permessi**
-   - Middleware/helper per verificare ruoli
-   - Validazione azioni admin/owner only
-
-### 8.2 Priorità Media 🟡
-1. **Testing**
-   - Unit tests per repositories (sqlx::test con DB isolato)
-   - Integration tests per API REST
-   - WebSocket connection tests
-2. **Validazione Input**
-   - Validation layer per DTOs
-   - Sanitizzazione input utente
-3. **Error Handling Migliorato**
-   - Messaggi d'errore più specifici
-   - Logging errori lato server
-
-### 8.3 Priorità Bassa 🟢
-1. **Client Implementation** - Interface utente
-2. **Logging System** - Monitoraggio risorse server ogni 2 minuti (sysinfo + tracing)
-3. **Performance Optimization**
-   - Profiling con flamegraph
-   - Ottimizzazione query database
-   - Connection pooling tuning
-4. **Deployment**
-   - Containerizzazione (Docker)
-   - CI/CD pipeline
-   - Documentazione deployment
-
----
-
-## 9. Note di Sviluppo
-
-### 9.1 Decisioni Architetturali
-- **Database**: MySQL scelto per supporto ENUM nativi e TIMESTAMP con timezone
-- **ENUM Storage**: Valori UPPERCASE nel database (`'OWNER'`, `'PENDING'`, etc.)
-- **Timestamp**: `TIMESTAMP` per date (UTC), mappato a `DateTime<Utc>` in Rust
-- **Password**: Hashing con bcrypt (cost factor: DEFAULT_COST)
-- **JWT**: Expirazione 24 ore, cookie HttpOnly + header Authorization
-- **WebSocket**: Split read/write per performance, MPSC channels per comunicazione interna
-- **Soft Delete**: Username → "Deleted User", password → "" per preservare history messaggi
-
-### 9.2 Convenzioni Codice
-- **Naming DB**: `snake_case` per colonne (`user_id`, `chat_id`, `created_at`)
-- **Naming Rust**: `snake_case` per fields, `PascalCase` per types/enums
-- **Error Handling**: Propagazione con `?`, conversione automatica a `AppError`
-- **Async**: Tutto async con tokio runtime
-- **Repository**: Metodi async che ritornano `Result<T, sqlx::Error>`
-- **Service**: Metodi async che ritornano `Result<T, AppError>`
-
-### 9.3 File Structure
-```
-server/
-├── src/
-│   ├── main.rs              # Entry point, routing, server setup
-│   ├── entities.rs          # Data models (User, Chat, Message, etc.)
-│   ├── repositories.rs      # Database access layer (CRUD + custom queries)
-│   ├── services.rs          # Business logic layer (endpoints handlers)
-│   ├── dtos.rs              # Data Transfer Objects (client communication)
-│   ├── auth.rs              # JWT encoding/decoding + middleware
-│   ├── error_handler.rs     # Centralized error handling
-│   ├── ws_services.rs       # WebSocket handlers and logic
-│   ├── config.rs            # Configuration management
-│   └── middlewares.rs       # Custom middlewares
-├── migrations/              # SQL migration files
-│   └── 1_create_database.sql
-├── fixtures/                # Test data SQL files
-│   ├── popolate_users.sql
-│   └── popolate_messages.sql
-├── Cargo.toml              # Dependencies
-└── .env                    # Environment variables (DATABASE_URL, JWT_SECRET)
+```json
+{ "user_id": 1, "username": "mario_rossi" }
 ```
 
 ---
 
-## 10. Metriche Progetto
+### GET /users
+- URL: `/users/`
+- HTTP Method: GET
+- Protetta: Sì
+- Description: Cerca utenti per username (query param)
+- Path parameters: None
+- Query parameters: `username` (string, partial search)
+- Request body: None
+- Response status: 200 OK
+- Response body:
 
-- **Totale Linee Codice Server**: ~2000 linee
-- **Coverage Implementazione**: 80%
-- **Endpoints REST**: 13 definiti, 3 funzionanti (23%)
-- **Repository Methods**: 45+ metodi implementati
-- **Database Tables**: 5 tabelle complete
-- **Enum Types**: 4 enum native MySQL
-- **WebSocket Handlers**: Infrastruttura completa, business logic 30%
+```json
+[
+  { "user_id": 1, "username": "mario_rossi" },
+  { "user_id": 5, "username": "mario_bianchi" }
+]
+```
 
 ---
 
-## 11. Contatti e Contributi
+### GET /users/me
+- URL: `/users/me`
+- HTTP Method: GET
+- Protetta: Sì
+- Description: Ottiene informazioni sull'utente autenticato.
+- Path parameters: None
+- Query parameters: None
+- Request body: None
+- Response status: 200 OK
+- Response body:
 
-**Team**: G43  
-**Repository**: PdS2425-C2/G43  
-**Branch Attivo**: `dev`  
-**Branch Produzione**: `main`
+```json
+{ "user_id": 1, "username": "mario_rossi" }
+```
 
 ---
 
-*Ultimo aggiornamento: 5 Ottobre 2025*
+### GET /users/{user_id}
+- URL: `/users/{user_id}`
+- HTTP Method: GET
+- Protetta: Sì
+- Description: Recupera utente per `user_id`.
+- Path parameters: `user_id` (int)
+- Query parameters: None
+- Request body: None
+- Response status: 200 OK / 404 Not Found
+- Response body:
+
+```json
+{ "user_id": 1, "username": "mario_rossi" }
+```
+
+---
+
+### GET /chats
+- URL: `/chats/`
+- HTTP Method: GET
+- Protetta: Sì
+- Description: Lista chat dell'utente (con metadati come ruolo e unread)
+- Request body: None
+- Response status: 200 OK
+- Response body:
+
+```json
+[
+  { "chat_id": 1, "title": "Team Project", "description": "Progetto università", "chat_type": "GROUP", "my_role": "OWNER", "unread_messages": 5, "last_message_at": "2025-11-05T14:30:00Z" }
+]
+```
+
+---
+
+### POST /chats
+- URL: `/chats/`
+- HTTP Method: POST
+- Protetta: Sì
+- Description: Crea nuova chat
+- Request body (Group):
+
+```json
+{ "title": "New Project Group", "description": "Chat per il nuovo progetto", "chat_type": "GROUP" }
+```
+
+- Request body (Private):
+
+```json
+{ "chat_type": "PRIVATE", "other_user_id": 5 }
+```
+- Response status: 201 Created
+- Response body:
+
+```json
+{ "chat_id": 3, "title": "New Project Group", "description": "Chat per il nuovo progetto", "chat_type": "GROUP" }
+```
+
+---
+
+### GET /chats/{chat_id}/messages
+- URL: `/chats/{chat_id}/messages`
+- HTTP Method: GET
+- Protetta: Sì (membership)
+- Description: Recupera messaggi di una chat (paginati)
+- Path parameters: `chat_id` (int)
+- Query parameters: `limit`, `before`, `after`
+- Request body: None
+- Response status: 200 OK
+- Response body:
+
+```json
+[
+  { "message_id": 10, "chat_id": 1, "sender_id": 2, "content": "Hi", "message_type": "USERMESSAGE", "created_at": "2025-11-05T14:00:00Z" }
+]
+```
+
+---
+
+### GET /chats/{chat_id}/members
+- URL: `/chats/{chat_id}/members`
+- HTTP Method: GET
+- Protetta: Sì (membership)
+- Description: Lista membri della chat
+- Response status: 200 OK
+- Response body:
+
+```json
+[
+  { "user_id": 1, "username": "mario_rossi", "user_role": "OWNER" }
+]
+```
+
+---
+
+### POST /chats/{chat_id}/invite/{user_id}
+- URL: `/chats/{chat_id}/invite/{user_id}`
+- HTTP Method: POST
+- Protetta: Sì (membership)
+- Description: Invia invito a `user_id` a unirsi alla chat
+- Path parameters: `chat_id`, `user_id`
+- Request body: None
+- Response status: 200 OK / 404 Not Found
+- Response body (example EnrichedInvitationDTO):
+
+```json
+{
+  "invite_id": 10,
+  "target_chat_id": 1,
+  "invited_id": 5,
+  "invitee_id": 1,
+  "state": "PENDING",
+  "created_at": "2025-11-05T15:00:00Z"
+}
+```
+
+Note: se il target è online, il server invia un `InternalSignal::Invitation` via `UserMap`.
+
+---
+
+### PATCH /chats/{chat_id}/members/{user_id}/role
+- URL: `/chats/{chat_id}/members/{user_id}/role`
+- HTTP Method: PATCH
+- Protetta: Sì (membership)
+- Description: Aggiorna ruolo membro (OWNER|ADMIN|MEMBER)
+- Request body:
+
+```json
+{ "user_role": "ADMIN" }
+```
+- Response status: 200 OK
+
+---
+
+### PATCH /chats/{chat_id}/transfer_ownership/{new_owner_id}
+- URL: `/chats/{chat_id}/transfer_ownership/{new_owner_id}`
+- HTTP Method: PATCH
+- Protetta: Sì
+- Description: Trasferisce ownership della chat
+- Response status: 200 OK
+
+---
+
+### DELETE /chats/{chat_id}/members/{user_id}
+- URL: `/chats/{chat_id}/members/{user_id}`
+- HTTP Method: DELETE
+- Protetta: Sì
+- Description: Rimuove membro dalla chat
+- Response status: 204 No Content
+
+---
+
+### POST /chats/{chat_id}/leave
+- URL: `/chats/{chat_id}/leave`
+- HTTP Method: POST
+- Protetta: Sì
+- Description: L'utente autenticato lascia la chat
+- Response status: 200 OK
+
+---
+
+### POST /chats/{chat_id}/clean
+- URL: `/chats/{chat_id}/clean`
+- HTTP Method: POST
+- Protetta: Sì
+- Description: Pulisce la chat (admin/owner)
+- Response status: 200 OK
+
+---
+
+### GET /invitations/pending
+- URL: `/invitations/pending`
+- HTTP Method: GET
+- Protetta: Sì
+- Description: Lista inviti pendenti per utente
+- Response status: 200 OK
+- Response body (example array):
+
+```json
+[
+  { "invite_id": 10, "target_chat_id": 1, "invited_id": 5, "invitee_id": 1, "state": "PENDING", "created_at": "2025-11-05T15:00:00Z" }
+]
+```
+
+---
+
+### POST /invitations/{invite_id}/{action}
+- URL: `/invitations/{invite_id}/{action}`
+- HTTP Method: POST
+- Protetta: Sì
+- Description: Rispondi a invito; `action` = `accept|reject`
+- Path params: `invite_id`, `action`
+- Response status: 200 OK
+
+---
+
+### WebSocket endpoint: /ws
+- URL: `/ws`
+- HTTP Method: GET (upgrade WebSocket)
+- Protetta: Sì (middleware `authentication_middleware`)
+- Description: Upgrade autenticato a connessione WebSocket per ricevere/send messaggi real-time.
+
+Note generali:
+- Tutte le rotte marchiate come protette richiedono header `Authorization: Bearer <token>`.
+- I DTO sono definiti in `server/src/dtos`.
+
+---
+
+## 11. WebSocket Protocol Documentation
+
+### Endpoint
+
+- `/ws` — upgrade dal client autenticato. Il middleware inserisce `Extension(User)` per `user_id` usato da `handle_socket`.
+
+### Lifecycle connessione
+
+1. Client richiede upgrade WS a `/ws` con token.
+2. Server verifica il JWT (middleware) e recupera `User`.
+3. `ws_handler` esegue upgrade e chiama `handle_socket(socket, state, user_id)`.
+4. `handle_socket` crea `internal_channel`, registra l'utente e avvia `listen_ws` e `write_ws`.
+5. Durante la vita della connessione: client invia `MessageDTO` → server elabora; server invia batch di `MessageDTO` e notifiche.
+6. Alla chiusura o timeout, `Shutdown` e rimozione utente da `UserMap`.
+
+### Eventi server → client
+
+- `Batch Messages` (array di `MessageDTO`) — invio periodico o a batch_size.
+- `AddChat` / `RemoveChat` — notifiche con forma `{"AddChat": chat_id}`.
+- `Invitation` — `{"Invitation": EnrichedInvitationDTO}`.
+- `Error` — `{"Error": "message"}`.
+
+Esempio JSON batch:
+
+```json
+[   
+    {"message_id":1,...}, 
+    {"message_id":2,...} 
+]
+```
+
+### Eventi client → server
+
+- `MessageDTO` — invio messaggi. Il server aspetta campi necessari per creare `CreateMessageDTO` (`chat_id`, `sender_id`, `content`, `message_type`, `created_at`).
+
+Esempio client→server:
+
+```json
+{
+    "chat_id":10,
+    "sender_id":42,
+    "content":"Ciao",
+    "message_type":"UserMessage","created_at":"2025-11-19T12:34:56Z"
+}
+```
+
+### Errori, rate limiting, batching
+
+- Rate limiting lato server: `RATE_LIMITER_MILLIS` (10 ms) → limite pratico ~100 msg/s per connessione.
+- Timeout inattività: `TIMEOUT_DURATION_SECONDS` (300s) → chiusura automatica.
+- Batching: `BATCH_INTERVAL` (1000 ms) e `BATCH_MAX_SIZE` (10) per ridurre overhead di invio.
+- Error handling: invalid message → `InternalSignal::Error` notificato al client; tentativi di spoofing o violazioni → rejection e log.
+- Se il channel broadcast non ha receivers, `ChatMap::send` ritorna errore e il messaggio viene comunque persistito sul DB per consegna successiva.
+
+---
+
+## 12. Database Schema
+
+### Diagramma ER
+
+```
++--------+      +-----------------+      +----------+
+| users  |<---->| userchatmetadata|<---->| chats    |
+| (PK)   |      | (PK: chat_id,   |      | (PK)     |
+| user_id|      |       user_id)  |      | chat_id  |
++--------+      +-----------------+      +----------+
+     |                |  ^   ^               |
+     |                |  |   |               |
+     |                |  |   +-----------+   |
+     |                |  |               |   |
+     +--< messages >--+  +--< invitations >--+
+
+Tables:
+- users
+- chats
+- messages
+- invitations
+- userchatmetadata
+```
+
+### Tabelle dettagliate
+
+1) `users`
+- `user_id` INT PK AUTO_INCREMENT
+- `username` VARCHAR(255) UNIQUE NOT NULL
+- `password` TEXT NOT NULL (bcrypt hashed)
+
+2) `chats`
+- `chat_id` INT PK AUTO_INCREMENT
+- `title` VARCHAR(255)
+- `description` TEXT
+- `chat_type` ENUM('GROUP','PRIVATE') NOT NULL
+
+3) `messages`
+- `message_id` INT PK AUTO_INCREMENT
+- `chat_id` INT FK -> `chats.chat_id` ON DELETE CASCADE
+- `sender_id` INT FK -> `users.user_id` ON DELETE CASCADE
+- `content` TEXT NOT NULL
+- `message_type` ENUM('USERMESSAGE','SYSTEMMESSAGE')
+- `created_at` TIMESTAMP NOT NULL
+- Indici: `(chat_id, created_at DESC)`, `(sender_id)`
+
+4) `invitations`
+- `invite_id` INT PK AUTO_INCREMENT
+- `target_chat_id` INT FK -> `chats.chat_id`
+- `invited_id` INT FK -> `users.user_id`
+- `invitee_id` INT FK -> `users.user_id`
+- `state` ENUM('PENDING','ACCEPTED','REJECTED')
+- `created_at` TIMESTAMP
+- Unique constraint: `(target_chat_id, invited_id, state)`
+
+5) `userchatmetadata`
+- PK (`chat_id`,`user_id`)
+- `messages_visible_from` TIMESTAMP NOT NULL
+- `messages_received_until` TIMESTAMP NOT NULL
+- `user_role` ENUM('OWNER','ADMIN','MEMBER')
+- `member_since` TIMESTAMP NOT NULL
+
+
+
+---
+
+---
+
+## 13. Test
+
+### Strategia
+
+- Test unitari (white tests) per repository e middleware (autenticazione, membership).
+- Test di integrazione/e2e su servizi critici (services + repository) usando `axum` test utilities e un database di test (fixture SQL o container). Uso di `sqlx` per interagire con DB; in test si può usare `sqlx::Sqlite` o MySQL in-memory/isolato.
+- Report di coverage con `tarpaulin` (per Rust) e strumenti JS per client.
+
+### White tests (unit)
+
+- Repositories: testare le query SQL in isolamento usando `sqlx::test` e fixture su DB di test.
+- Middleware: testare comportamento di `authentication_middleware` (header mancanti, token invalidi) con request fittizie.
+
+### Test e2e
+
+- Avviare `axum` in tokio test runtime e chiamare endpoint reali (es. login -> create chat -> invite -> websocket upgrade).
+- Per WS, usare client WebSocket di test (ad esempio `tokio-tungstenite`) per simulare upgrade e verificare flussi di messaggi end-to-end.
+
+### `sqlx` mocking
+
+- `sqlx` permette di usare un database reale nelle suite di test, oppure usare feature `offline` con query compile-time check e database di test.
+- Fixtures SQL si trovano in `server/fixtures/` (users.sql, chats.sql, messages.sql, invitations.sql) e devono essere caricate prima dei test e2e.
+
+### `axum` e2e
+
+- Usare `axum::Router` con state di test e layer middleware identici a produzione; chiamare handlers con `tower::Service` o `reqwest` su listener TCP.
+
+
+
+---
+
+## 14. Logging
+
+### Stack logging
+
+- Libreria: `tracing` + `tracing_subscriber`.
+- In `main.rs` si inizializza `tracing_subscriber::EnvFilter` con valore prelevato dalla configurazione (`RUST_LOG` o `config.log_level`).
+- Layer: `fmt::layer()` per formatting di logs.
+
+### Formati
+
+- Default: plain text legibile.
+- Possibile JSON: `tracing_subscriber::fmt().json()` per output strutturato in produzione e log shipping.
+
+### Configurazioni
+
+- Variabili d'ambiente: `RUST_LOG` (es. `server=info,tower_http=debug`) o `LOG_LEVEL` nel file di configurazione.
+- Esempio avvio con livello debug:
+
+```pwsh
+$env:RUST_LOG = "server=debug,tower_http=debug"
+cargo run --bin server
+```
+
+### Esempi di log significativi
+
+- Connessione WS stabilita: `WebSocket connection established`
+- User registrato online: `User registered as online`
+- Messaggio broadcast: `Message broadcast to receivers`
+- Errori DB: `Failed to persist message to database`
+
+---
+
+## 15. Deployment Diagram
+
+![Deployment Diagram](Deployment_diagram.png)
+
+
+## 16. Context Diagram
+
+![Deployment Diagram](Context_diagram.png)
+
+### Descrizione nodi
+
+- Client: browser con React app.
+- Reverse Proxy: TLS termination, routing a `/` e `/ws` al server; può gestire scaling e sticky sessions se necessario.
+- App Server: esegue il binario Rust; gestisce REST + WS.
+- DB: MySQL (rugginedb) con connessioni pool.
+- CI/CD: build artifacts, publish image, deploy.
+
+### Pipeline di deploy
+
+1. CI: run tests, build release (`cargo build --release`), build client (`npm run build`).
+2. Package: creare Docker image (server + assets) o artefatto binario.
+3. Publish: push su registry.
+4. Deploy: rollout su ambiente (K8s/VM) + migrazioni DB.
+
+---
+
+## 17. Documentazione Client
+
+### Architettura front-end
+
+- Framework: React + TypeScript + Vite.
+- State/Context: `AuthContext` per autenticazione; `WebSocketContext` per connessione WS condivisa.
+- Servizi: `services/api.ts` per HTTP, `services/tauri.ts` per integrazione desktop/Tauri se attivo.
+
+### Routing
+
+- Pagine principali: `Login` (autenticazione), `Home` (lista chat + area chat), componenti chat.
+
+### Descrizione di ogni pagina
+
+- `Login`:
+  - Cosa mostra: form username/password.
+  - Azioni: POST `/auth/login` → salva JWT in context.
+  - Interazione WS: dopo login, apre connessione WS a `/ws` con header `Authorization`.
+
+- `Home`:
+  - Cosa mostra: sidebar con chat, area messaggi, header chat.
+  - Azioni: selezione chat, invio messaggi via WebSocket, gestione inviti.
+  - Interazione API: richieste REST per liste chat e storico messaggi, WS per ricevere messaggi in tempo reale.
+
+### Componenti principali 
+
+- `Sidebar`: lista chat; interroga GET `/chats`.
+- `ChatArea`: mostra messaggi (chiama GET `/chats/{chat_id}/messages`) e si registra alle notifiche WS.
+- `ChatInput`: invia `MessageDTO` via WS al server.
+- `ProfileModal`: gestione utente.
+
+### Interazioni API e WS
+
+- HTTP per operazioni CRUD, membership, inviti e fetch storici.
+- WS usato per invio immediato di messaggi e ricezione broadcast / notifiche.
+
+---
+
+## 18. Dimensione del Compilato
+
+### Misurazioni (ambiente attuale nella workspace)
+
+- Binario server (debug) rilevato in `server/target/debug/server.exe`: 16.03 MB (misurazione locale).
+
+Comandi usati per verificare:
+
+```pwsh
+Get-Item 'server/target/debug/server.exe' | Select-Object Name,@{Name='SizeMB';Expression={[math]::Round($_.Length/1MB,2)}}
+```
+
+### Misure consigliate da riprodurre
+
+Per ottenere misure ripetibili:
+
+1. Build debug
+```pwsh
+cd server
+cargo build
+Get-Item target/debug/server.exe | Select Name,@{Name='SizeMB';Expression={[math]::Round($_.Length/1MB,2)}}
+```
+
+2. Build release (ottimizzato)
+```pwsh
+cd server
+cargo build --release
+Get-Item target/release/server.exe | Select Name,@{Name='SizeMB';Expression={[math]::Round($_.Length/1MB,2)}}
+```
+
+3. Build client (Vite)
+```pwsh
+cd client
+npm install
+npm run build
+# misura dist
+Get-ChildItem -Recurse dist | Measure-Object -Property Length -Sum
+```
+
+### Ottimizzazioni consigliate
+
+- Rust: `cargo build --release --features=...` + `LTO` (link-time-optimization) in `Cargo.toml` per ridurre dimensione e migliorare perf.
+  - `strip` binario per rimuovere simboli: `strip target/release/server.exe` (o `llvm-strip`)
+- Client: abilitare minification, tree-shaking (Vite/rollup), compressione asset (gzip/brotli) in server/reverse proxy.
+
+---
+
+## 19. Troubleshooting
+
+- Problema: connessioni WS cadono subito -> verificare `Authorization` header, controllare logs per `Connection timeout` e `RATE_LIMITER_MILLIS`.
+- Problema: messaggi non consegnati -> controllare `ChatMap::send` warning: se nessun receiver, il canale viene rimosso; i messaggi sono comunque persistiti.
+- Problema: DB connection fail -> `main.rs` esegue retry in loop; verificare variabile `DATABASE_URL` nel `.env`.
+
+---
+
+## 20. Sicurezza
+
+- Token JWT: validare scadenza e firma; usare secret robusto.
+- Password: sempre hashare con `bcrypt` (già implementato).
+- SQLi: `sqlx` con query parametrizzate evita injection.
+- Minimizzare permessi DB: user `ruggine` con privilegi limitati (SELECT, INSERT, UPDATE, DELETE, CREATE, INDEX, ALTER).
+- Rate limiting: almeno lato WS; considerare rate limit in ingress (reverse proxy) per protezione DoS.
+
+---
+
+## 21. Performance
+
+- Batching WS riduce overhead di rete `BATCH_MAX_SIZE` e `BATCH_INTERVAL`.
+- Uso di `Arc<MessageDTO>` evita copie multiple nella broadcast.
+- `DashMap` e `tokio::sync::broadcast` offrono concorrenza efficiente.
+- Consigli: abilitare `RUST_LOG` a livello info/warn in produzione; profilare con `perf`/`flamegraph` per hot-path.
+
+---
