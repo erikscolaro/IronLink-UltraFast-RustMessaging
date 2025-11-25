@@ -212,30 +212,7 @@ Server listening on http://127.0.0.1:3000
 
 ### Diagramma generale
 
-```
-+----------------+        HTTPS/API        +--------------------+
-|   Client (UI)  | <---------------------> |  Reverse Proxy /   |
-| React + WS     |                          |  Load Balancer     |
-+----------------+        WebSocket         +--------------------+
-        |                                         |
-        | HTTP/WS                                  | Forward
-        v                                         v
-+----------------------+                   +-----------------------+
-|  Server (Axum, Rust) |                   |  Database (MySQL)     |
-| - REST API           |                   | - messages, users,    |
-| - WebSocket endpoint |                   |   chats, invitations  |
-| - ChatMap, UserMap   |                   +-----------------------+
-| - Services / Repos   |
-+----------------------+                   (optional) Monitoring/Logs
-        |
-        v
-+----------------+
-|  Background    |
-|  Tasks:        |
-|  - CPU monitor |  (Campiona CPU ogni secondo, logga tempo effettivo + media ogni 2 min)
-|  - Cleanup     |
-+----------------+
-```
+![Diagramma generale](diagrammi/diagramma_generale.png)
 
 ### Descrizione dei layer
 
@@ -258,41 +235,66 @@ Server listening on http://127.0.0.1:3000
 
 Questa sezione descrive in dettaglio il comportamento interno del modulo WebSocket (`server/src/ws`).
 
-Grafo funzionale (flow) dell'architettura WebSocket — mostra i componenti e il flusso dati/controllo:
+### 8.0 Diagrammi architetturali
 
-```
-Client (Browser)                           Reverse Proxy
-     |                                         |
-     |  HTTP Upgrade / Authorization Bearer    |
-     |---------------------------------------->|
-     |                                         |  forward
-     |                                         v
-     |                                  App Server (Axum)
-     |                                         |
-     |            WebSocket Upgrade (/ws)      |
-     |<--------------------------------------->|
-     |                                         |
-     v                                         v
- +----------------+   spawn per-connection   +-------------------+
- |  listen_ws     |<------------------------>|   write_ws        |
- | (reader task)  |                          | (writer task)     |
- +-------+--------+                          +-----+-------------+
-     |                                         |
-     | on text msg                              | sends batches
-     v                                         v
-   event_handlers::process_message           BroadcastStream from ChatMap
-     |                                         |
-     v                                         v
-   services/repositories -> persist message    ChatMap.send(chat_id, Arc<MessageDTO>)
-     |                                         |
-     v                                         v
-   If user in chat -> OK                     Receivers (other write_ws tasks)
-     |                                         |
-     +-----------------------------------------+
-          broadcast
-```
+#### 8.0.1 Overview generale
 
-Il grafo evidenzia i ruoli principali: client richiede upgrade (autenticato), il server crea due task per connessione (`listen_ws` e `write_ws`), `process_message` valida e persiste i messaggi e `ChatMap` si occupa del broadcasting ai writer task degli utenti connessi.
+Il seguente diagramma mostra una panoramica ad alto livello dell'architettura WebSocket:
+
+![WebSocket Overview](diagrammi/ws_overview_1.png)
+
+#### 8.0.2 Connection Lifecycle
+
+Diagramma dettagliato del ciclo di vita di una connessione WebSocket (setup → running → cleanup):
+
+![WebSocket Lifecycle](diagrammi/ws_connection_lifecycle_2.png)
+
+**Componenti chiave:**
+- **handle_socket**: Orchestratore principale che gestisce upgrade e spawn dei task
+- **listen_ws**: Task reader che riceve messaggi dal client (rate limited, con timeout)
+- **write_ws**: Task writer che invia messaggi al client (con batching)
+- **UserMap**: Mappa in-memory degli utenti online con internal_channel
+- **ChatMap**: Gestione canali broadcast per ogni chat
+
+**Parametri importanti:**
+- Rate limiting: ~10ms tra letture (~100 msg/s per connessione)
+- Timeout inattività: 300s
+- Cleanup automatico: rimozione da UserMap + terminazione task
+
+#### 8.0.3 Message Flow
+
+Diagramma del flusso completo di un messaggio: client → validazione → persistenza → broadcast:
+
+![WebSocket Message Flow](diagrammi/ws_message_flow_3.png)
+
+**Flussi principali:**
+1. **Client → Server**: MessageDTO deserializzato, validato, verificata membership
+2. **Persistenza**: Messaggio salvato nel DB (SEMPRE, anche se nessun utente online)
+3. **Broadcast**: Arc<MessageDTO> inviato via ChatMap ai receivers online
+4. **Batching**: write_ws accumula messaggi e li invia in batch (max 10 msg o 1000ms)
+
+**Gestione utenti offline:**
+- Se nessun receiver online, il canale viene rimosso da ChatMap
+- Il messaggio è comunque persistito e sarà recuperato al prossimo fetch
+
+#### 8.0.4 Internal Signals
+
+Diagramma dei segnali interni (Invitation, AddChat, RemoveChat, Error):
+
+![WebSocket Internal Signals](diagrammi/ws_internal_signals_4.png)
+
+**Segnali supportati:**
+- **Invitation**: Notifica in tempo reale quando un utente viene invitato
+- **AddChat**: Sottoscrizione dinamica a nuova chat dopo accept
+- **RemoveChat**: Rimozione sottoscrizione quando rimosso da chat
+- **Error**: Notifiche di errore (validazione, spoofing, permessi)
+- **Shutdown**: Chiusura connessione (timeout, disconnect, errore)
+
+**Meccanismo:**
+- Services/Repositories invocano `UserMap::send_server_message_if_online`
+- UserMap fa lookup in DashMap e invia sul `internal_channel` (unbounded)
+- write_ws riceve il segnale e lo serializza/invia al client
+
 
 ### 8.1 Analisi approfondita `connection.rs`
 
@@ -812,25 +814,7 @@ Esempio client→server:
 
 ### Diagramma ER
 
-```
-+--------+      +-----------------+      +----------+
-| users  |<---->| userchatmetadata|<---->| chats    |
-| (PK)   |      | (PK: chat_id,   |      | (PK)     |
-| user_id|      |       user_id)  |      | chat_id  |
-+--------+      +-----------------+      +----------+
-     |                |  ^   ^               |
-     |                |  |   |               |
-     |                |  |   +-----------+   |
-     |                |  |               |   |
-     +--< messages >--+  +--< invitations >--+
-
-Tables:
-- users
-- chats
-- messages
-- invitations
-- userchatmetadata
-```
+![Database Schema](diagrammi/ruggineDB_ER.jpg)
 
 ### Tabelle dettagliate
 
@@ -941,12 +925,12 @@ cargo run --bin server
 
 ## 15. Deployment Diagram
 
-![Deployment Diagram](Deployment_diagram.png)
+![Deployment Diagram](diagrammi/deployment_diagram.png)
 
 
 ## 16. Context Diagram
 
-![Deployment Diagram](Context_diagram.png)
+![Deployment Diagram](diagrammi/context_diagram.png)
 
 ### Descrizione nodi
 
