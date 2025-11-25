@@ -1,202 +1,226 @@
 # Manuale Utente — Ruggine
 
 
-Indice
-1. Introduzione
-2. Requisiti di sistema
-3. Installazione e Configurazione
-4. Panoramica dell'interfaccia utente
-5. Come utilizzare la Chat
-6. Sicurezza e Privacy
-7. FAQ e risoluzione problemi rapida
-8. Appendice: comandi rapidi e contatti
+## Indice
+1. [Introduzione](#1-introduzione)
+2. [Requisiti di sistema](#2-requisiti-di-sistema)
+3. [Installazione e Configurazione](#3-installazione-e-configurazione)
+4. [Panoramica dell'interfaccia utente](#4-panoramica-dellinterfaccia-utente)
+5. [Come utilizzare la Chat](#5-come-utilizzare-la-chat)
+6. [Sicurezza e Privacy](#6-sicurezza-e-privacy)
 
 ---
 
 ## 1. Introduzione
 
-### Cos’è l’applicazione
-Ruggine è un’applicazione di messaggistica in tempo reale che combina API REST e WebSocket per fornire chat private e di gruppo, inviti, gestione ruoli e notifiche. Il backend è scritto in Rust (Axum + sqlx) e il client è React/TypeScript (Vite). In ambienti desktop è possibile usare il pacchetto Tauri se disponibile.
+### Cos'è l'applicazione
+Ruggine è un'applicazione di messaggistica in tempo reale che combina API REST e WebSocket per fornire chat private e di gruppo, inviti, gestione ruoli e notifiche. Il backend è scritto in Rust (Axum + sqlx) e il client è React/TypeScript (Vite). Il client viene fornito tramite un'applicazione che utilizza il framework Tauri.
 
 ### A chi è destinata
-L’app è pensata per utenti finali che desiderano comunicare in tempo reale in contesti di team o privati. È adatta ad utenti non tecnici e a sviluppatori che vogliano estenderla o integrarla.
+L'app è pensata per utenti finali che desiderano comunicare in tempo reale in contesti di team o privati. È adatta ad utenti non tecnici e a sviluppatori che vogliano estenderla o integrarla.
 
 ### Funzionalità principali
 - Messaggistica in tempo reale via WebSocket
 - Chat private e di gruppo
 - Inviti e gestione membership (OWNER, ADMIN, MEMBER)
 - Storico messaggi persistito su MySQL
-- Notifiche in‑app e browser
+- Notifiche in‑app
 
 ---
 
 ## 2. Requisiti di sistema
 
 ### Dispositivi supportati
-- Desktop e laptop (Windows, macOS, Linux)
-- Browser moderni: Chrome, Edge, Firefox, Safari (ultime versioni consigliate)
-- App desktop (se distribuita tramite Tauri): Windows x86_64, macOS, Linux
-
-### Compatibilità con sistemi operativi
-- Client web: qualsiasi sistema con browser moderno
-- Server: sistema con toolchain Rust per build (developer). Per l’esercizio quotidiano basta un server Linux/Windows con MySQL e supporto per servizi HTTP/HTTPS.
+- Desktop e laptop (Windows, Linux)
+- App desktop (distribuita tramite Tauri): Windows x86_64, Linux
 
 ### Requisiti di rete/connessione
-- Connessione internet stabile con porte HTTP/HTTPS aperte
-- Supporto WebSocket (Upgrade HTTP → WS) sul reverse proxy o server
-- Banda e latenza: connessioni più veloci e latenza bassa migliorano l’esperienza in tempo reale
+- Connessione internet stabile tramite HTTP/HTTPS
+- Banda e latenza: connessioni più veloci e latenza bassa migliorano l'esperienza in tempo reale
 
 ---
 
 ## 3. Installazione e Configurazione
 
-Questa sezione descrive i passaggi per un utente finale; gli amministratori di sistema troveranno istruzioni di deploy nel file `docs/RUGGINE_DOC.md`.
-
 ### Come creare un account
-1. Apri l’app nel browser (URL fornito dall’amministratore) o avvia il client desktop.
-2. Clic su `Registrati`.
+
+![Accesso](screenshot_manuale/accesso.png)
+
+1. Avvia il client desktop.
+2. Clicca su `Non hai un account? Registrati`.
+
+![Registrazione](screenshot_manuale/registrazione.png)
+
 3. Inserisci un nome utente e una password conforme alla policy (min. 8 caratteri, e deve contenere almeno: una lettera minuscola e una maiuscola, un numero e un carattere speciale).
-4. Clic su `Crea account`.
-5. In caso di successo sarai reindirizzato alla schermata di login.
+4. Clicca su `Registrati`.
+5. In caso di successo sarai reindirizzato alla schermata principale.
 
 ### Procedura di login
+
+![Login](screenshot_manuale/accesso.png)
+
 1. Apri la pagina di login.
 2. Inserisci username e password.
-3. Clic su `Accedi` o premi Enter.
-4. Se le credenziali sono corrette, l’app riceverà un token di sessione (JWT) e ti dirigerà alla Home.
-
-### Configurazione iniziale
-- Imposta l’immagine del profilo (se disponibile)
-- Controlla le impostazioni di notifica (browser o app)
-- Aggiungi i contatti o aspetta inviti
-
-Nota: la gestione delle impostazioni è disponibile nella sezione **Impostazioni** (vedi capitolo 4).
+3. Clicca su `Accedi`.
+4. Se le credenziali sono corrette, l'app ti dirigerà alla schermata principale.
 
 ---
 
-## 4. Panoramica dell’interfaccia utente
-
-La UI è organizzata in modo da essere familiare a chi usa applicazioni di chat moderne.
+## 4. Panoramica dell'interfaccia utente
 
 ### Elementi principali
-- **Sidebar (sinistra)**: elenco chat e contatti, pulsante `Nuova chat`/`Crea gruppo`, campo ricerca.
-- **Area centrale**: conversazione attiva, elenco messaggi.
-- **Header / Dettagli (destra o sopra)**: informazioni chat, pulsanti azione (Aggiungi membro, Leave, Impostazioni chat).
 
-> Suggerimento screenshot: inserire qui uno screenshot della Home che mostri la sidebar, l’area messaggi e l’header. (File suggerito: `docs/screenshots/home.png`)
+![Interfaccia principale](screenshot_manuale/interfaccia1.png)
 
-### Schermata Home
-- Mostra elenco chat con anteprima dell’ultimo messaggio e timestamp
-- Pulsante per creare nuova chat
-- Campo di ricerca per trovare chat o contatti
-
-### Lista contatti
-- Cerca utenti per username
-- Azioni: visualizza profilo, invia invito, inizia nuova chat
-
-### Finestra chat
-- **Header**: titolo chat, membri, informazioni
-- **Area Messaggi**: visualizza messaggi in ordine cronologico; i messaggi mostrano nome mittente, testo e timestamp
-- **Input**: campo testo, invio con Enter; tasti/icone per emoji o attach (se presenti)
-
-> Suggerimento screenshot: finestra chat con messaggi e campo input (`docs/screenshots/chat_window.png`).
-
-### Impostazioni
-- Profilo utente: cambia username, immagine, logout
-- Notifiche: abilitare/disabilitare notifiche browser
-- Preferenze: temi, suoni (se implementati)
+- **Sidebar (sinistra)**: informazioni utente, elenco chat e pulsanti `Nuova Privata` e `Nuovo Gruppo`.
+- **Area centrale**: conversazione attiva con elenco messaggi.
+- **Info chat**: cliccando sull'icona info in alto a destra si aprono i dettagli della chat.
 
 ---
 
 ## 5. Come utilizzare la Chat
 
-### Inviare e ricevere messaggi
-- Per inviare un messaggio: seleziona la chat, digita nel campo, premi Enter.
-- Il client invia un oggetto JSON (MessageDTO) via WebSocket. Il server persiste il messaggio e lo broadcast agli utenti connessi.
-- Se sei offline, i messaggi verranno memorizzati e recapitati alla prossima connessione.
+### Creare una chat privata
 
-### Creare gruppi
-1. Clic su `Nuova chat` → seleziona `Gruppo`.
-2. Inserisci titolo e descrizione.
-3. Aggiungi membri (seleziona dagli utenti o inserisci username).
-4. Conferma per creare il gruppo; gli invitati riceveranno notifiche.
+![Nuova chat privata](screenshot_manuale/interfaccia_nuova_chat_privata.png)
 
-> Suggerimento screenshot: modal di creazione gruppo (`docs/screenshots/create_group.png`).
+1. Clicca su `Nuova Privata` nella sidebar.
+2. Inserisci l'username dell'utente con cui vuoi chattare.
+3. Clicca sul nome dell'utente con cui vuoi chattare.
+4. La chat verrà creata e apparirà nella lista.
 
-### Gestire le conversazioni (tutte le opzioni)
-- **Aggiungere membro**: vai su dettagli chat → `Aggiungi membro` → seleziona utente → invia invito.
-- **Rimuovere membro**: (solo OWNER/ADMIN) → dettagli chat → `Rimuovi membro`.
-- **Cambiare ruolo**: (OWNER) → imposta ruolo ADMIN/MEMBER per gli utenti.
-- **Trasferire ownership**: (OWNER) → `Transfer ownership` → seleziona nuovo owner.
-- **Abbandonare chat**: `Leave chat` dal menu della chat.
-- **Pulire chat**: (OWNER/ADMIN) → `Clean chat` per rimuovere messaggi secondo policy (azione distruttiva — richiede conferma).
-- **Inviti**: gli inviti pendenti sono visibili in `/invitations/pending`; puoi accettare/rifiutare.
+### Creare un gruppo
 
-### Notifiche
-- Notifiche in‑app: badge nella sidebar e nella chat.
-- Notifiche browser: richiedere permesso; appaiono anche se la finestra non è attiva.
-- Tipi di evento notificati: nuovo messaggio, invito, aggiunta a chat.
+![Nuovo gruppo](screenshot_manuale/interfaccia_nuova_chat_gruppo.png)
+
+1. Clicca su `Nuovo Gruppo` nella sidebar.
+2. Inserisci il titolo del gruppo.
+3. Inserisci una descrizione (facoltativa).
+4. Clicca su `Crea Gruppo`.
+5. Il gruppo verrà creato e potrai iniziare ad aggiungere membri.
+
+### Inviare messaggi
+
+![Chat privata](screenshot_manuale/interfaccia_chat_privata.png)
+
+1. Seleziona la chat dalla lista nella sidebar.
+2. Digita il messaggio nel campo di testo in basso.
+3. Premi `Invio` o il tasto in basso a destra per inviare il messaggio.
+4. I messaggi vengono recapitati in tempo reale agli altri utenti connessi.
+
+### Invitare membri in un gruppo (solo proprietario o amministratore)
+
+![Invito membro - Step 1](screenshot_manuale/interfaccia_chat_gruppo_invito_invio.png)
+
+1. Apri un gruppo di cui sei proprietario o amministratore.
+2. Clicca sull'icona info in alto a destra.
+3. Clicca su `Invita`.
+
+![Invito membro - Step 2](screenshot_manuale/interfaccia_chat_gruppo_invito_invio_2.png)
+
+4. Inserisci l'username dell'utente da invitare.
+5. Clicca su `Conferma Invito` nel popup.
+6. L'utente riceverà una notifica e potrà accettare o rifiutare l'invito.
+
+### Ricevere e accettare inviti
+
+![Ricezione invito](screenshot_manuale/interfaccia_chat_gruppo_invito_ricevimento.png)
+
+1. Quando ricevi un invito, apparirà una notifica nella sidebar.
+2. Clicca su `Accetta` per unirti al gruppo o `Rifiuta` per declinare.
+
+### Gestire i ruoli (proprietario o amministratore)
+
+![Promuovere membro - Step 1](screenshot_manuale/interfaccia_chat_gruppo_info_promozione.png)
+
+Se sei proprietario o amministratore di un gruppo, puoi modificare i ruoli dei membri:
+
+- **Proprietario**: può promuovere membri ad amministratori o trasferire il ruolo di proprietario ad un utente amministratore
+- **Amministratore**: può solo modificare il ruolo dei membri semplici
+
+1. Apri le info del gruppo.
+2. Clicca su `Promuovi` o `Retrocedi` accanto al nome del membro.
+
+![Promuovere membro - Step 2](screenshot_manuale/interfaccia_chat_gruppo_info_promozione_2.png)
+
+3. Conferma la modifica del ruolo.
+
+### Trasferire la proprietà (solo proprietario)
+
+![Trasferimento - Step 1](screenshot_manuale/interfaccia_chat_gruppo_info_trasferisci.png)
+
+1. Apri le info del gruppo.
+2. Clicca su un utente del gruppo
+3. Clicca su `Trasferisci Proprietà`.
+
+![Trasferimento - Step 2](screenshot_manuale/interfaccia_chat_gruppo_info_trasferisci_2.png)
+
+3. Seleziona il nuovo proprietario dalla lista dei membri.
+
+![Trasferimento - Step 3](screenshot_manuale/interfaccia_chat_gruppo_info_trasferisci_3.png)
+
+4. Conferma il trasferimento.
+5. Il nuovo proprietario avrà il pieno controllo del gruppo.
+
+### Uscire da un gruppo
+
+![Uscita gruppo](screenshot_manuale/interfaccia_chat_gruppo_info_esci.png)
+
+1. Apri le info del gruppo.
+2. Clicca su `Esci dal Gruppo`.
+3. Conferma l'uscita.
+4. Non potrai più visualizzare i messaggi del gruppo.
+
+**Nota**: se sei il proprietario e l'unico membro, il gruppo verrà eliminato completamente. Altrimenti, se sei il proprietario, prima di poter uscire dal gruppo dovrai trasferire l'ownership ad un altro utente amministratore.
+
+### Pulire la cronologia chat
+
+Qualsiasi membro può pulire la propria cronologia dei messaggi:
+
+1. Apri le info della chat.
+2. Clicca su `Pulisci Chat`.
+3. Conferma l'azione.
+4. I messaggi precedenti non saranno più visibili per te, ma rimarranno per gli altri membri.
+
+**Nota**: quando tutti i membri hanno pulito i messaggi fino a una certa data, quei messaggi vengono eliminati definitivamente dal database.
+
+### Rimuovere membri (solo proprietario o amministratore)
+
+Se sei proprietario o amministratore, puoi rimuovere membri dal gruppo:
+
+1. Apri le info del gruppo.
+2. Clicca su `Rimuovi` accanto al nome del membro.
+3. Conferma la rimozione.
+
+**Limitazioni**:
+- Non puoi rimuovere il proprietario del gruppo
+- Il membro rimosso riceverà una notifica e la chat verrà rimossa dalla sua lista
+
+### Eliminare il proprio account
+
+![Eliminazione account - Step 1](screenshot_manuale/interfaccia_quit_delete.png)
+
+1. Clicca sul tuo profilo nella sidebar.
+2. Clicca su `Elimina Account`.
+
+![Eliminazione account - Step 2](screenshot_manuale/interfaccia_quit_delete_2.png)
+
+3. Conferma l'eliminazione.
+4. Il tuo account e tutti i dati associati verranno eliminati in modo permanente.
 
 ---
 
 ## 6. Sicurezza e Privacy
 
-### Password e autenticazione
-- Le password vengono inviate al server su canale sicuro (HTTPS) durante registrazione/login.
-- Sul server le password sono **hashate usando `bcrypt`** prima di essere salvate nel database — il server non memorizza password in chiaro.
-- Dopo il login viene emesso un JWT che il client usa per autenticare le richieste successive (header `Authorization: Bearer <token>`).
+### Autenticazione
+- Le password vengono hashate con `bcrypt` prima di essere salvate nel database.
 
-### Conservazione dei dati utente
-- I messaggi, le informazioni utenti e gli inviti sono persistiti in MySQL.
-- Sono memorizzati: username, hash password, messaggi (content, sender_id, created_at), metadati chat e inviti.
-- L’accesso al DB dovrebbe essere protetto (firewall, credenziali limitate, backup regolari).
+### Conservazione dei dati
+- I messaggi sono salvati in modo permanente nel database MySQL.
+- L'eliminazione dell'account rimuove tutti i dati personali.
 
-### Pratiche consigliate
-- Usa password forti e uniche
-- Non salvare token JWT in localStorage se temi XSS; preferisci session storage o meccanismi sicuri
-- Assicurati che in produzione il servizio sia esposto solo via HTTPS e dietro reverse proxy sicuro
+### Consigli per la sicurezza
+- Usa password forti e uniche.
+- Non condividere il tuo account con altri.
+- Fai logout quando usi dispositivi condivisi.
 
----
-
-## 7. FAQ e risoluzione problemi rapida
-
-Q: Non ricevo messaggi in tempo reale — cosa controllo?
-- Verifica che la connessione WebSocket sia stabilita (console di rete nel browser)
-- Controlla eventuali errori di autenticazione (token scaduto)
-- Verifica che il reverse proxy non stia bloccando l’Upgrade/Connection headers
-
-Q: Come recupero la password?
-- Al momento la procedura di reset non è descritta nel progetto; contatta l’amministratore per reimpostare manualmente o implementare una procedura di reset via email.
-
-Q: I messaggi scompaiono quando ricreo la chat?
-- Azioni come `Clean chat` rimuovono i messaggi in modo permanente. Verifica i permessi prima di eseguire.
-
----
-
-## 8. Appendice: comandi rapidi e contatti
-
-- Logout: Menu Profilo → `Logout`.
-- Eseguire un build locale (developer):
-```pwsh
-cd server
-cargo build --release
-```
-- Test di integrazione (esempio):
-```pwsh
-cd server
-cargo test --test api_websocket -- --nocapture
-```
-
-Contatti per assistenza: fornisci link o email dell’amministratore/maintainer del progetto.
-
----
-
-## Posizionamento suggerito per screenshot
-- Home: `docs/screenshots/home.png`
-- Lista contatti: `docs/screenshots/contacts.png`
-- Finestra chat: `docs/screenshots/chat_window.png`
-- Creazione gruppo: `docs/screenshots/create_group.png`
-- Notifica invito: `docs/screenshots/invitation.png`
-- Impostazioni profilo: `docs/screenshots/settings.png`
-
-Inserire le immagini con didascalie brevi e alt text per accessibilità.
