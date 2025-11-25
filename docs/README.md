@@ -222,6 +222,7 @@ Server listening on http://127.0.0.1:3000
 - Repositories: Accesso persistente via `sqlx` su MySQL.
 - Real-time layer: `ChatMap` (broadcast channels per chat) + `UserMap` (mappa utenti online) + per-connection tasks (read/write).
 - Persistence: MySQL con tabelle `users`, `chats`, `messages`, `invitations`, `userchatmetadata`.
+- Monitoring: Task in background che campiona CPU/memoria del processo server ogni secondo (120 campioni in 2 minuti) e logga statistiche aggregate in `cpu_stats.log` (vedi `docs/CPU_MONITORING.md`).
 
 ### Comunicazioni HTTP/WS
 
