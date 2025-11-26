@@ -159,7 +159,7 @@ cd ../client
 npm install
 
 # Build frontend (opzionale per dev)
-npm run build
+npm run tauri build
 ```
 
 
