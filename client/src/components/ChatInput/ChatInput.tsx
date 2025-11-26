@@ -1,6 +1,6 @@
 // ChatInput - Componente per l'invio di messaggi
 import { useState } from 'react';
-import { Form, Button, InputGroup, Container } from 'react-bootstrap';
+import { Form, Button } from 'react-bootstrap';
 import styles from './ChatInput.module.css';
 
 interface ChatInputProps {

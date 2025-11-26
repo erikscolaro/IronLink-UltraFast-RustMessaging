@@ -1,7 +1,7 @@
 // ChatInfo - Pannello laterale con informazioni sulla chat
 import { useEffect, useState } from 'react';
 import { ChatDTO, ChatType, UserChatMetadataDTO, UserRole, getUserId } from '../../models/types';
-import { Button, ListGroup, Badge, Spinner, Form, Dropdown, DropdownButton, ButtonGroup } from 'react-bootstrap';
+import { Button, Spinner, Dropdown, DropdownButton, ButtonGroup } from 'react-bootstrap';
 import { useAuth } from '../../context/AuthContext';
 import * as api from '../../services/api';
 import styles from './ChatInfo.module.css';
@@ -141,7 +141,6 @@ export default function ChatInfo({ chat, isVisible, onClose, onStartInvite, onCh
       return;
     }
 
-    const memberName = memberNames.get(userId) || 'questo utente';
     try {
       await api.updateMemberRole(chat.chat_id, userId, UserRole.Admin);
       loadMembers();
@@ -159,7 +158,6 @@ export default function ChatInfo({ chat, isVisible, onClose, onStartInvite, onCh
       return;
     }
 
-    const memberName = memberNames.get(userId) || 'questo utente';
     try {
       await api.updateMemberRole(chat.chat_id, userId, UserRole.Member);
       loadMembers();
