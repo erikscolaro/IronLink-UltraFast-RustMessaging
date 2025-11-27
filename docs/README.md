@@ -1792,7 +1792,8 @@ cd server
 cargo build --release
 Get-Item target\release\server.exe | Select-Object Name,@{Name='SizeMB';Expression={[math]::Round($_.Length/1MB,2)}}
 ```
-Dimensione eseguibile: 2.86 MB
+Dimensione eseguibile Windows: 2.86 MB
+Dimensione eseguibile Linux: 3.5 MB
 
 **Client Tauri (installer desktop completo)**:
 ```pwsh
@@ -1801,7 +1802,8 @@ npm run tauri build
 # Windows installer in: src-tauri\target\release\bundle\nsis\
 Get-Item src-tauri\target\release\bundle\nsis\*.exe | Select-Object Name,@{Name='SizeMB';Expression={[math]::Round($_.Length/1MB,2)}}
 ```
-Dimensione eseguibile: 11.8 MB
+Dimensione eseguibile Windows: 11.8 MB
+Dimensione eseguibile Linux: 16.3 MB
 
 ### Ottimizzazioni implementate
 
