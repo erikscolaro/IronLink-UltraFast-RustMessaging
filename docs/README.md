@@ -5,23 +5,24 @@
 ## Indice completo
 
 1. [Panoramica del progetto](#1-panoramica-del-progetto)
-2. [Librerie utilizzate](#2-librerie-utilizzate)
-3. [Installazione](#3-installazione)
-4. [Configurazione](#4-configurazione)
-5. [Avvio](#5-avvio)
-6. [Architettura del Sistema](#6-architettura-del-sistema)
-7. [Architettura WebSocket](#7-architettura-websocket)
-8. [Struttura del Progetto](#8-struttura-del-progetto)
-9. [API Documentation](#9-api-documentation)
-10. [WebSocket Protocol Documentation](#10-websocket-protocol-documentation)
-11. [Database Schema](#11-database-schema)
-12. [Test](#12-test)
-13. [Logging](#13-logging)
-14. [Deployment & Context Diagram](#14-deployment--context-diagram)
-15. [Documentazione Client](#15-documentazione-client)
-16. [Dimensione del Compilato](#16-dimensione-del-compilato)
-17. [Sicurezza](#17-sicurezza)
-18. [Performance](#18-performance)
+2. [Requisiti Funzionali](#2-requisiti-funzionali)
+3. [Librerie utilizzate](#3-librerie-utilizzate)
+4. [Installazione](#4-installazione)
+5. [Configurazione](#5-configurazione)
+6. [Avvio](#6-avvio)
+7. [Architettura del Sistema](#7-architettura-del-sistema)
+8. [Architettura WebSocket](#8-architettura-websocket)
+9. [Struttura del Progetto](#9-struttura-del-progetto)
+10. [API Documentation](#10-api-documentation)
+11. [WebSocket Protocol Documentation](#11-websocket-protocol-documentation)
+12. [Database Schema](#12-database-schema)
+13. [Test](#13-test)
+14. [Logging](#14-logging)
+15. [Deployment & Context Diagram](#15-deployment--context-diagram)
+16. [Documentazione Client](#16-documentazione-client)
+17. [Dimensione del Compilato](#17-dimensione-del-compilato)
+18. [Sicurezza](#18-sicurezza)
+19. [Performance](#19-performance)
 
 
 ---
@@ -51,7 +52,68 @@ Il sistema espone API REST per operazioni CRUD (utenti, chat, inviti) e un endpo
 
 ---
 
-## 2. Librerie utilizzate
+## 2. Requisiti Funzionali
+
+Questa sezione documenta i requisiti funzionali effettivamente implementati nel progetto.
+
+### 2.1 Gestione Utenti
+
+**Autenticazione:**
+- ✅ **Login** (`POST /auth/login`): Autenticazione tramite username e password, ritorna JWT (HS256, expire 24h)
+- ✅ **Registrazione** (`POST /auth/register`): Creazione nuovo utente con hash bcrypt (cost 12)
+- ✅ **Validazione**: Username riservato "Deleted User" bloccato in fase di registrazione/login
+
+**Ricerca:**
+- ✅ **Ricerca utente** (`GET /users?username={username}`): Filtro utenti tramite username (query parameter)
+- ✅ **Lista utenti** (`GET /users`): Recupero di tutti gli utenti registrati
+
+### 2.2 Gestione Chat Private
+
+**Funzionalità implementate:**
+- ✅ **Creazione chat privata**: Automatica quando si invia il primo invito tra due utenti (`POST /chats/{chat_id}/invite/{user_id}`)
+- ✅ **Recupero messaggi** (`GET /chats/{chat_id}/messages`): Con filtro basato su `messages_visible_from` (ultimo messaggio visualizzato)
+- ✅ **Salvataggio ultimo messaggio visualizzato**: Campo `messages_received_until` in `user_chat_metadata`
+- ✅ **Invio messaggio**: Tramite WebSocket con validazione lunghezza (1-5000 caratteri)
+- ✅ **Pulizia chat** (`POST /chats/{chat_id}/clean`): Aggiorna `messages_visible_from` ed elimina messaggi non più visibili da nessun membro
+
+### 2.3 Gestione Chat di Gruppo
+
+**Creazione e configurazione:**
+- ✅ **Creazione gruppo** (`POST /chats`): Con `chat_type: "Group"`, `title`, `description` opzionale
+- ✅ **Ruoli utente**: Owner, Admin, Member implementati con permessi differenziati
+
+**Gestione messaggi:**
+- ✅ **Recupero messaggi** (`GET /chats/{chat_id}/messages`): Con filtro `messages_visible_from`
+- ✅ **Salvataggio ultimo messaggio visualizzato**: Campo `messages_received_until` in metadata
+- ✅ **Invio messaggio**: WebSocket con validazione (1-5000 caratteri, rate limiting 10ms)
+- ✅ **Pulizia messaggi per singolo utente** (`POST /chats/{chat_id}/clean`): Aggiorna `messages_visible_from`, elimina fisicamente messaggi non visibili da nessuno
+
+**Gestione membri:**
+- ✅ **Estensione ruolo Admin** (`PATCH /chats/{chat_id}/members/{user_id}/role`): Owner può promuovere Member → Admin
+- ✅ **Aggiunta membri tramite invito** (`POST /chats/{chat_id}/invite/{user_id}`): Owner/Admin invitano, target riceve notifica real-time
+- ✅ **Risposta invito** (`POST /invitations/{invite_id}/{action}`): Accept/Reject, crea messaggio di sistema
+- ✅ **Lista inviti pending** (`GET /invitations/pending`): Inviti ricevuti dall'utente autenticato
+- ✅ **Espulsione membro** (`DELETE /chats/{chat_id}/members/{user_id}`): Solo Owner/Admin, non può rimuovere Owner
+- ✅ **Uscita spontanea** (`POST /chats/{chat_id}/leave`): Member/Admin possono uscire, Owner solo se unico membro
+- ✅ **Trasferimento ownership** (`PATCH /chats/{chat_id}/transfer_ownership/{new_owner_id}`): Solo Owner, target deve essere membro
+
+**Funzionalità real-time:**
+- ✅ **Notifiche WebSocket**: AddChat, RemoveChat, Invitation inviati tramite `InternalSignal`
+- ✅ **Broadcast messaggi**: Batching (10 msg o 1 sec), Arc<MessageDTO> zero-copy
+- ✅ **Rate limiting**: 10ms per messaggio (~100 msg/sec per connessione)
+- ✅ **Timeout inattività**: 300 secondi (5 minuti)
+
+### 2.4 Logging
+
+**Stack implementato:**
+- ✅ **tracing 0.1** + **tracing-subscriber 0.3**
+- ✅ **Configurazione livelli**: Via `RUST_LOG` env var (`trace`, `debug`, `info`, `warn`, `error`)
+- ✅ **Integrazione tower-http**: Logging middleware per richieste HTTP
+- ✅ **Structured logging**: Campi contestuali (`user_id`, `chat_id`, etc.) tramite macro `#[instrument]`
+
+---
+
+## 3. Librerie utilizzate
 
 ### Backend (Rust)
 **Framework e Runtime:**
@@ -113,7 +175,7 @@ Il sistema espone API REST per operazioni CRUD (utenti, chat, inviti) e un endpo
 - tokio-tungstenite 0.21 (WebSocket client)
 - serde 1.x, serde_json 1.x
 
-## 3. Installazione
+## 4. Installazione
 
 ### Prerequisiti
 
@@ -163,7 +225,7 @@ npm run tauri build
 ```
 
 
-## 4. Configurazione
+## 5. Configurazione
 
 ### File `.env` Server
 
@@ -221,7 +283,7 @@ VITE_API_URL=http://localhost:3000
 - Acquire timeout pool: 2 secondi (hardcoded)
 - Test before acquire: abilitato
 
-## 5. Avvio
+## 6. Avvio
 
 ### Avvio Server (Backend)
 
@@ -314,7 +376,7 @@ cargo run
 ```
 ---
 
-## 6. Architettura del Sistema
+## 7. Architettura del Sistema
 
 ### Diagramma generale
 
@@ -450,13 +512,13 @@ TIMEOUT_DURATION_SECONDS: 300s
 
 ---
 
-## 7. Architettura WebSocket
+## 8. Architettura WebSocket
 
 Questa sezione descrive in dettaglio l'implementazione del modulo WebSocket (`server/src/ws`).
 
-### 7.0 Diagrammi architetturali
+### 8.0 Diagrammi architetturali
 
-#### 7.0.1 Overview generale
+#### 8.0.1 Overview generale
 
 Il seguente diagramma mostra una panoramica ad alto livello dell'architettura WebSocket:
 
@@ -470,7 +532,7 @@ Il seguente diagramma mostra una panoramica ad alto livello dell'architettura We
 - **listen_ws**: Task reader (client → server)
 - **write_ws**: Task writer (server → client)
 
-#### 7.0.2 Connection Lifecycle
+#### 8.0.2 Connection Lifecycle
 
 Diagramma dettagliato del ciclo di vita di una connessione WebSocket (setup → running → cleanup):
 
@@ -488,7 +550,7 @@ Diagramma dettagliato del ciclo di vita di una connessione WebSocket (setup → 
 - **Acquire timeout DB**: 2 secondi (per caricare chat utente in write_ws)
 - **Cleanup automatico**: Rimozione da UserMap + terminazione task
 
-#### 7.0.3 Message Flow
+#### 8.0.3 Message Flow
 
 Diagramma del flusso completo di un messaggio: client → validazione → persistenza → broadcast:
 
@@ -524,7 +586,7 @@ Diagramma del flusso completo di un messaggio: client → validazione → persis
 - Il messaggio è persistito anche se nessun receiver online
 - Al prossimo login, l'utente recupera messaggi con GET `/chats/{chat_id}/messages`
 
-#### 7.0.4 Internal Signals
+#### 8.0.4 Internal Signals
 
 Diagramma dei segnali interni (Invitation, AddChat, RemoveChat, Error, Shutdown):
 
@@ -559,7 +621,7 @@ pub enum InternalSignal {
 - **Validation error**: `process_message` → `send_server_message_if_online(&user_id, Error("Invalid message"))`
 
 
-### 7.1 Analisi approfondita `connection.rs`
+### 8.1 Analisi approfondita `connection.rs`
 
 **Ruolo**: Orchestrare la vita di una singola connessione WebSocket per utente autenticato.
 
@@ -735,7 +797,7 @@ async fn listen_ws(
    info!("WebSocket connection closed");
    ```
 
-### 7.2 Analisi approfondita `chatmap.rs`
+### 8.2 Analisi approfondita `chatmap.rs`
 
 **Ruolo**: Mantenere mappa thread-safe di canali broadcast per ogni chat.
 
@@ -783,7 +845,7 @@ pub fn is_active(&self, chat_id: &i32) -> bool
 - Canali creati on-demand (lazy initialization)
 - Rimozione automatica canali senza receiver (evita memory leak)
 
-### 7.3 Task di lettura/scrittura
+### 8.3 Task di lettura/scrittura
 
 **Separazione responsabilità**:
 - **listen_ws**: Input handling (client → server)
@@ -802,7 +864,7 @@ pub fn is_active(&self, chat_id: &i32) -> bool
 - Comunicano tramite `internal_channel` (unbounded, async)
 - Shutdown coordinato: listen_ws → send(Shutdown) → write_ws riceve e termina
 
-### 7.4 Segnali interni
+### 8.4 Segnali interni
 
 **Utilizzo nei services**:
 
@@ -833,7 +895,7 @@ state.users_online.send_server_message_if_online(
 );
 ```
 
-### 7.5 Gestione utenti
+### 8.5 Gestione utenti
 
 **UserMap** (`usermap.rs`):
 ```rust
@@ -854,7 +916,7 @@ pub struct UserMap {
 2. Durante connessione → `send_server_message_if_online` da services
 3. `write_ws` termina → `remove_from_online` (cleanup)
 
-### 7.6 Messaggi e formati
+### 8.6 Messaggi e formati
 
 **DTO principale**: `MessageDTO` (server/src/dtos/message.rs)
 ```rust
@@ -932,7 +994,7 @@ pub struct MessageDTO {
 }
 ```
 
-### 7.7 Esempi dettagliati
+### 8.7 Esempi dettagliati
 
 #### Esempio 1: Invio messaggio da client
 
@@ -1011,7 +1073,7 @@ pub struct MessageDTO {
 
 ---
 
-## 8. Struttura del Progetto
+## 9. Struttura del Progetto
 
 ### Albero directory 
 
@@ -1047,7 +1109,7 @@ pub struct MessageDTO {
 
 ---
 
-## 9. API Documentation
+## 10. API Documentation
 
 ### Introduzione generale
 
@@ -1349,7 +1411,7 @@ Note generali:
 
 ---
 
-## 10. WebSocket Protocol Documentation
+## 11. WebSocket Protocol Documentation
 
 ### Endpoint
 
@@ -1405,7 +1467,7 @@ Esempio client→server:
 
 ---
 
-## 11. Database Schema
+## 12. Database Schema
 
 ### Diagramma ER
 
@@ -1455,7 +1517,7 @@ Esempio client→server:
 
 ---
 
-## 12. Test
+## 13. Test
 
 ### Strategia
 
@@ -1486,7 +1548,7 @@ Esempio client→server:
 
 ---
 
-## 13. Logging
+## 14. Logging
 
 ### Stack logging
 
@@ -1518,7 +1580,7 @@ cargo run --bin server
 
 ---
 
-## 14. Deployment & Context Diagram
+## 15. Deployment & Context Diagram
 
 ### Deployment Diagram
 
@@ -1573,7 +1635,7 @@ cargo run --bin server
 
 ---
 
-## 15. Documentazione Client
+## 16. Documentazione Client
 
 ### Architettura front-end
 
@@ -1709,7 +1771,7 @@ interface WebSocketContextType {
 
 ---
 
-## 16. Dimensione del Compilato
+## 17. Dimensione del Compilato
 
 ### Comandi per misurare build
 
@@ -1787,7 +1849,7 @@ strip = true           # Rimuove simboli debug automaticamente
 
 ---
 
-## 17. Sicurezza
+## 18. Sicurezza
 
 ### Autenticazione JWT
 
@@ -1881,7 +1943,7 @@ let app = Router::new()
 
 ---
 
-## 18. Performance
+## 19. Performance
 
 ### Ottimizzazioni WebSocket
 
@@ -1983,47 +2045,24 @@ tracing = "0.1"
 tracing-subscriber = "0.3"
 ```
 
-**Configurazione produzione**:
+**Configurazione** (`server/src/main.rs`):
+```rust
+use tracing_subscriber::{fmt, EnvFilter};
+
+tracing_subscriber::fmt()
+    .with_env_filter(EnvFilter::from_default_env())
+    .init();
+```
+
+**Livelli configurabili tramite variabile d'ambiente**:
 ```pwsh
+# Development
+$env:RUST_LOG = "server=debug,tower_http=debug"
+cargo run
+
+# Production
 $env:RUST_LOG = "server=info,tower_http=warn"
 cargo run --release
-```
-
-**Impatto performance logging**:
-- `trace`: ~10-20% overhead CPU
-- `debug`: ~5-10% overhead CPU
-- `info`: ~1-2% overhead CPU
-- `warn`/`error`: <1% overhead CPU
-
-### Profiling e Debugging
-
-**Strumenti consigliati**:
-
-1. **Flamegraph** (CPU profiling):
-```pwsh
-cargo install flamegraph
-cargo flamegraph --bin server
-# Genera flamegraph.svg con hot-path
-```
-
-2. **Tokio Console** (async runtime inspection):
-```toml
-# Cargo.toml
-[dependencies]
-console-subscriber = "0.1"
-```
-```rust
-console_subscriber::init();
-```
-```pwsh
-cargo install tokio-console
-tokio-console
-```
-
-3. **Valgrind/Heaptrack** (memory profiling - Linux only):
-```bash
-valgrind --tool=massif target/release/server
-heaptrack target/release/server
 ```
 
 ### Ottimizzazioni Compilatore
@@ -2043,20 +2082,3 @@ strip = true           # Rimuove simboli debug
 
 ### Metriche Performance Attese
 
-**WebSocket**:
-- Latenza messaggio: <10ms (network locale) a <100ms (internet)
-- Throughput: ~1000 messaggi/sec per chat (limitato da batching 1s)
-- Connessioni simultanee: ~5000-10000 (limite RAM/file descriptors, non CPU)
-
-**Database**:
-- Query semplici (SELECT by PK): <1ms
-- Query JOIN (messages + users): <5ms
-- INSERT message: <2ms
-- Pool saturation: warning se acquire > 100ms
-
-**Memory**:
-- Server idle: ~10-20MB RAM
-- 1000 connessioni WS: ~50-100MB RAM
-- 10000 messaggi cached (Arc): ~50MB RAM
-
----
