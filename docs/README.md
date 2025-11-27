@@ -6,23 +6,24 @@
 
 1. [Panoramica del progetto](#1-panoramica-del-progetto)
 2. [Requisiti Funzionali](#2-requisiti-funzionali)
-3. [Librerie utilizzate](#3-librerie-utilizzate)
-4. [Installazione](#4-installazione)
-5. [Configurazione](#5-configurazione)
-6. [Avvio](#6-avvio)
-7. [Architettura del Sistema](#7-architettura-del-sistema)
-8. [Architettura WebSocket](#8-architettura-websocket)
-9. [Struttura del Progetto](#9-struttura-del-progetto)
-10. [API Documentation](#10-api-documentation)
-11. [WebSocket Protocol Documentation](#11-websocket-protocol-documentation)
-12. [Database Schema](#12-database-schema)
-13. [Test](#13-test)
-14. [Logging](#14-logging)
-15. [Deployment & Context Diagram](#15-deployment--context-diagram)
-16. [Documentazione Client](#16-documentazione-client)
-17. [Dimensione del Compilato](#17-dimensione-del-compilato)
-18. [Sicurezza](#18-sicurezza)
-19. [Performance](#19-performance)
+3. [Requisiti Non Funzionali](#3-requisiti-non-funzionali)
+4. [Librerie utilizzate](#4-librerie-utilizzate)
+5. [Installazione](#5-installazione)
+6. [Configurazione](#6-configurazione)
+7. [Avvio](#7-avvio)
+8. [Architettura del Sistema](#8-architettura-del-sistema)
+9. [Architettura WebSocket](#9-architettura-websocket)
+10. [Struttura del Progetto](#10-struttura-del-progetto)
+11. [API Documentation](#11-api-documentation)
+12. [WebSocket Protocol Documentation](#12-websocket-protocol-documentation)
+13. [Database Schema](#13-database-schema)
+14. [Test](#14-test)
+15. [Logging](#15-logging)
+16. [Deployment & Context Diagram](#16-deployment--context-diagram)
+17. [Documentazione Client](#17-documentazione-client)
+18. [Dimensione del Compilato](#18-dimensione-del-compilato)
+19. [Sicurezza](#19-sicurezza)
+20. [Performance](#20-performance)
 
 
 ---
@@ -113,7 +114,45 @@ Questa sezione documenta i requisiti funzionali effettivamente implementati nel 
 
 ---
 
-## 3. Librerie utilizzate
+## 3. Requisiti Non Funzionali
+
+### 3.1 Portabilità Multi-Piattaforma
+
+**Cross-platform (Windows e Linux):**
+- ✅ **Rust Edition 2024**: Linguaggio cross-platform nativo
+- ✅ **Tokio 1.47.1**: Runtime async multi-piattaforma
+- ✅ **Tauri 2.x**: Client desktop cross-platform (Windows, Linux, macOS)
+- ✅ **Dipendenze**: Tutte le librerie supportano Windows/Linux (axum, sqlx, bcrypt, etc.)
+
+### 3.2 Efficienza CPU e Dimensione Compilato
+
+**Async runtime** (`server/Cargo.toml`):
+```toml
+tokio = { version = "1.47.1", features = ["rt-multi-thread", ...] }
+```
+- ✅ **M:N threading**: Migliaia di task async su pochi thread OS
+- ✅ **Work-stealing scheduler**: Bilanciamento automatico carico
+- ✅ **DashMap 6.1.0**: HashMap concorrente lock-free
+- ✅ **Arc<MessageDTO>**: Zero-copy broadcasting
+
+**Ottimizzazioni release** (`server/Cargo.toml`):
+```toml
+[profile.release]
+opt-level = "z"        # Ottimizza per size
+lto = true             # Link-Time Optimization
+codegen-units = 1      # Ottimizzazioni globali
+panic = "abort"        # Riduce size ~10%
+strip = true           # Rimuove simboli debug (~30% reduction)
+```
+
+**Dimensioni binari**:
+- ✅ Server debug: ~15-20 MB
+- ✅ Server release: ~3-5 MB
+- ✅ Tauri installer: ~8-15 MB
+
+---
+
+## 4. Librerie utilizzate
 
 ### Backend (Rust)
 **Framework e Runtime:**
@@ -175,7 +214,7 @@ Questa sezione documenta i requisiti funzionali effettivamente implementati nel 
 - tokio-tungstenite 0.21 (WebSocket client)
 - serde 1.x, serde_json 1.x
 
-## 4. Installazione
+## 5. Installazione
 
 ### Prerequisiti
 
@@ -225,7 +264,7 @@ npm run tauri build
 ```
 
 
-## 5. Configurazione
+## 6. Configurazione
 
 ### File `.env` Server
 
@@ -256,7 +295,7 @@ LOG_LEVEL=info
 | Variabile | Default | Obbligatorio | Descrizione |
 |-----------|---------|--------------|-------------|
 | `DATABASE_URL` | - | ✅ | Connection string MySQL formato: `mysql://user:password@host:port/database` |
-| `JWT_SECRET` | `"un segreto meno bello"` | ❌ | Chiave firma JWT (HS256). **WARNING**: default non sicuro per produzione |
+| `JWT_SECRET` | `"supersecretkey"` | ❌ | Chiave firma JWT (HS256). **WARNING**: default non sicuro per produzione |
 | `SERVER_HOST` | `127.0.0.1` | ❌ | Indirizzo IP di binding server |
 | `SERVER_PORT` | `3000` | ❌ | Porta TCP server (0-65535) |
 | `MAX_DB_CONNECTIONS` | `1000` | ❌ | Dimensione pool connessioni MySQL |
@@ -283,7 +322,7 @@ VITE_API_URL=http://localhost:3000
 - Acquire timeout pool: 2 secondi (hardcoded)
 - Test before acquire: abilitato
 
-## 6. Avvio
+## 7. Avvio
 
 ### Avvio Server (Backend)
 
@@ -376,7 +415,7 @@ cargo run
 ```
 ---
 
-## 7. Architettura del Sistema
+## 8. Architettura del Sistema
 
 ### Diagramma generale
 
@@ -512,13 +551,13 @@ TIMEOUT_DURATION_SECONDS: 300s
 
 ---
 
-## 8. Architettura WebSocket
+## 9. Architettura WebSocket
 
 Questa sezione descrive in dettaglio l'implementazione del modulo WebSocket (`server/src/ws`).
 
-### 8.0 Diagrammi architetturali
+### 9.0 Diagrammi architetturali
 
-#### 8.0.1 Overview generale
+#### 9.0.1 Overview generale
 
 Il seguente diagramma mostra una panoramica ad alto livello dell'architettura WebSocket:
 
@@ -532,7 +571,7 @@ Il seguente diagramma mostra una panoramica ad alto livello dell'architettura We
 - **listen_ws**: Task reader (client → server)
 - **write_ws**: Task writer (server → client)
 
-#### 8.0.2 Connection Lifecycle
+#### 9.0.2 Connection Lifecycle
 
 Diagramma dettagliato del ciclo di vita di una connessione WebSocket (setup → running → cleanup):
 
@@ -550,7 +589,7 @@ Diagramma dettagliato del ciclo di vita di una connessione WebSocket (setup → 
 - **Acquire timeout DB**: 2 secondi (per caricare chat utente in write_ws)
 - **Cleanup automatico**: Rimozione da UserMap + terminazione task
 
-#### 8.0.3 Message Flow
+#### 9.0.3 Message Flow
 
 Diagramma del flusso completo di un messaggio: client → validazione → persistenza → broadcast:
 
@@ -586,7 +625,7 @@ Diagramma del flusso completo di un messaggio: client → validazione → persis
 - Il messaggio è persistito anche se nessun receiver online
 - Al prossimo login, l'utente recupera messaggi con GET `/chats/{chat_id}/messages`
 
-#### 8.0.4 Internal Signals
+#### 9.0.4 Internal Signals
 
 Diagramma dei segnali interni (Invitation, AddChat, RemoveChat, Error, Shutdown):
 
@@ -621,7 +660,7 @@ pub enum InternalSignal {
 - **Validation error**: `process_message` → `send_server_message_if_online(&user_id, Error("Invalid message"))`
 
 
-### 8.1 Analisi approfondita `connection.rs`
+### 9.1 Analisi approfondita `connection.rs`
 
 **Ruolo**: Orchestrare la vita di una singola connessione WebSocket per utente autenticato.
 
@@ -797,7 +836,7 @@ async fn listen_ws(
    info!("WebSocket connection closed");
    ```
 
-### 8.2 Analisi approfondita `chatmap.rs`
+### 9.2 Analisi approfondita `chatmap.rs`
 
 **Ruolo**: Mantenere mappa thread-safe di canali broadcast per ogni chat.
 
@@ -845,7 +884,7 @@ pub fn is_active(&self, chat_id: &i32) -> bool
 - Canali creati on-demand (lazy initialization)
 - Rimozione automatica canali senza receiver (evita memory leak)
 
-### 8.3 Task di lettura/scrittura
+### 9.3 Task di lettura/scrittura
 
 **Separazione responsabilità**:
 - **listen_ws**: Input handling (client → server)
@@ -864,7 +903,7 @@ pub fn is_active(&self, chat_id: &i32) -> bool
 - Comunicano tramite `internal_channel` (unbounded, async)
 - Shutdown coordinato: listen_ws → send(Shutdown) → write_ws riceve e termina
 
-### 8.4 Segnali interni
+### 9.4 Segnali interni
 
 **Utilizzo nei services**:
 
@@ -895,7 +934,7 @@ state.users_online.send_server_message_if_online(
 );
 ```
 
-### 8.5 Gestione utenti
+### 9.5 Gestione utenti
 
 **UserMap** (`usermap.rs`):
 ```rust
@@ -916,7 +955,7 @@ pub struct UserMap {
 2. Durante connessione → `send_server_message_if_online` da services
 3. `write_ws` termina → `remove_from_online` (cleanup)
 
-### 8.6 Messaggi e formati
+### 9.6 Messaggi e formati
 
 **DTO principale**: `MessageDTO` (server/src/dtos/message.rs)
 ```rust
@@ -994,7 +1033,7 @@ pub struct MessageDTO {
 }
 ```
 
-### 8.7 Esempi dettagliati
+### 9.7 Esempi dettagliati
 
 #### Esempio 1: Invio messaggio da client
 
@@ -1073,7 +1112,7 @@ pub struct MessageDTO {
 
 ---
 
-## 9. Struttura del Progetto
+## 10. Struttura del Progetto
 
 ### Albero directory 
 
@@ -1109,7 +1148,7 @@ pub struct MessageDTO {
 
 ---
 
-## 10. API Documentation
+## 11. API Documentation
 
 ### Introduzione generale
 
@@ -1201,24 +1240,6 @@ Nota: Bodies e DTO si riferiscono a `server/src/dtos/*`.
 ```json
 { "user_id": 1, "username": "mario_rossi" }
 ```
-
----
-
-### GET /users/{user_id}
-- URL: `/users/{user_id}`
-- HTTP Method: GET
-- Protetta: Sì
-- Description: Recupera utente per `user_id`.
-- Path parameters: `user_id` (int)
-- Query parameters: None
-- Request body: None
-- Response status: 200 OK / 404 Not Found
-- Response body:
-
-```json
-{ "user_id": 1, "username": "mario_rossi" }
-```
-
 ---
 
 ### GET /chats
@@ -1411,7 +1432,7 @@ Note generali:
 
 ---
 
-## 11. WebSocket Protocol Documentation
+## 12. WebSocket Protocol Documentation
 
 ### Endpoint
 
@@ -1467,7 +1488,7 @@ Esempio client→server:
 
 ---
 
-## 12. Database Schema
+## 13. Database Schema
 
 ### Diagramma ER
 
@@ -1511,13 +1532,9 @@ Esempio client→server:
 - `user_role` ENUM('OWNER','ADMIN','MEMBER')
 - `member_since` TIMESTAMP NOT NULL
 
-
-
 ---
 
----
-
-## 13. Test
+## 14. Test
 
 ### Strategia
 
@@ -1548,7 +1565,7 @@ Esempio client→server:
 
 ---
 
-## 14. Logging
+## 15. Logging
 
 ### Stack logging
 
@@ -1580,7 +1597,7 @@ cargo run --bin server
 
 ---
 
-## 15. Deployment & Context Diagram
+## 16. Deployment & Context Diagram
 
 ### Deployment Diagram
 
@@ -1631,11 +1648,9 @@ cargo run --bin server
    mysql -u root -p < server/migrations/1_create_database.sql
    ```
 
-**Note**: L'architettura attuale è monolitica locale. I diagrammi deployment e context mostrano una possibile evoluzione con reverse proxy, load balancer e CI/CD, ma non sono implementati nel progetto corrente.
-
 ---
 
-## 16. Documentazione Client
+## 17. Documentazione Client
 
 ### Architettura front-end
 
@@ -1771,7 +1786,7 @@ interface WebSocketContextType {
 
 ---
 
-## 17. Dimensione del Compilato
+## 18. Dimensione del Compilato
 
 ### Comandi per misurare build
 
@@ -1849,7 +1864,7 @@ strip = true           # Rimuove simboli debug automaticamente
 
 ---
 
-## 18. Sicurezza
+## 19. Sicurezza
 
 ### Autenticazione JWT
 
@@ -1858,7 +1873,7 @@ strip = true           # Rimuove simboli debug automaticamente
 - Durata token: **24 ore** (configurato in `encode_jwt`)
 - Claims: `username`, `id` (user_id), `iat` (issued at), `exp` (expiration)
 - Secret: configurabile via `JWT_SECRET` env var
-  - Default insicuro: `"un segreto meno bello"` (warning al boot se non configurato)
+  - Default insicuro: `"supersecretkey"` (warning al boot se non configurato)
   - **Produzione**: usare secret robusto (min 32 caratteri alfanumerici casuali)
 
 **Validazione**:
@@ -1921,29 +1936,9 @@ let mut rate_limiter = interval(Duration::from_millis(RATE_LIMITER_MILLIS));
 rate_limiter.tick().await; // Attende 10ms tra ogni messaggio
 ```
 
-### CORS
-
-**Implementazione** (`server/src/main.rs`):
-```rust
-use tower_http::cors::CorsLayer;
-
-let app = Router::new()
-    .layer(CorsLayer::permissive()); // Development: permette tutte le origini
-```
-
-**Configurazione attuale**:
-- ❌ **Permissive mode**: accetta richieste da qualsiasi origine (dev only)
-- ⚠️ **Produzione**: configurare CORS restrittivo:
-  ```rust
-  CorsLayer::new()
-      .allow_origin("https://tuo-dominio.com".parse::<HeaderValue>().unwrap())
-      .allow_methods([Method::GET, Method::POST, Method::PATCH, Method::DELETE])
-      .allow_headers([AUTHORIZATION, CONTENT_TYPE])
-  ```
-
 ---
 
-## 19. Performance
+## 20. Performance
 
 ### Ottimizzazioni WebSocket
 
