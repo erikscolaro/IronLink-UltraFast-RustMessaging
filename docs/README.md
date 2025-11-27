@@ -60,57 +60,57 @@ Questa sezione documenta i requisiti funzionali effettivamente implementati nel 
 ### 2.1 Gestione Utenti
 
 **Autenticazione:**
-- ✅ **Login** (`POST /auth/login`): Autenticazione tramite username e password, ritorna JWT (HS256, expire 24h)
-- ✅ **Registrazione** (`POST /auth/register`): Creazione nuovo utente con hash bcrypt (cost 12)
-- ✅ **Validazione**: Username riservato "Deleted User" bloccato in fase di registrazione/login
+- **Login** (`POST /auth/login`): Autenticazione tramite username e password, ritorna JWT (HS256, expire 24h)
+- **Registrazione** (`POST /auth/register`): Creazione nuovo utente con hash bcrypt (cost 12)
+- **Validazione**: Username riservato "Deleted User" bloccato in fase di registrazione/login
 
 **Ricerca:**
-- ✅ **Ricerca utente** (`GET /users?username={username}`): Filtro utenti tramite username (query parameter)
-- ✅ **Lista utenti** (`GET /users`): Recupero di tutti gli utenti registrati
+- **Ricerca utente** (`GET /users?username={username}`): Filtro utenti tramite username (query parameter)
+- **Lista utenti** (`GET /users`): Recupero di tutti gli utenti registrati
 
 ### 2.2 Gestione Chat Private
 
 **Funzionalità implementate:**
-- ✅ **Creazione chat privata**: Automatica quando si invia il primo invito tra due utenti (`POST /chats/{chat_id}/invite/{user_id}`)
-- ✅ **Recupero messaggi** (`GET /chats/{chat_id}/messages`): Con filtro basato su `messages_visible_from` (ultimo messaggio visualizzato)
-- ✅ **Salvataggio ultimo messaggio visualizzato**: Campo `messages_received_until` in `user_chat_metadata`
-- ✅ **Invio messaggio**: Tramite WebSocket con validazione lunghezza (1-5000 caratteri)
-- ✅ **Pulizia chat** (`POST /chats/{chat_id}/clean`): Aggiorna `messages_visible_from` ed elimina messaggi non più visibili da nessun membro
+- **Creazione chat privata**: Automatica quando si invia il primo invito tra due utenti (`POST /chats/{chat_id}/invite/{user_id}`)
+- **Recupero messaggi** (`GET /chats/{chat_id}/messages`): Con filtro basato su `messages_visible_from` (ultimo messaggio visualizzato)
+- **Salvataggio ultimo messaggio visualizzato**: Campo `messages_received_until` in `user_chat_metadata`
+- **Invio messaggio**: Tramite WebSocket con validazione lunghezza (1-5000 caratteri)
+- **Pulizia chat** (`POST /chats/{chat_id}/clean`): Aggiorna `messages_visible_from` ed elimina messaggi non più visibili da nessun membro
 
 ### 2.3 Gestione Chat di Gruppo
 
 **Creazione e configurazione:**
-- ✅ **Creazione gruppo** (`POST /chats`): Con `chat_type: "Group"`, `title`, `description` opzionale
-- ✅ **Ruoli utente**: Owner, Admin, Member implementati con permessi differenziati
+- **Creazione gruppo** (`POST /chats`): Con `chat_type: "Group"`, `title`, `description` opzionale
+- **Ruoli utente**: Owner, Admin, Member implementati con permessi differenziati
 
 **Gestione messaggi:**
-- ✅ **Recupero messaggi** (`GET /chats/{chat_id}/messages`): Con filtro `messages_visible_from`
-- ✅ **Salvataggio ultimo messaggio visualizzato**: Campo `messages_received_until` in metadata
-- ✅ **Invio messaggio**: WebSocket con validazione (1-5000 caratteri, rate limiting 10ms)
-- ✅ **Pulizia messaggi per singolo utente** (`POST /chats/{chat_id}/clean`): Aggiorna `messages_visible_from`, elimina fisicamente messaggi non visibili da nessuno
+- **Recupero messaggi** (`GET /chats/{chat_id}/messages`): Con filtro `messages_visible_from`
+- **Salvataggio ultimo messaggio visualizzato**: Campo `messages_received_until` in metadata
+- **Invio messaggio**: WebSocket con validazione (1-5000 caratteri, rate limiting 10ms)
+- **Pulizia messaggi per singolo utente** (`POST /chats/{chat_id}/clean`): Aggiorna `messages_visible_from`, elimina fisicamente messaggi non visibili da nessuno
 
 **Gestione membri:**
-- ✅ **Estensione ruolo Admin** (`PATCH /chats/{chat_id}/members/{user_id}/role`): Owner può promuovere Member → Admin
-- ✅ **Aggiunta membri tramite invito** (`POST /chats/{chat_id}/invite/{user_id}`): Owner/Admin invitano, target riceve notifica real-time
-- ✅ **Risposta invito** (`POST /invitations/{invite_id}/{action}`): Accept/Reject, crea messaggio di sistema
-- ✅ **Lista inviti pending** (`GET /invitations/pending`): Inviti ricevuti dall'utente autenticato
-- ✅ **Espulsione membro** (`DELETE /chats/{chat_id}/members/{user_id}`): Solo Owner/Admin, non può rimuovere Owner
-- ✅ **Uscita spontanea** (`POST /chats/{chat_id}/leave`): Member/Admin possono uscire, Owner solo se unico membro
-- ✅ **Trasferimento ownership** (`PATCH /chats/{chat_id}/transfer_ownership/{new_owner_id}`): Solo Owner, target deve essere membro
+- **Estensione ruolo Admin** (`PATCH /chats/{chat_id}/members/{user_id}/role`): Owner può promuovere Member → Admin
+- **Aggiunta membri tramite invito** (`POST /chats/{chat_id}/invite/{user_id}`): Owner/Admin invitano, target riceve notifica real-time
+- **Risposta invito** (`POST /invitations/{invite_id}/{action}`): Accept/Reject, crea messaggio di sistema
+- **Lista inviti pending** (`GET /invitations/pending`): Inviti ricevuti dall'utente autenticato
+- **Espulsione membro** (`DELETE /chats/{chat_id}/members/{user_id}`): Solo Owner/Admin, non può rimuovere Owner
+- **Uscita spontanea** (`POST /chats/{chat_id}/leave`): Member/Admin possono uscire, Owner solo se unico membro
+- **Trasferimento ownership** (`PATCH /chats/{chat_id}/transfer_ownership/{new_owner_id}`): Solo Owner, target deve essere membro
 
 **Funzionalità real-time:**
-- ✅ **Notifiche WebSocket**: AddChat, RemoveChat, Invitation inviati tramite `InternalSignal`
-- ✅ **Broadcast messaggi**: Batching (10 msg o 1 sec), Arc<MessageDTO> zero-copy
-- ✅ **Rate limiting**: 10ms per messaggio (~100 msg/sec per connessione)
-- ✅ **Timeout inattività**: 300 secondi (5 minuti)
+- **Notifiche WebSocket**: AddChat, RemoveChat, Invitation inviati tramite `InternalSignal`
+- **Broadcast messaggi**: Batching (10 msg o 1 sec), Arc<MessageDTO> zero-copy
+- **Rate limiting**: 10ms per messaggio (~100 msg/sec per connessione)
+- **Timeout inattività**: 300 secondi (5 minuti)
 
 ### 2.4 Logging
 
 **Stack implementato:**
-- ✅ **tracing 0.1** + **tracing-subscriber 0.3**
-- ✅ **Configurazione livelli**: Via `RUST_LOG` env var (`trace`, `debug`, `info`, `warn`, `error`)
-- ✅ **Integrazione tower-http**: Logging middleware per richieste HTTP
-- ✅ **Structured logging**: Campi contestuali (`user_id`, `chat_id`, etc.) tramite macro `#[instrument]`
+- **tracing 0.1** + **tracing-subscriber 0.3**
+- **Configurazione livelli**: Via `RUST_LOG` env var (`trace`, `debug`, `info`, `warn`, `error`)
+- **Integrazione tower-http**: Logging middleware per richieste HTTP
+- **Structured logging**: Campi contestuali (`user_id`, `chat_id`, etc.) tramite macro `#[instrument]`
 
 ---
 
@@ -119,10 +119,10 @@ Questa sezione documenta i requisiti funzionali effettivamente implementati nel 
 ### 3.1 Portabilità Multi-Piattaforma
 
 **Cross-platform (Windows e Linux):**
-- ✅ **Rust Edition 2024**: Linguaggio cross-platform nativo
-- ✅ **Tokio 1.47.1**: Runtime async multi-piattaforma
-- ✅ **Tauri 2.x**: Client desktop cross-platform (Windows, Linux, macOS)
-- ✅ **Dipendenze**: Tutte le librerie supportano Windows/Linux (axum, sqlx, bcrypt, etc.)
+- **Rust Edition 2024**: Linguaggio cross-platform nativo
+- **Tokio 1.47.1**: Runtime async multi-piattaforma
+- **Tauri 2.x**: Client desktop cross-platform (Windows, Linux, macOS)
+- **Dipendenze**: Tutte le librerie supportano Windows/Linux (axum, sqlx, bcrypt, etc.)
 
 ### 3.2 Efficienza CPU e Dimensione Compilato
 
@@ -130,10 +130,10 @@ Questa sezione documenta i requisiti funzionali effettivamente implementati nel 
 ```toml
 tokio = { version = "1.47.1", features = ["rt-multi-thread", ...] }
 ```
-- ✅ **M:N threading**: Migliaia di task async su pochi thread OS
-- ✅ **Work-stealing scheduler**: Bilanciamento automatico carico
-- ✅ **DashMap 6.1.0**: HashMap concorrente lock-free
-- ✅ **Arc<MessageDTO>**: Zero-copy broadcasting
+- **M:N threading**: Migliaia di task async su pochi thread OS
+- **Work-stealing scheduler**: Bilanciamento automatico carico
+- **DashMap 6.1.0**: HashMap concorrente lock-free
+- **Arc<MessageDTO>**: Zero-copy broadcasting
 
 **Ottimizzazioni release** (`server/Cargo.toml`):
 ```toml
@@ -144,12 +144,6 @@ codegen-units = 1      # Ottimizzazioni globali
 panic = "abort"        # Riduce size ~10%
 strip = true           # Rimuove simboli debug (~30% reduction)
 ```
-
-**Dimensioni binari**:
-- ✅ Server debug: ~15-20 MB
-- ✅ Server release: ~3-5 MB
-- ✅ Tauri installer: ~8-15 MB
-
 ---
 
 ## 4. Librerie utilizzate
@@ -1792,30 +1786,13 @@ interface WebSocketContextType {
 
 **Server Rust**:
 
-1. **Build debug** (non ottimizzato, con simboli debug):
-```pwsh
-cd server
-cargo build
-Get-Item target\debug\server.exe | Select-Object Name,@{Name='SizeMB';Expression={[math]::Round($_.Length/1MB,2)}}
-```
-Dimensione tipica: ~15-20 MB
-
-2. **Build release** (ottimizzato):
+**Build release** (ottimizzato):
 ```pwsh
 cd server
 cargo build --release
 Get-Item target\release\server.exe | Select-Object Name,@{Name='SizeMB';Expression={[math]::Round($_.Length/1MB,2)}}
 ```
-Dimensione tipica: ~3-5 MB (grazie alle ottimizzazioni in `Cargo.toml`)
-
-**Client Vite (solo dist web)**:
-```pwsh
-cd client
-npm run build
-$size = (Get-ChildItem -Recurse dist | Measure-Object -Property Length -Sum).Sum
-[math]::Round($size/1MB,2)
-```
-Dimensione tipica dist: ~1-2 MB (HTML + JS minificato + CSS)
+Dimensione eseguibile: 2.86 MB
 
 **Client Tauri (installer desktop completo)**:
 ```pwsh
@@ -1824,7 +1801,7 @@ npm run tauri build
 # Windows installer in: src-tauri\target\release\bundle\nsis\
 Get-Item src-tauri\target\release\bundle\nsis\*.exe | Select-Object Name,@{Name='SizeMB';Expression={[math]::Round($_.Length/1MB,2)}}
 ```
-Dimensione tipica installer: ~8-15 MB (include runtime WebView2, binario Rust Tauri, assets frontend)
+Dimensione eseguibile: 11.8 MB
 
 ### Ottimizzazioni implementate
 
@@ -1836,32 +1813,6 @@ codegen-units = 1      # Single codegen unit per migliori ottimizzazioni
 panic = "abort"        # Panic abort invece di unwind (riduce size)
 strip = true           # Rimuove simboli debug automaticamente
 ```
-
-**Client Vite** (già configurato in `vite.config.ts`):
-- Minification automatica in build production
-- Tree-shaking per rimuovere codice non usato
-- Code splitting per chunk più piccoli
-- Asset optimization (immagini, CSS)
-
-### Confronto dimensioni
-
-| Componente | Debug | Release | Note |
-|------------|-------|---------|------|
-| Server Rust | ~15-20 MB | ~3-5 MB | Release con strip + LTO |
-| Client Tauri (installer) | N/A | ~8-15 MB | Include WebView2 runtime + backend Rust |
-
-### Ulteriori ottimizzazioni possibili
-
-**Server**:
-- `opt-level = "s"` invece di `"z"` per bilanciare size/speed
-- Rimuovere dipendenze non usate (già minimizzate)
-- Build con `musl` su Linux per binari statici più piccoli
-
-**Client**:
-- Lazy loading componenti React con `React.lazy()`
-- Compressione Brotli/Gzip per servire assets (se deployment web)
-- Ottimizzazione immagini (WebP, dimensioni responsive)
-
 ---
 
 ## 19. Sicurezza
