@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 /// Struct per gestire io col client
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[allow(dead_code)] // Non attualmente usata, mantenuta per compatibilità futura
 pub struct InvitationDTO {
     pub invite_id: Option<i32>,
     pub target_chat_id: Option<i32>,

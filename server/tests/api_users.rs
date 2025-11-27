@@ -82,7 +82,7 @@ mod user_tests {
             .await;
 
         response.assert_status_ok();
-        let users: Vec<serde_json::Value> = response.json();
+        let _users: Vec<serde_json::Value> = response.json();
 
         Ok(())
     }

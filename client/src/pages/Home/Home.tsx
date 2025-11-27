@@ -9,7 +9,6 @@ import ChatArea from '../../components/ChatArea/ChatArea';
 import ChatInfo from '../../components/ChatInfo/ChatInfo';
 import ProfileModal from '../../components/ProfileModal/ProfileModal';
 import styles from './Home.module.css';
-import { show } from '@tauri-apps/api/app';
 
 export default function Home() {
   const { onChatAdded, onChatRemoved, subscribeToChat } = useWebSocket();

@@ -1,5 +1,5 @@
 // ChatArea - Area principale della chat con messaggi
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { ChatDTO, MessageDTO, MessageType, getUserId } from '../../models/types';
 import { Spinner } from 'react-bootstrap';
 import { useAuth } from '../../context/AuthContext';
@@ -24,6 +24,41 @@ export default function ChatArea({ chat, onShowInfo, onBack, cleanChatTrigger }:
   const [members, setMembers] = useState<Map<number, string>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  // Carica altri messaggi quando si scrolla in cima
+  const handleScroll = useCallback(async () => {
+    if (isLoadingMore || isLoading) return;
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    // Funziona solo se la divisione è scrollabile
+    if (container.scrollHeight <= container.clientHeight) return;
+    if (container.scrollTop === 0 && messages.length > 0) {
+      setIsLoadingMore(true);
+      const oldestMsg = messages[0];
+      try {
+        const moreMsgs = await api.getChatMessages(chat.chat_id, oldestMsg.created_at);
+        if (moreMsgs.length > 0) {
+          setMessages(prev => {
+            // Unisci, rimuovi duplicati per message_id, ordina dal più vecchio al più recente
+            const allMsgs = [...moreMsgs, ...prev];
+            const seen = new Set();
+            const unique = allMsgs.filter(msg => {
+              if (msg.message_id && seen.has(msg.message_id)) return false;
+              if (msg.message_id) seen.add(msg.message_id);
+              return true;
+            });
+            unique.sort((a, b) => new Date(a.created_at ?? '').getTime() - new Date(b.created_at ?? '').getTime());
+            return unique;
+          });
+        }
+      } catch (e) {
+        // opzionale: mostra errore
+      } finally {
+        setIsLoadingMore(false);
+      }
+    }
+  }, [chat.chat_id, messages, isLoadingMore, isLoading]);
 
   // Carica messaggi e membri all'apertura della chat
   useEffect(() => {
@@ -37,7 +72,6 @@ export default function ChatArea({ chat, onShowInfo, onBack, cleanChatTrigger }:
         // Carica membri per ottenere gli username
         const chatMembers = await api.listChatMembers(chat.chat_id);
         const memberMap = new Map<number, string>();
-        
         for (const member of chatMembers) {
           try {
             const userData = await api.getUserById(member.user_id);
@@ -50,8 +84,16 @@ export default function ChatArea({ chat, onShowInfo, onBack, cleanChatTrigger }:
             console.error(`Errore caricamento utente ${member.user_id}:`, error);
           }
         }
-        
         setMembers(memberMap);
+
+        // Porta la chat a scrollBottom dopo il caricamento
+        // Forza scrollBottom dopo caricamento messaggi
+        requestAnimationFrame(() => {
+          const container = messagesContainerRef.current;
+          if (container) {
+            container.scrollTop = container.scrollHeight;
+          }
+        });
       } catch (error) {
         console.error('Errore caricamento dati chat:', error);
       } finally {
@@ -90,10 +132,33 @@ export default function ChatArea({ chat, onShowInfo, onBack, cleanChatTrigger }:
     };
   }, [chat.chat_id, subscribeToChat]);
 
-  // Auto-scroll all'ultimo messaggio
+  // ScrollBottom solo al primo caricamento della chat
+  const firstLoad = useRef(true);
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (firstLoad.current && messages.length > 0) {
+      requestAnimationFrame(() => {
+        const container = messagesContainerRef.current;
+        if (container) {
+          container.scrollTop = container.scrollHeight;
+        }
+      });
+      firstLoad.current = false;
+    }
+  }, [messages, chat.chat_id]);
+
+  useEffect(() => {
+    firstLoad.current = true;
+  }, [chat.chat_id]);
+
+  // Aggiungi event listener per lo scroll
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    container.addEventListener('scroll', handleScroll);
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+    };
+  }, [handleScroll]);
 
   // Gestione pulizia chat tramite trigger
   useEffect(() => {
@@ -153,8 +218,15 @@ export default function ChatArea({ chat, onShowInfo, onBack, cleanChatTrigger }:
         onShowInfo={onShowInfo}
         onBack={onBack}
       />
-      
-      <div className={styles.messagesContainer}>
+      <div
+        className={styles.messagesContainer}
+        ref={messagesContainerRef}
+      >
+        {isLoadingMore && (
+          <div className="d-flex align-items-center justify-content-center text-muted" style={{ minHeight: 30 }}>
+            <Spinner animation="border" size="sm" /> Caricamento...
+          </div>
+        )}
         {messages.length === 0 ? (
           <div className="d-flex align-items-center justify-content-center h-100 text-muted">
             <p>Nessun messaggio ancora. Inizia la conversazione!</p>
@@ -163,7 +235,6 @@ export default function ChatArea({ chat, onShowInfo, onBack, cleanChatTrigger }:
           messages.map((msg, index) => {
             const isOwnMessage = user ? msg.sender_id === getUserId(user) : false;
             const isPrivateChat = chat.chat_type === 'Private';
-            
             // Determina se mostrare il nome utente:
             // 1. Mai nelle chat private
             // 2. Mai per i propri messaggi
@@ -172,7 +243,6 @@ export default function ChatArea({ chat, onShowInfo, onBack, cleanChatTrigger }:
             const shouldShowUsername = !isPrivateChat && 
                                       !isOwnMessage && 
                                       (!previousMsg || previousMsg.sender_id !== msg.sender_id);
-            
             return (
               <ChatMessage
                 key={msg.message_id || `msg-${index}`}
@@ -185,7 +255,6 @@ export default function ChatArea({ chat, onShowInfo, onBack, cleanChatTrigger }:
         )}
         <div ref={messagesEndRef} />
       </div>
-      
       <ChatInput onSendMessage={handleSendMessage} />
     </div>
   );

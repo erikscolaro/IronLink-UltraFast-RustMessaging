@@ -1,6 +1,5 @@
 // ChatMessage - Componente per visualizzare un singolo messaggio
 import { MessageDTO, MessageType } from '../../models/types';
-import { Badge } from 'react-bootstrap';
 import styles from './ChatMessage.module.css';
 
 interface ChatMessageProps {
