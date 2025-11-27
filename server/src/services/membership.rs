@@ -1,5 +1,6 @@
 //! Membership services - Gestione membri e ruoli nelle chat
 
+<<<<<<< Updated upstream
 use crate::core::{AppError, AppState, require_role};
 use crate::dtos::{
     CreateInvitationDTO, CreateMessageDTO, CreateUserChatMetadataDTO, EnrichedInvitationDTO,
@@ -8,6 +9,12 @@ use crate::dtos::{
 use crate::entities::{ChatType, InvitationStatus, MessageType, User, UserChatMetadata, UserRole};
 use crate::repositories::{Create, Delete, Read, Update};
 use crate::ws::usermap::InternalSignal;
+=======
+use crate::core::{AppError, AppState};
+use crate::dtos::{UserInChatDTO, CreateChatDTO};
+use crate::entities::{ChatType, User, UserRole};
+use crate::repositories::Create;
+>>>>>>> Stashed changes
 use axum::{
     Extension,
     extract::{Json, Path, State},
@@ -64,6 +71,7 @@ pub async fn list_chat_members(
 #[instrument(skip(state, current_user), fields(user_id = %current_user.user_id))]
 pub async fn list_pending_invitations(
     State(state): State<Arc<AppState>>,
+<<<<<<< Updated upstream
     Extension(current_user): Extension<User>,
 ) -> Result<Json<Vec<EnrichedInvitationDTO>>, AppError> {
     debug!("Listing pending invitations for user");
@@ -111,6 +119,127 @@ pub async fn list_pending_invitations(
     }
 
     Ok(Json(enriched_invitations))
+=======
+    Path(chat_id): Path<i32>,
+    Path(user_id): Path<i32>,
+    Extension(current_user): Extension<User>, // ottenuto dall'autenticazione tramite token jwt
+) -> Result<(), AppError> {
+    // 1. Estrarre chat_id e user_id dal path della URL
+    // 2. Ottenere l'utente corrente dall'Extension (autenticato tramite JWT)
+    // 3. Recuperare il metadata di current_user per questa chat (singola query per controllo permessi)
+    // 4. Verificare che current_user sia Admin o Owner, altrimenti ritornare errore FORBIDDEN (fail-fast)
+    // 5. Verificare che l'utente target non sia già membro della chat (query metadata target)
+    // 6. Se è già membro, ritornare errore CONFLICT
+    // 7. Controllare se esiste già un invito pending per questo utente in questa chat
+    // 8. Se esiste già un invito pending, ritornare errore CONFLICT
+    // 9. Verificare che l'utente target esista nel database (query solo se tutte le validazioni passano)
+    // 10. Se non esiste, ritornare errore NOT_FOUND
+    // 11. Creare o recuperare una chat privata tra current_user e l'utente target
+    // 12. Creare un messaggio di sistema con l'invito alla chat
+    // 13. Salvare il messaggio di invito nel database
+    // 14. Inviare il messaggio tramite WebSocket all'utente target se online (operazione non bloccante)
+    // 15. Ritornare StatusCode::OK
+
+    let meta = state
+        .meta
+        .find_by_user_and_chat_id(&current_user.user_id, &chat_id)
+        .await?;
+
+    let meta = match meta {
+    Some(m) => m,
+    None => {
+        return Err(AppError::forbidden(
+            "You are not a member of this chat".to_string(),
+            ));
+        }
+    };
+
+    match meta.user_role {
+        Some(UserRole::Member) => {},
+        _ => {
+            return Err(AppError::forbidden(
+                "You do not have permission to invite users to this chat".to_string(),
+            ));
+        }
+    }
+
+    let is_present = state
+        .meta
+        .find_by_user_and_chat_id(&user_id, &chat_id)
+        .await?
+        .is_some();
+    if is_present {
+        return Err(AppError::conflict(
+            "User is already a member of this chat".to_string(),
+        ));
+    }
+
+    let has_pending_invite = state
+        .invitation
+        .has_pending_invitation(&user_id, &chat_id)
+        .await?;
+    if has_pending_invite {
+        return Err(AppError::conflict(
+            "There is already a pending invitation for this user to this chat".to_string(),
+        ));
+    }
+    
+    let user = state
+        .user
+        .find_by_id(&user_id)
+        .await?;
+    if user.is_none() {
+        return Err(AppError::not_found("User not found".to_string()));
+    }
+
+    let chat = state
+        .chat
+        .get_private_chat_between_users(&current_user.user_id, &user_id)
+        .await?;
+    if chat.is_none() {
+        let new_chat = CreateChatDTO {
+            title: None,
+            description: None,
+            chat_type: ChatType::Private,
+        };
+
+        chat = state
+            .chat
+            .create(&new_chat)
+            .await?;
+
+        let now = Utc::now();
+            let metadata_current_user = CreateUserChatMetadataDTO {
+                user_id: current_user.user_id,
+                chat_id: chat.chat_id,
+                user_role: Some(UserRole::Member),
+                member_since: now,
+                messages_visible_from: now,
+                messages_received_until: now,
+            };
+
+            let metadata_second_user = CreateUserChatMetadataDTO {
+                user_id: user_id,
+                chat_id: chat.chat_id,
+                user_role: Some(UserRole::Member),
+                member_since: now,
+                messages_visible_from: now,
+                messages_received_until: now,
+            };
+
+            // Create both metadata in a single transaction for atomicity
+            state
+                .meta
+                .create_many(&[metadata_current_user, metadata_second_user])
+                .await?;
+    }
+
+    // 12. Creare un messaggio di sistema con l'invito alla chat
+    // 13. Salvare il messaggio di invito nel database
+    // 14. Inviare il messaggio tramite WebSocket all'utente target se online (operazione non bloccante)
+    // 15. Ritornare StatusCode::OK
+    todo!()
+>>>>>>> Stashed changes
 }
 
 #[instrument(skip(state, current_user, metadata), fields(chat_id = %chat_id, inviting_user = %current_user.user_id, target_user = %user_id))]

@@ -1771,7 +1771,6 @@ strip = true           # Rimuove simboli debug automaticamente
 | Componente | Debug | Release | Note |
 |------------|-------|---------|------|
 | Server Rust | ~15-20 MB | ~3-5 MB | Release con strip + LTO |
-| Client (dist web) | N/A | ~1-2 MB | Solo assets frontend |
 | Client Tauri (installer) | N/A | ~8-15 MB | Include WebView2 runtime + backend Rust |
 
 ### Ulteriori ottimizzazioni possibili
@@ -1805,13 +1804,6 @@ strip = true           # Rimuove simboli debug automaticamente
 - Controlla scadenza automaticamente via `jsonwebtoken` crate
 - Estrae user e inserisce `Extension<User>` per i handler
 
-**Raccomandazioni**:
-- ✅ Implementato: expiry time (24h)
-- ✅ Implementato: firma HMAC
-- ⚠️ Consigliato: secret a 256+ bit in produzione
-- ⚠️ Consigliato: rotazione secret periodica
-- ⚠️ Consigliato: blacklist token per logout (attualmente non implementato)
-
 ### Hash Password
 
 **Implementazione** (`server/src/entities/user.rs`):
@@ -1829,11 +1821,6 @@ pub fn hash_password(password: &str) -> Result<String, bcrypt::BcryptError> {
 - Salt: generato automaticamente da bcrypt (random per ogni password)
 - Storage: hash come TEXT in tabella `users.password`
 
-**Protezioni**:
-- ✅ Rainbow table attack: protetto (salt unico per password)
-- ✅ Timing attack: bcrypt ha tempo costante per verify
-- ✅ Brute force: cost 12 rende lento (~250ms per hash)
-
 ### Protezione SQL Injection
 
 **Implementazione** (`server/src/repositories/*.rs`):
@@ -1845,9 +1832,6 @@ pub fn hash_password(password: &str) -> Result<String, bcrypt::BcryptError> {
 - **Zero concatenazione stringhe** nelle query SQL
 - Compile-time check delle query (feature `macros` di sqlx)
 
-**Protezioni**:
-- ✅ SQL injection: impossibile (parametri escaped automaticamente)
-- ✅ Type safety: query controllate a compile-time contro schema DB
 
 ### Permessi Database
 
@@ -1860,14 +1844,6 @@ Lo script di migrazione contiene (commentati) i comandi per creare utente con pr
 -- GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, INDEX, ALTER 
 --   ON rugginedb.* TO 'ruggine'@'localhost';
 ```
-
-**Privilegi concessi**:
-- ✅ SELECT, INSERT, UPDATE, DELETE (operazioni CRUD)
-- ✅ CREATE, INDEX, ALTER (per migrazioni schema)
-- ❌ DROP, TRUNCATE (non concessi - prevenzione perdita dati accidentale)
-- ❌ SUPER, FILE, PROCESS (non concessi - limitazione accesso sistema)
-
-**Nota**: I comandi sono commentati nello script, devono essere eseguiti manualmente se si vuole utente dedicato.
 
 ### Rate Limiting WebSocket
 
@@ -1882,18 +1858,6 @@ let mut rate_limiter = interval(Duration::from_millis(RATE_LIMITER_MILLIS));
 // Loop di lettura messaggi
 rate_limiter.tick().await; // Attende 10ms tra ogni messaggio
 ```
-
-**Protezioni WebSocket**:
-- ✅ **Rate limiting client**: max ~100 messaggi/sec per connessione (10ms delay)
-- ✅ **Timeout inattività**: disconnessione automatica dopo 300s senza messaggi
-- ✅ **Anti-spoofing**: verifica `sender_id == user_id` autenticato
-- ✅ **Blocco system messages**: client non può inviare `MessageType::SystemMessage`
-- ✅ **Validazione membership**: controllo appartenenza chat prima di broadcast
-
-**Limitazioni**:
-- ⚠️ Rate limiting solo lato server (no protezione flooding di connessioni multiple)
-- ⚠️ No rate limiting su endpoint HTTP REST
-- ⚠️ Consigliato: reverse proxy con rate limit globale (nginx/HAProxy) in produzione
 
 ### CORS
 
@@ -1915,21 +1879,6 @@ let app = Router::new()
       .allow_headers([AUTHORIZATION, CONTENT_TYPE])
   ```
 
-### Altre Considerazioni di Sicurezza
-
-**Implementate**:
-- ✅ HTTPS/TLS: delegato a reverse proxy (deployment production)
-- ✅ Password validation: lunghezza minima 8 caratteri (validazione DTO)
-- ✅ Username blocklist: "Deleted User" non accettato in login
-
-**Non implementate (raccomandazioni)**:
-- ⚠️ Rate limiting HTTP endpoints (attualmente assente)
-- ⚠️ CSRF protection (Tauri client non necessita, web client sì)
-- ⚠️ Account lockout dopo N tentativi falliti
-- ⚠️ Password complexity requirements (maiuscole, numeri, simboli)
-- ⚠️ 2FA (Two-Factor Authentication)
-- ⚠️ Audit logging per azioni sensibili
-
 ---
 
 ## 18. Performance
@@ -1950,12 +1899,6 @@ let mut interval = tokio::time::interval(Duration::from_millis(BATCH_INTERVAL));
 // - interval tick (1 secondo)
 ```
 
-**Benefici**:
-- ✅ Riduce overhead di rete: 10 messaggi in 1 frame WebSocket invece di 10 frame separati
-- ✅ Riduce syscall: meno chiamate `send()` al socket
-- ✅ Latenza controllata: massimo 1 secondo di delay (o immediato se batch pieno)
-- ✅ Throughput migliorato: ~10x meno overhead per messaggi consecutivi
-
 **Zero-copy con Arc** (`server/src/ws/chatmap.rs`):
 
 ```rust
@@ -1967,14 +1910,6 @@ pub struct ChatMap {
 
 pub fn send(&self, chat_id: &i32, msg: Arc<MessageDTO>) -> Result<usize, SendError<Arc<MessageDTO>>>
 ```
-
-**Benefici**:
-- ✅ **Zero copie** del messaggio: `Arc<MessageDTO>` condivide puntatore tra N receiver
-- ✅ Broadcast efficiente: 1 messaggio → 100 utenti online = 1 allocazione + 100 reference count increment
-- ✅ Memory footprint ridotto: evita clone di struct con String (content può essere 5000 char)
-
-**Esempio impatto**: 
-- Chat con 50 membri online: senza Arc = 50 copie del messaggio (~250KB per messaggio 5KB), con Arc = 1 copia + 50 puntatori (~5KB + 400 byte)
 
 ### Concorrenza Lock-Free
 
@@ -1992,17 +1927,6 @@ pub struct ChatMap {
 }
 ```
 
-**Caratteristiche**:
-- ✅ **Lock-free sharding**: DashMap divide hashmap in N shard (default 16), ogni shard ha RwLock indipendente
-- ✅ Letture concorrenti: thread multipli possono leggere shard diversi simultaneamente
-- ✅ Scritture ottimizzate: lock solo su shard interessato, non su tutta mappa
-- ✅ Zero contention per operazioni su chat_id diversi
-
-**Performance**:
-- Lookup (`get`): O(1) con lock read su singolo shard
-- Insert (`insert`): O(1) con lock write su singolo shard
-- Scalabilità: lineare fino a ~16 thread (numero shard default)
-
 **tokio::sync::broadcast** (multi-producer multi-consumer):
 
 ```rust
@@ -2014,14 +1938,6 @@ let rx2 = tx.subscribe();
 
 tx.send(Arc::new(message))?; // Tutti i receiver ricevono
 ```
-
-**Caratteristiche**:
-- ✅ **Multi-consumer**: ogni `subscribe()` crea receiver indipendente
-- ✅ Broadcast atomico: `send()` notifica tutti i receiver in O(1)
-- ✅ Ring buffer lock-free: capacity 100, messaggi più vecchi droppati se buffer pieno
-- ✅ Clone-free: condivide `Arc<T>` tra receiver
-
-**Alternativa scartata**: `tokio::sync::mpsc` (multi-producer single-consumer) richiederebbe loop manuale per broadcast
 
 ### Async Runtime
 
@@ -2037,17 +1953,6 @@ tokio = { version = "1.47.1", features = [
     "sync",               // broadcast, mpsc, oneshot
 ] }
 ```
-
-**Configurazione**:
-- ✅ **Work-stealing scheduler**: thread pool che bilancia task automaticamente
-- ✅ Thread pool size: `num_cpus` core (es. 8 core → 8 worker thread)
-- ✅ Task spawn: ogni connessione WebSocket = 2 task (`listen_ws` + `write_ws`)
-- ✅ Cooperative multitasking: task yield automaticamente su `.await`
-
-**Performance**:
-- 1000 connessioni WebSocket = 2000 task tokio (non 2000 OS thread)
-- Overhead task: ~2KB stack per task vs ~2MB per OS thread
-- Context switch: task tokio < 100ns, OS thread ~1-10μs
 
 ### Database Connection Pool
 
@@ -2070,17 +1975,6 @@ ACQUIRE_TIMEOUT = 2 seconds      // Timeout acquire
 TEST_BEFORE_ACQUIRE = true       // Verifica connessione prima di restituirla
 ```
 
-**Ottimizzazioni**:
-- ✅ Connection reuse: evita overhead TCP handshake + MySQL auth per ogni query
-- ✅ Prepared statements: query compilate 1 volta, riutilizzate N volte
-- ✅ Compile-time SQL check: errori SQL detection a build-time (feature `macros`)
-- ✅ Async I/O: query non bloccano thread tokio
-
-**Bottleneck potenziali**:
-- ⚠️ Pool size 1000: potrebbe essere eccessivo per MySQL (default max_connections=151)
-- ⚠️ Lifetime 1s: troppo breve, ricrea connessioni frequentemente (overhead)
-- 💡 Raccomandato: `MAX_DB_CONNECTIONS=100`, `DB_CONNECTION_LIFETIME_SECS=300`
-
 ### Logging e Tracing
 
 **Stack** (`server/Cargo.toml`):
@@ -2094,11 +1988,6 @@ tracing-subscriber = "0.3"
 $env:RUST_LOG = "server=info,tower_http=warn"
 cargo run --release
 ```
-
-**Best practices**:
-- ✅ `info`: eventi significativi (login, connessione WS, errori)
-- ✅ `warn`/`error`: condizioni anomale
-- ❌ `debug`/`trace`: solo development (troppo verbose, impatto performance)
 
 **Impatto performance logging**:
 - `trace`: ~10-20% overhead CPU
@@ -2150,16 +2039,6 @@ panic = "abort"        # Panic abort invece di unwind (riduce size)
 strip = true           # Rimuove simboli debug
 ```
 
-**Trade-off**:
-- ✅ Binary size: -60% (~15MB debug → ~3-5MB release)
-- ✅ Startup time: -30% (meno codice da caricare)
-- ⚠️ Compile time: +50% (LTO + codegen-units=1 rallentano build)
-- ⚠️ Debug info: assente (strip=true), stack trace limitati
-
-**Alternative per performance max**:
-```toml
-opt-level = 3          # Speed invece di size
-codegen-units = 16     # Parallel codegen (compile veloce, meno ottimizzazioni)
 ```
 
 ### Metriche Performance Attese
